@@ -1,0 +1,28 @@
+# Xcode derived data (xcodebuild -derivedDataPath build)
+build/
+
+# Xcode user-specific data (per-developer breakpoints/schemes)
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.swiftpm/
+
+# Xcode test results / derived data outside build/
+*.xcresult
+DerivedData/
+
+# History benchmark switch file (see SixOneTests/HistoryBenchmarkTests.swift).
+# Leaving one behind slows the full test suite down by seconds.
+# /tmp/sixone-benchmark is the other accepted location; put neither back in a commit.
+.benchmark-history
+
+# Agent/editor workspaces, per-developer
+.claude/
+.cursor/
+.idea/
+
+# Local packaging script (not tracked)
+scripts/
