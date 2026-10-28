@@ -181,7 +181,7 @@ struct ClipboardListView: View {
             isScrollBlocked: confirmationState.isPresenting,
             quickPasteRange: quickPasteRange,
             onSelect: { select(id: $0) },
-            onActivate: { activate(id: $0) },
+            onActivate: { activate(id: $0, asPlainText: $1) },
             onCopy: { flashCopied(id: $0) },
             menuProvider: { row, anchor in rowMenuBuilder.makeMenu(for: row, anchor: anchor) },
             onVisibleRowRangeChanged: { range in
@@ -205,10 +205,10 @@ struct ClipboardListView: View {
         navigationState.requestScroll(toRow: id)
     }
 
-    private func activate(id: UUID) {
+    private func activate(id: UUID, asPlainText: Bool) {
         searchState.resignFocus()
         moreActionsState.resignFocus()
-        actions?.panelDidActivate(id: id)
+        actions?.panelDidActivate(id: id, asPlainText: asPlainText)
     }
 
     private func flashCopied(id: UUID) {

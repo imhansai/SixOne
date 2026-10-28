@@ -35,7 +35,7 @@ struct RowHitRoutingTests {
                 isSelected: false,
                 isListActive: false,
                 onSelect: { _ in recorder.events.append("select") },
-                onActivate: { _ in recorder.events.append("activate") },
+                onActivate: { _, _ in recorder.events.append("activate") },
                 onCopy: { recorder.events.append("copy") },
                 menuProvider: { _ in
                     recorder.menuRequests += 1

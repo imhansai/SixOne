@@ -228,9 +228,10 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
     // MARK: - 面板级动作（PanelActionHandler）
 
-    func panelDidActivate(id: UUID) {
+    func panelDidActivate(id: UUID, asPlainText: Bool) {
         guard let item = fullItem(id: id) else { return }
-        pasteFlow.paste(item)
+        // 无纯文本形态的条目回落普通粘贴。
+        pasteFlow.paste(item, asPlainText: asPlainText && item.kind.hasPlainText)
     }
 
     func panelDidRequestDelete(id: UUID) {
@@ -551,9 +552,9 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         hide(restoresPreviousApplication: false)
     }
 
-    private func activateSelected() {
+    private func activateSelected(asPlainText: Bool) {
         guard let id = cursor.selectedItemID, let item = fullItem(id: id) else { return }
-        pasteFlow.paste(item)
+        pasteFlow.paste(item, asPlainText: asPlainText && item.kind.hasPlainText)
     }
 
     // MARK: - 菜单命令
@@ -1098,8 +1099,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         case .closePreview:
             previewState.close()
 
-        case .activateSelectedItem:
-            activateSelected()
+        case .activateSelectedItem(let asPlainText):
+            activateSelected(asPlainText: asPlainText)
         case .activateFocusedGroupFile(let index):
             if let item = previewState.item { pasteFlow.paste(item, fileIndex: index) }
         case .pasteVisibleRow(let offset, let asPlainText):

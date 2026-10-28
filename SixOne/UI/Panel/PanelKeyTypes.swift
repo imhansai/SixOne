@@ -34,6 +34,12 @@ struct PanelKeyPress: Equatable {
             || matches(PanelKeyCode.a, [.command, .option])
     }
 
+    /// ⇧+Return / ⇧+Enter：粘贴为纯文本。
+    var isPlainTextReturn: Bool {
+        modifiers == [.shift]
+            && (keyCode == PanelKeyCode.returnKey || keyCode == PanelKeyCode.keypadEnter)
+    }
+
     /// ⌘+1…9 / ⌘⇧+1…9 对应的可见行偏移（0 起）；其它组合为 nil。
     var quickPasteOffset: Int? {
         guard !isARepeat else { return nil }
@@ -78,7 +84,7 @@ enum PanelKeyAction: Equatable {
     case openPreviewForSelection
     case closePreview
 
-    case activateSelectedItem
+    case activateSelectedItem(asPlainText: Bool)
     case activateFocusedGroupFile(index: Int)
     /// 粘贴当前完整可见区的第 offset 行（0 起）。
     case pasteVisibleRow(offset: Int, asPlainText: Bool)

@@ -37,7 +37,7 @@ struct RowClickGestureContinuityTests {
                 selectedItemID: nil,
                 scrollRevision: 0,
                 onSelect: { recorder.selections.append($0) },
-                onActivate: { recorder.activations.append($0) },
+                onActivate: { id, _ in recorder.activations.append(id) },
                 onCopy: { _ in },
                 menuProvider: { _, _ in nil }
             )

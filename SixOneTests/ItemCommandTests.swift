@@ -39,11 +39,13 @@ struct ItemCommandTests {
         #expect(ItemCommand.rowMenuLayout(for: .file) == ItemCommand.rowMenuLayout(for: .image))
     }
 
-    @Test("链接条目：与图片/文件同构（可打开、可分享）")
+    @Test("链接条目：有纯文本版本，也可以打开、分享")
     func linkRowLayout() {
         #expect(ItemCommand.rowMenuLayout(for: .link) == [
             .command(.paste),
+            .command(.pasteAsPlainText),
             .command(.copy),
+            .command(.copyAsPlainText),
             .separator,
             .command(.share),
             .command(.open),
@@ -52,11 +54,13 @@ struct ItemCommandTests {
         ])
     }
 
-    @Test("颜色条目：没有打开/分享，只有粘贴/拷贝/删除")
+    @Test("颜色条目：纯文本是十六进制色值；没有打开/分享")
     func colorRowLayout() {
         #expect(ItemCommand.rowMenuLayout(for: .color) == [
             .command(.paste),
+            .command(.pasteAsPlainText),
             .command(.copy),
+            .command(.copyAsPlainText),
             .separator,
             .command(.delete),
         ])

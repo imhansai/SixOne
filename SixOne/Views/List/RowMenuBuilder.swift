@@ -84,7 +84,7 @@ struct RowMenuBuilder {
         let actions = panelActions()
         switch command {
         case .paste:
-            actions?.panelDidActivate(id: row.id)
+            actions?.panelDidActivate(id: row.id, asPlainText: false)
         case .pasteAsPlainText:
             actions?.panelDidPasteAsPlainText(id: row.id)
         case .copy:

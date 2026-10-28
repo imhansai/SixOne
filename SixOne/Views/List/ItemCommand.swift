@@ -65,13 +65,13 @@ enum ItemMenuEntry: Equatable {
 }
 
 extension ItemCommand {
-    /// 列表行菜单布局：文本条目多两条 ⇧ 备用项，非文本多分享/打开。
+    /// 列表行菜单布局：有纯文本形态的条目多两条 ⇧ 备用项，链接/图片/文件多分享与打开。
     static func rowMenuLayout(for kind: ClipboardItemKind) -> [ItemMenuEntry] {
         var entries: [ItemMenuEntry] = []
         entries.append(.command(.paste))
-        if kind == .text { entries.append(.command(.pasteAsPlainText)) }
+        if kind.hasPlainText { entries.append(.command(.pasteAsPlainText)) }
         entries.append(.command(.copy))
-        if kind == .text { entries.append(.command(.copyAsPlainText)) }
+        if kind.hasPlainText { entries.append(.command(.copyAsPlainText)) }
         if kind != .text && kind != .color {
             entries.append(.separator)
             entries.append(.command(.share))

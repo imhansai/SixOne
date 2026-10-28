@@ -37,7 +37,7 @@ private func makeRowHost(
                     listTopPadding: index == 0 ? topPadding : 0,
                     listBottomPadding: index == rows.count - 1 ? bottomPadding : 0,
                     onSelect: { _ in },
-                    onActivate: { _ in },
+                    onActivate: { _, _ in },
                     onCopy: {},
                     menuProvider: { _ in nil }
                 )

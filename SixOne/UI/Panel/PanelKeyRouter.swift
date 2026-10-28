@@ -49,6 +49,7 @@ enum PanelKeyRouter {
                 PanelKeyCode.keypadEnter, PanelKeyCode.delete,
             ]
             let isNavigation = navigationKeys.contains { press.matches($0) }
+                || press.isPlainTextReturn
                 || press.matches(PanelKeyCode.up, .command)
                 || press.matches(PanelKeyCode.down, .command)
             return isNavigation ? .panel(.consume) : .standard
@@ -170,11 +171,13 @@ enum PanelKeyRouter {
                 return press.isARepeat ? .panel(.consume) : .panel(.closePreview)
             }
 
-            if press.matches(PanelKeyCode.returnKey) || press.matches(PanelKeyCode.keypadEnter) {
+            if press.matches(PanelKeyCode.returnKey)
+                || press.matches(PanelKeyCode.keypadEnter)
+                || press.isPlainTextReturn {
                 if let index = focusedGroupFileIndex(context) {
                     return .panel(.activateFocusedGroupFile(index: index))
                 }
-                return .panel(.activateSelectedItem)
+                return .panel(.activateSelectedItem(asPlainText: press.isPlainTextReturn))
             }
 
             if press.matches(PanelKeyCode.up, .command) {
@@ -195,6 +198,11 @@ enum PanelKeyRouter {
         // 列表态：⌘F 聚焦搜索；Space 必须在 pre-dispatch 处理，insertText 到不了窗口。
         if press.matches(PanelKeyCode.f, .command) {
             return .panel(.focusSearch)
+        }
+        // ⇧+Return 粘贴为纯文本；普通 Return 仍走标准 action。
+        if press.isPlainTextReturn {
+            guard context.hasSelection else { return .panel(.consume) }
+            return press.isARepeat ? .panel(.consume) : .panel(.activateSelectedItem(asPlainText: true))
         }
         if press.matches(PanelKeyCode.space) {
             guard !press.isARepeat else { return .panel(.consume) }

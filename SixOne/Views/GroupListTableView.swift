@@ -169,7 +169,7 @@ struct GroupListTableView: NSViewRepresentable {
                 guard let self, let index = self.rowIndexByID[rowID] else { return }
                 self.onSelect?(index)
             }
-            rowClickTracker.onActivate = { [weak self] rowID in
+            rowClickTracker.onActivate = { [weak self] rowID, _ in
                 guard let self, let index = self.rowIndexByID[rowID] else { return }
                 self.onCommand?(.paste, index)
             }

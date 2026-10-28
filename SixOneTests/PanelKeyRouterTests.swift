@@ -60,6 +60,8 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.up, [], context) == .panel(.consume))
         #expect(route(PanelKeyCode.down, [], context) == .panel(.consume))
         #expect(route(PanelKeyCode.returnKey, [], context) == .panel(.consume))
+        #expect(route(PanelKeyCode.returnKey, .shift, context) == .panel(.consume),
+                "菜单聚焦时 ⇧+Return 不该粘贴")
         #expect(route(PanelKeyCode.delete, [], context) == .panel(.consume))
         #expect(route(PanelKeyCode.up, .command, context) == .panel(.consume))
         #expect(route(PanelKeyCode.space, [], context) == .standard)
@@ -186,12 +188,35 @@ struct PanelKeyRouterTests {
         let context = PanelKeyContext(previewKind: .file, previewFileCount: 1, hasSelection: true)
         #expect(route(PanelKeyCode.escape, [], context) == .panel(.escape))
         #expect(route(PanelKeyCode.space, [], context) == .panel(.closePreview))
-        #expect(route(PanelKeyCode.returnKey, [], context) == .panel(.activateSelectedItem))
+        #expect(route(PanelKeyCode.returnKey, [], context)
+            == .panel(.activateSelectedItem(asPlainText: false)))
         #expect(route(PanelKeyCode.up, [], context) == .panel(.stepPreview(by: -1)))
         #expect(route(PanelKeyCode.down, [], context) == .panel(.stepPreview(by: 1)))
         #expect(route(PanelKeyCode.up, .command, context) == .panel(.jumpPreview(to: 0)))
         #expect(route(PanelKeyCode.down, .command, context) == .panel(.jumpPreviewToOldest))
         #expect(route(PanelKeyCode.f, .command, context) == .panel(.consume))
+    }
+
+    @Test("⇧+Return：粘贴为纯文本；列表与预览都接管，⌘⇧ 与搜索框放行")
+    func plainTextReturn() {
+        let list = PanelKeyContext(hasSelection: true)
+        #expect(route(PanelKeyCode.returnKey, .shift, list)
+            == .panel(.activateSelectedItem(asPlainText: true)))
+        #expect(route(PanelKeyCode.keypadEnter, .shift, list)
+            == .panel(.activateSelectedItem(asPlainText: true)))
+        #expect(route(PanelKeyCode.returnKey, .shift) == .panel(.consume),
+                "无选中时吞掉，不落到响应链")
+
+        #expect(route(PanelKeyCode.returnKey, [], list) == .standard,
+                "不带 Shift 的 Return 仍走 insertNewline")
+        #expect(route(PanelKeyCode.returnKey, [.shift, .command], list) == .standard,
+                "⌘⇧+Return 不是纯文本粘贴")
+        #expect(route(PanelKeyCode.returnKey, .shift, PanelKeyContext(isSearchFocused: true))
+            == .standard, "搜索框聚焦时 Return 交给 delegate")
+
+        let preview = PanelKeyContext(previewKind: .text, hasSelection: true)
+        #expect(route(PanelKeyCode.returnKey, .shift, preview)
+            == .panel(.activateSelectedItem(asPlainText: true)))
     }
 
     @Test("文本预览聚焦时 ⌘F 放行给查找栏")

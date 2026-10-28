@@ -54,7 +54,7 @@ struct ClipboardScrollerFlashTests {
                 selectedItemID: nil,
                 scrollRevision: context.navigationState.scrollRevision,
                 onSelect: { _ in },
-                onActivate: { _ in },
+                onActivate: { _, _ in },
                 onCopy: { _ in },
                 menuProvider: { _, _ in nil },
                 beep: beep

@@ -13,6 +13,7 @@ struct RowInteractionHostTests {
     private final class Recorder {
         var events: [String] = []
         var activatedIDs: [UUID] = []
+        var plainTextFlags: [Bool] = []
     }
 
     private func makeHost(
@@ -41,9 +42,10 @@ struct RowInteractionHostTests {
         view.currentRowID = rowID
         // 独立使用时无共享追踪器，回调挂在宿主自带的追踪器上。
         view.localClickTracker.onSelect = { _ in recorder.events.append("select") }
-        view.localClickTracker.onActivate = { id in
+        view.localClickTracker.onActivate = { id, asPlainText in
             recorder.events.append("activate")
             recorder.activatedIDs.append(id)
+            recorder.plainTextFlags.append(asPlainText)
         }
         return rowID
     }
@@ -53,12 +55,13 @@ struct RowInteractionHostTests {
         in window: NSWindow,
         at point: CGPoint,
         clickCount: Int,
-        timestamp: TimeInterval? = nil
+        timestamp: TimeInterval? = nil,
+        modifiers: NSEvent.ModifierFlags = []
     ) -> NSEvent {
         NSEvent.mouseEvent(
             with: type,
             location: point,
-            modifierFlags: [],
+            modifierFlags: modifiers,
             timestamp: timestamp ?? ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber,
             context: nil,
@@ -97,6 +100,32 @@ struct RowInteractionHostTests {
 
         #expect(recorder.events == ["select", "activate"])
         #expect(recorder.activatedIDs == [rowID])
+        #expect(recorder.plainTextFlags == [false])
+    }
+
+    @Test("⇧+双击：激活时带上纯文本意图")
+    func shiftDoubleClickRequestsPlainText() {
+        let recorder = Recorder()
+        let (view, window) = makeHost()
+        defer { window.orderOut(nil) }
+        configure(view, recorder: recorder)
+
+        let point = CGPoint(x: 100, y: 29)
+        view.mouseDown(with: mouseEvent(
+            .leftMouseDown, in: window, at: point, clickCount: 1, modifiers: .shift
+        ))
+        view.mouseUp(with: mouseEvent(
+            .leftMouseUp, in: window, at: point, clickCount: 1, modifiers: .shift
+        ))
+        view.mouseDown(with: mouseEvent(
+            .leftMouseDown, in: window, at: point, clickCount: 2, modifiers: .shift
+        ))
+        view.mouseUp(with: mouseEvent(
+            .leftMouseUp, in: window, at: point, clickCount: 2, modifiers: .shift
+        ))
+
+        #expect(recorder.events == ["select", "activate"])
+        #expect(recorder.plainTextFlags == [true])
     }
 
     @Test("按下后拖出行外再抬起：不算点击")

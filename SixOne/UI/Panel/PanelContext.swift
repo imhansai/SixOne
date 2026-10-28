@@ -7,7 +7,7 @@ import Foundation
 
 /// 需要面板协作的动作；用协议集中实现，`PanelContext` 弱引用持有。
 protocol PanelActionHandler: AnyObject {
-    func panelDidActivate(id: UUID)
+    func panelDidActivate(id: UUID, asPlainText: Bool)
     func panelDidRequestDelete(id: UUID)
     func panelDidPasteAsPlainText(id: UUID)
     func panelDidRequestOpen(id: UUID)

@@ -42,7 +42,7 @@ struct HistoryListTableView: NSViewRepresentable {
     var quickPasteRange: ClosedRange<Int>? = nil
 
     let onSelect: (UUID) -> Void
-    let onActivate: (UUID) -> Void
+    let onActivate: (UUID, Bool) -> Void
     let onCopy: (UUID) -> Void
     let menuProvider: (HistoryRow, RowInteractionHost.HostView) -> NSMenu?
     var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
@@ -218,7 +218,7 @@ struct HistoryListTableView: NSViewRepresentable {
                         listBottomPadding: bottomPadding,
                         onSelect: { parent.onSelect($0) },
                         // 激活目标由行宿主按连击序列起点给 id，不是当前行。
-                        onActivate: { parent.onActivate($0) },
+                        onActivate: { parent.onActivate($0, $1) },
                         onCopy: { parent.onCopy(row.id) },
                         menuProvider: { anchor in parent.menuProvider(row, anchor) },
                         clickTracker: tracker

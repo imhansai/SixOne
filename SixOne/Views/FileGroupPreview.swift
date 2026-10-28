@@ -254,7 +254,7 @@ struct FileGroupRow: View {
             RowInteractionHost(
                 rowID: rowID,
                 onSelect: { _ in onSelect(index) },
-                onActivate: { _ in onCommand(.paste, index) },
+                onActivate: { _, _ in onCommand(.paste, index) },
                 makeMenu: { host in menu(for: host) },
                 clickTracker: clickTracker
             )

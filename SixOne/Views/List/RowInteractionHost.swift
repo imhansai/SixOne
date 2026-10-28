@@ -26,8 +26,8 @@ final class MenuAction: NSObject {
 struct RowInteractionHost: NSViewRepresentable {
     let rowID: UUID
     let onSelect: (UUID) -> Void
-    /// 参数是连击序列起点的条目 id，而非抬起时的行。
-    let onActivate: (UUID) -> Void
+    /// 参数是连击序列起点的条目 id；第二参数表示按住 ⇧ 的纯文本意图。
+    let onActivate: (UUID, Bool) -> Void
     let makeMenu: (HostView) -> NSMenu?
     var clickTracker: RowClickTracker?
 
@@ -101,7 +101,7 @@ struct RowInteractionHost: NSViewRepresentable {
 @MainActor
 final class RowClickTracker {
     var onSelect: ((UUID) -> Void)?
-    var onActivate: ((UUID) -> Void)?
+    var onActivate: ((UUID, Bool) -> Void)?
 
     /// 按下时记下的条目 id；抬起落到复用宿主上也仍选按下的那条。
     private(set) var pressedRowID: UUID?
@@ -144,7 +144,7 @@ final class RowClickTracker {
             // 单击选中；clickCount 0 来自异常事件，按单击兜底别吞掉选中。
             onSelect?(pressedRowID)
         case 2:
-            onActivate?(sequenceRowID ?? pressedRowID)
+            onActivate?(sequenceRowID ?? pressedRowID, event.modifierFlags.contains(.shift))
         default:
             // 三连击不再叠加，避免一次手势粘贴多次。
             break

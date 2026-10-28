@@ -21,8 +21,8 @@ struct ClipboardRowView: View {
     var listBottomPadding: CGFloat = 0
     /// 单击选中，参数是按下时的条目 id（抬起时视图可能已被复用）。
     let onSelect: (UUID) -> Void
-    /// 双击激活，参数是连击序列起点的条目 id。
-    let onActivate: (UUID) -> Void
+    /// 双击激活：连击起点的条目 id，以及按住 ⇧ 的纯文本意图。
+    let onActivate: (UUID, Bool) -> Void
     let onCopy: () -> Void
     let menuProvider: (RowInteractionHost.HostView) -> NSMenu?
     var clickTracker: RowClickTracker?
