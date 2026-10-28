@@ -75,6 +75,49 @@ struct HistoryListRefreshTests {
         #expect(harness.store.rows.first?.id != anchoredTop)
     }
 
+    @Test("收起期间的新复制记为「唤出回顶部」，看着的时候来的不算")
+    func tracksNewContentWhileHidden() async throws {
+        let harness = try Harness(itemCount: 250)
+        await harness.store.loadLatestAndWait()
+        harness.store.noteTopVisibleIndex(120)
+
+        try harness.copy("看着的时候来的")
+        await settle(harness.store)
+        #expect(!harness.store.takeNewContentWhileHidden())
+
+        harness.store.setListVisible(false)
+        try harness.copy("收起的时候来的")
+        await settle(harness.store)
+
+        #expect(harness.store.takeNewContentWhileHidden())
+        #expect(!harness.store.takeNewContentWhileHidden(), "标记只能取一次")
+    }
+
+    @Test("收起期间的面板内触达置顶不算新内容，深浏览的位置照旧恢复")
+    func ignoresTouchWhileHidden() async throws {
+        let harness = try Harness(itemCount: 3)
+        await harness.store.loadLatestAndWait()
+        harness.store.setListVisible(false)
+
+        harness.events.post(.touched(id: harness.itemIDs[0]))
+        // 事件处理延后一跳；等条目真的置顶，才能确认它已被消费。
+        #expect(await Wait.until { harness.store.rows.first?.id == harness.itemIDs[0] })
+
+        #expect(!harness.store.takeNewContentWhileHidden())
+    }
+
+    @Test("收起期间外部复制命中已有条目（去重置顶）也算新内容")
+    func tracksExternalTouchWhileHidden() async throws {
+        let harness = try Harness(itemCount: 3)
+        await harness.store.loadLatestAndWait()
+        harness.store.setListVisible(false)
+
+        harness.events.post(.touched(id: harness.itemIDs[0], isExternal: true))
+        #expect(await Wait.until { harness.store.rows.first?.id == harness.itemIDs[0] })
+
+        #expect(harness.store.takeNewContentWhileHidden())
+    }
+
     @Test("收起时把已经攒下的刷新补上")
     func flushesPendingRefreshOnHide() async throws {
         let harness = try Harness(itemCount: 250)

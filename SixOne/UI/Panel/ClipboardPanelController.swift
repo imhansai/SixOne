@@ -439,9 +439,12 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         )
     }
 
-    /// 接回上次的预览、选中与滚动锚点；停得深就不重载。
+    /// 接回上次的预览、选中与滚动锚点；收起期间来过新复制就停到新顶部，停得深才不重载。
     private func restoreSession() {
-        if !(session?.isDeepScroll ?? false) {
+        // 复制后立刻唤出时轮询还没认领，事件仍在流水线里；同样按「有新复制」处理。
+        let storeHasNewContent = store.takeNewContentWhileHidden()
+        let hasNewContent = storeHasNewContent || manager.hasUnpolledPasteboardChange
+        if hasNewContent || !(session?.isDeepScroll ?? false) {
             store.loadLatest()
         }
 
@@ -454,11 +457,16 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
         restoreQuickLookItemIfNeeded()
 
-        if let resolution = session?.resolve(againstRows: store.rows) {
+        if let resolution = session?.resolve(againstRows: store.rows, hasNewContent: hasNewContent) {
             cursor.selectedItemID = resolution.selectedItemID
             navigationState.isSelectionActive = resolution.isSelectionActive
-            if let rowID = resolution.scrollToRowID {
+            switch resolution.scrollTarget {
+            case .top:
+                navigationState.requestScrollToTop()
+            case .row(let rowID):
                 navigationState.requestScroll(toRow: rowID)
+            case nil:
+                break
             }
         } else {
             cursor.selectedItemID = nil

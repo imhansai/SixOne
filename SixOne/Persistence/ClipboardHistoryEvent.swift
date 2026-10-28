@@ -9,8 +9,8 @@ import Foundation
 
 enum ClipboardHistoryEvent: Equatable {
     case inserted(id: UUID)
-    /// 条目被触达，置顶。
-    case touched(id: UUID)
+    /// 条目被触达，置顶；`isExternal` 表示这次触达来自外部应用的新复制（去重命中）。
+    case touched(id: UUID, isExternal: Bool = false)
     /// 缩略图生成完成，原位刷新不改顺序。
     case thumbnailUpdated(id: UUID)
     case deleted(id: UUID)

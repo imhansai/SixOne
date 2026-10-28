@@ -50,6 +50,18 @@ struct ClipboardCaptureTests {
         #expect(harness.recorder.events.count == 1)
     }
 
+    @Test("复制后还没轮询：能探测到未认领的变化，轮询后清除")
+    func detectsUnpolledPasteboardChange() async throws {
+        let harness = try ClipboardHarness()
+        #expect(!harness.manager.hasUnpolledPasteboardChange)
+
+        harness.pasteboard.simulateCopy(text: "hello")
+        #expect(harness.manager.hasUnpolledPasteboardChange)
+
+        await harness.pollAndWait()
+        #expect(!harness.manager.hasUnpolledPasteboardChange)
+    }
+
     @Test("重复复制同一内容：不新增条目，原位置顶并广播 touched")
     func deduplicatesAndTouches() async throws {
         let harness = try ClipboardHarness()
@@ -67,7 +79,7 @@ struct ClipboardCaptureTests {
         #expect(after.recencyID > recencyBefore)
         #expect(harness.recorder.events == [
             .inserted(id: first.id),
-            .touched(id: first.id),
+            .touched(id: first.id, isExternal: true),
         ])
     }
 
@@ -273,7 +285,9 @@ struct ClipboardCaptureTests {
         harness.pasteboard.simulateCopy(text: "from editor")
         await harness.pollAndWait()
 
-        #expect(harness.itemsNewestFirst().first?.sourceAppBundleIdentifier == "com.example.editor")
+        let item = try #require(harness.itemsNewestFirst().first)
+        #expect(item.sourceAppBundleIdentifier == "com.example.editor")
+        #expect(harness.recorder.events.last == .touched(id: item.id, isExternal: false))
     }
 
     @Test("整条拷贝：写回剪贴板、置顶，且不会被轮询当成新的外部复制")

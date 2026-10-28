@@ -124,6 +124,9 @@ final class ClipboardManager {
         }
     }
 
+    /// 剪贴板已变化但还没被轮询认领：复制后马上唤出面板时，事件还在流水线里。
+    var hasUnpolledPasteboardChange: Bool { pasteboard.changeCount != lastChangeCount }
+
     /// 轮询一次剪贴板；主线程只做 changeCount、隐私判定与读内容，解析交给后台。
     func pollPasteboard() {
         guard pasteboard.changeCount != lastChangeCount else { return }
@@ -162,6 +165,8 @@ final class ClipboardManager {
     private func commit(_ prepared: PasteboardEntryParser.PreparedCapture, source: SourceApplication?) {
         let entry = prepared.entry
         let fileAccess = prepared.fileAccess
+        // 内部写入也可能被轮询到（如预览里 ⌘C 直接写粘贴板），来源只判定一次。
+        let isExternal = source?.bundleIdentifier != Bundle.main.bundleIdentifier
 
         // 内容已存在：原位刷新内容/来源并置顶，去重但不吞事件。
         if let existing = existingItem(forContentKey: entry.contentKey) {
@@ -174,13 +179,13 @@ final class ClipboardManager {
             existing.contentType = entry.contentType
             existing.colorData = entry.colorData
             // 内部写入触发的轮询保留原来源，避免角标被改成 SixOne 自身。
-            if source?.bundleIdentifier != Bundle.main.bundleIdentifier {
+            if isExternal {
                 existing.sourceAppBundleIdentifier = source?.bundleIdentifier
                 existing.sourceAppName = source?.name
             }
             existing.securityScopeBookmark = fileAccess.bookmark
             existing.securityScopeBookmarks = fileAccess.bookmarks
-            recordTouch(existing)
+            recordTouch(existing, isExternal: isExternal)
             scheduleThumbnail(for: existing, entry: entry)
             trimToRetention()
             return
@@ -513,7 +518,7 @@ final class ClipboardManager {
     }
 
     /// 触达：换新排序键置顶、刷新时间与快照，保存后广播。
-    private func recordTouch(_ item: ClipboardItem) {
+    private func recordTouch(_ item: ClipboardItem, isExternal: Bool = false) {
         item.lastActivityAt = Date()
         item.recencyID = OrderedUUID.make()
         // 标题快照可能依赖 lastActivityAt，触达后统一刷新。
@@ -525,7 +530,7 @@ final class ClipboardManager {
         }
         item.refreshFilePathsSearchText()
         save("触达置顶")
-        events.post(.touched(id: item.id))
+        events.post(.touched(id: item.id, isExternal: isExternal))
     }
 
     private func syncLastChangeCount() {

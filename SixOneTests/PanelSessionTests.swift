@@ -22,7 +22,7 @@ struct PanelSessionTests {
         let selected = UUID()
         let other = UUID()
         let resolution = session(selected: selected, isActive: true)
-            .resolve(againstRows: [row(other), row(selected)])
+            .resolve(againstRows: [row(other), row(selected)], hasNewContent: false)
 
         #expect(resolution.selectedItemID == selected)
         #expect(resolution.isSelectionActive)
@@ -31,7 +31,7 @@ struct PanelSessionTests {
     @Test("选中项已被裁剪时回落为「没有选中」")
     func dropsTrimmedSelection() {
         let resolution = session(selected: UUID(), isActive: true)
-            .resolve(againstRows: [row(UUID())])
+            .resolve(againstRows: [row(UUID())], hasNewContent: false)
 
         #expect(resolution.selectedItemID == nil)
         #expect(!resolution.isSelectionActive)
@@ -42,26 +42,39 @@ struct PanelSessionTests {
         let first = UUID()
         let anchor = UUID()
         let resolution = session(anchor: anchor)
-            .resolve(againstRows: [row(first), row(anchor)])
+            .resolve(againstRows: [row(first), row(anchor)], hasNewContent: false)
 
-        #expect(resolution.scrollToRowID == anchor)
+        #expect(resolution.scrollTarget == .row(anchor))
     }
 
     @Test("锚点行已被裁剪时不发滚动请求")
     func dropsTrimmedAnchor() {
         let resolution = session(anchor: UUID())
-            .resolve(againstRows: [row(UUID())])
+            .resolve(againstRows: [row(UUID())], hasNewContent: false)
 
-        #expect(resolution.scrollToRowID == nil)
+        #expect(resolution.scrollTarget == nil)
     }
 
     @Test("空会话什么都不恢复")
     func emptySession() {
-        let resolution = session(isActive: true).resolve(againstRows: [row(UUID())])
+        let resolution = session(isActive: true)
+            .resolve(againstRows: [row(UUID())], hasNewContent: false)
 
         #expect(resolution.selectedItemID == nil)
         #expect(!resolution.isSelectionActive)
-        #expect(resolution.scrollToRowID == nil)
+        #expect(resolution.scrollTarget == nil)
+    }
+
+    @Test("收起期间来过新复制：放弃旧锚点与选中，回到顶部")
+    func newContentReturnsToTop() {
+        let selected = UUID()
+        let anchor = UUID()
+        let resolution = session(selected: selected, anchor: anchor, topVisibleIndex: 40, isActive: true)
+            .resolve(againstRows: [row(anchor), row(selected)], hasNewContent: true)
+
+        #expect(resolution.selectedItemID == nil)
+        #expect(!resolution.isSelectionActive)
+        #expect(resolution.scrollTarget == .top)
     }
 
     private func session(

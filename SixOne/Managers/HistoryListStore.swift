@@ -25,6 +25,8 @@ final class HistoryListStore {
     private var needsTopRefresh = false
     /// 列表是否在屏幕上；收起后不再攒刷新，避免唤出时与 ⌘↑ 抢时序。
     private var isListVisible = true
+    /// 收起期间来过新的复制；唤出时据此放弃旧滚动锚点，停到新的顶部。
+    private var receivedNewContentWhileHidden = false
     private(set) var query = ""
     var isSearching: Bool { !query.isEmpty }
     private var generation = 0
@@ -115,6 +117,12 @@ final class HistoryListStore {
         if !visible, needsTopRefresh { loadLatest() }
     }
 
+    /// 取走「收起期间有新复制」标记；唤出恢复会话时只认一次。
+    func takeNewContentWhileHidden() -> Bool {
+        defer { receivedNewContentWhileHidden = false }
+        return receivedNewContentWhileHidden
+    }
+
     private func fetchWindow(query: String) async -> (rows: [HistoryRow], hasOlder: Bool)? {
         do {
             let fetched = try await repository.latest(query: query, limit: windowLimit + 1)
@@ -174,13 +182,12 @@ final class HistoryListStore {
 
     private func handle(_ event: ClipboardHistoryEvent) {
         switch event {
-        case .inserted, .trimmed:
-            // 停在顶部或列表不可见时立即重载；只有用户正看着深处才攒刷新。
-            if topVisibleIndex <= ClipboardLayout.viewportRowCount || !isListVisible {
-                startWindowLoad()
-            } else {
-                needsTopRefresh = true
-            }
+        case .inserted:
+            // 只有真新增内容才作数；面板内复制/粘贴发的是 touched，深浏览的连续性不受影响。
+            if !isListVisible { receivedNewContentWhileHidden = true }
+            refreshAfterContentChange()
+        case .trimmed:
+            refreshAfterContentChange()
         case .cleared:
             // 条目清空：与滚动位置无关地立即清空，视口锚点归零，否则后续拷贝会被误判为滚到深处。
             topVisibleIndex = 0
@@ -189,7 +196,9 @@ final class HistoryListStore {
             isLoading = false
             dataRevision &+= 1
             startWindowLoad()
-        case .touched(let id):
+        case .touched(let id, let isExternal):
+            // 外部复制命中已有条目（去重置顶）同样算有新复制；面板内复制/粘贴不算。
+            if isExternal, !isListVisible { receivedNewContentWhileHidden = true }
             if isSearching {
                 startWindowLoad()
             } else {
@@ -199,6 +208,15 @@ final class HistoryListStore {
             Task { [weak self] in await self?.reloadRow(id: id) }
         case .deleted(let id):
             removeRow(id: id)
+        }
+    }
+
+    /// 停在顶部或列表不可见时立即重载；只有用户正看着深处才攒刷新。
+    private func refreshAfterContentChange() {
+        if topVisibleIndex <= ClipboardLayout.viewportRowCount || !isListVisible {
+            startWindowLoad()
+        } else {
+            needsTopRefresh = true
         }
     }
 }
