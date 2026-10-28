@@ -34,6 +34,24 @@ struct PanelKeyPress: Equatable {
             || matches(PanelKeyCode.a, [.command, .option])
     }
 
+    /// ⌘+1…9 / ⌘⇧+1…9 对应的可见行偏移（0 起）；其它组合为 nil。
+    var quickPasteOffset: Int? {
+        guard !isARepeat else { return nil }
+        guard modifiers == [.command] || modifiers == [.command, .shift] else { return nil }
+        switch keyCode {
+        case PanelKeyCode.one: return 0
+        case PanelKeyCode.two: return 1
+        case PanelKeyCode.three: return 2
+        case PanelKeyCode.four: return 3
+        case PanelKeyCode.five: return 4
+        case PanelKeyCode.six: return 5
+        case PanelKeyCode.seven: return 6
+        case PanelKeyCode.eight: return 7
+        case PanelKeyCode.nine: return 8
+        default: return nil
+        }
+    }
+
     /// 查找栏聚焦时可执行的查找动作；⌥⌘F / ⌥⌘A 刻意留给 NSTextFinder。
     var previewFindCommand: NSTextFinder.Action? {
         if matches(PanelKeyCode.f, .command) { return .showFindInterface }
@@ -62,6 +80,8 @@ enum PanelKeyAction: Equatable {
 
     case activateSelectedItem
     case activateFocusedGroupFile(index: Int)
+    /// 粘贴当前完整可见区的第 offset 行（0 起）。
+    case pasteVisibleRow(offset: Int, asPlainText: Bool)
 
     // 移动
     case stepPreview(by: Int)
@@ -95,6 +115,8 @@ struct PanelKeyContext {
 
     var isSearchFocused = false
     var isMoreActionsFocused = false
+    /// 完整可见行数；⌘+数字只在这段范围内生效。
+    var visibleRowCount = 0
 
     var isModalPresented = false
 
@@ -110,6 +132,11 @@ struct PanelKeyContext {
     var hasPreviewTextSelection = false
 
     var isPreviewing: Bool { previewKind != nil }
+
+    /// 列表（含搜索框聚焦）可用快速粘贴；预览、编辑与更多操作菜单让路。
+    var canQuickPasteVisibleRow: Bool {
+        !isPreviewing && !isEditing && !isMoreActionsFocused
+    }
 }
 
 // MARK: - 键码
@@ -131,4 +158,13 @@ enum PanelKeyCode {
     static let e = UInt16(kVK_ANSI_E)
     static let f = UInt16(kVK_ANSI_F)
     static let g = UInt16(kVK_ANSI_G)
+    static let one = UInt16(kVK_ANSI_1)
+    static let two = UInt16(kVK_ANSI_2)
+    static let three = UInt16(kVK_ANSI_3)
+    static let four = UInt16(kVK_ANSI_4)
+    static let five = UInt16(kVK_ANSI_5)
+    static let six = UInt16(kVK_ANSI_6)
+    static let seven = UInt16(kVK_ANSI_7)
+    static let eight = UInt16(kVK_ANSI_8)
+    static let nine = UInt16(kVK_ANSI_9)
 }

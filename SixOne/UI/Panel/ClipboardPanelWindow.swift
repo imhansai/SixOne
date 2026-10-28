@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor
 protocol PanelKeyHandling: AnyObject {
     func handlePreDispatchKey(_ event: NSEvent) -> Bool
+    /// 修饰键按下/松开：⌘ 按住时显示快速粘贴编号。
+    func handleModifierFlagsChanged(_ event: NSEvent)
     /// AppKit 未走 key equivalent 时的命令键补充分发（只认主菜单快捷键）。
     func handleCommandKey(_ event: NSEvent) -> Bool
     func shouldUseDefaultKeyDown(for event: NSEvent) -> Bool
@@ -28,6 +30,9 @@ final class ClipboardPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .flagsChanged {
+            keyHandler?.handleModifierFlagsChanged(event)
+        }
         if event.type == .keyDown, let keyHandler {
             if keyHandler.handlePreDispatchKey(event) { return }
             if keyHandler.handleCommandKey(event) { return }

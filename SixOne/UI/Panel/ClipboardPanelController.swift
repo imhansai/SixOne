@@ -23,6 +23,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     private let copyState: CopyState
     private let noticeState: NoticeState
     private let shareState: ShareState
+    private let quickPasteHintState: QuickPasteHintState
     private let searchSession: PanelSearchSession
     /// 上次收起时的界面快照；首次唤出前为 nil。
     private var session: PanelSession?
@@ -74,7 +75,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         moreActionsState: moreActionsState,
         confirmationState: confirmationState,
         previewState: previewState,
-        selectedItemID: { [weak self] in self?.cursor.selectedItemID }
+        selectedItemID: { [weak self] in self?.cursor.selectedItemID },
+        visibleRowCount: { [weak self] in
+            guard let range = self?.navigationState.fullyVisibleRange else { return 0 }
+            return min(range.count, QuickPaste.rowLimit)
+        }
     )
     private lazy var menuCommands = MenuKeyEquivalentIndex(menu: NSApp.mainMenu)
     private lazy var focusZones = PanelFocusZones(
@@ -99,6 +104,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         self.copyState = context.copyState
         self.noticeState = context.noticeState
         self.shareState = context.shareState
+        self.quickPasteHintState = context.quickPasteHintState
         self.searchSession = context.searchSession
         self.panel = PanelWindowFactory.makePanel()
 
@@ -128,6 +134,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 // 不恢复原应用，避免 SixOne 自己的设置窗口抢 key 时切走应用。
+                self?.quickPasteHintState.cancel()
                 self?.hideIfFocusLeft(restoresPreviousApplication: false)
             }
         }
@@ -389,6 +396,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         guard panel.isVisible || panelState.isVisible else { return }
         // 收起按自动保存处理，避免未提交编辑随退出丢失；显式取消不会走到这里。
         commitEditingBeforeHiding()
+        quickPasteHintState.cancel()
         captureSession()
         panel.makeFirstResponder(nil)
         searchState.isFocused = false
@@ -727,6 +735,18 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         pasteFlow.paste(full)
     }
 
+    /// ⌘+数字：先选中当前完整可见区的第 offset 行再粘贴；失败时面板保留并沿用现有提示。
+    private func pasteVisibleRow(offset: Int, asPlainText: Bool) {
+        guard let range = navigationState.fullyVisibleRange else { return }
+        let index = range.lowerBound + offset
+        guard range.contains(index), store.rows.indices.contains(index) else { return }
+        let id = store.rows[index].id
+        guard let full = fullItem(id: id) else { return }
+        if asPlainText, !full.kind.hasPlainText { return }
+        navigationState.selectedItemID = id
+        pasteFlow.paste(full, asPlainText: asPlainText)
+    }
+
     private func deleteSelectedItem() {
         guard let item = currentLightItem else { return }
         panelDidRequestDelete(id: item.id)
@@ -892,10 +912,28 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         let press = PanelKeyPress(event)
         let context = keyContext.context()
 
+        // 按了非 ⌘+数字 的键：编号提示立刻收起，避免 ⌘C 等组合闪一下。
+        if press.quickPasteOffset == nil {
+            quickPasteHintState.cancel()
+        }
+
         guard case .panel(let action) = PanelKeyRouter.route(press, context: context) else {
             return false
         }
         return apply(action)
+    }
+
+    /// 只认 ⌘ / ⌘⇧；预览、编辑、菜单弹出时编号不出现。
+    func handleModifierFlagsChanged(_ event: NSEvent) {
+        let context = keyContext.context()
+        guard panel.isKeyWindow,
+              !context.isModalPresented,
+              !context.isIMEComposing,
+              context.canQuickPasteVisibleRow else {
+            quickPasteHintState.cancel()
+            return
+        }
+        quickPasteHintState.handleModifiers(event.modifierFlags)
     }
 
     /// 先走原生菜单 key equivalent；菜单栏不可用时再走菜单索引 fallback。
@@ -1064,6 +1102,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             activateSelected()
         case .activateFocusedGroupFile(let index):
             if let item = previewState.item { pasteFlow.paste(item, fileIndex: index) }
+        case .pasteVisibleRow(let offset, let asPlainText):
+            pasteVisibleRow(offset: offset, asPlainText: asPlainText)
 
         case .stepPreview(let delta):
             cursor.stepPreview(direction: delta)

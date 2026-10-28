@@ -12,6 +12,8 @@ import UniformTypeIdentifiers
 /// 单行内容（HistoryRow 轻量快照）：选中态按值注入，复制反馈在行内观察。
 struct ClipboardRowView: View {
     let row: HistoryRow
+    /// 按住 ⌘ 时的快速粘贴编号；不显示时为空。
+    var shortcutNumber: Int? = nil
     let isSelected: Bool
     let isListActive: Bool
     /// 首末行额外让出的列表留白，算在行内并随内容滚动。
@@ -100,15 +102,17 @@ struct ClipboardRowView: View {
                 clickTracker: clickTracker
             )
         }
-        // 复制命中层在宿主之上，其余事件放行给宿主。
+        // 复制命中层在宿主之上，其余事件放行给宿主；编号占位时让整行照常响应。
         .overlay(alignment: .topTrailing) {
-            RowCopyHitTarget(onCopy: onCopy)
-                .frame(width: copyButtonRect.width, height: copyButtonRect.height)
-                .padding(.top, copyButtonRect.minY)
-                .padding(
-                    .trailing,
-                    ClipboardLayout.rowCopyButtonTrailingInset(usesOverlayScrollers: usesOverlayScrollers)
-                )
+            if shortcutNumber == nil {
+                RowCopyHitTarget(onCopy: onCopy)
+                    .frame(width: copyButtonRect.width, height: copyButtonRect.height)
+                    .padding(.top, copyButtonRect.minY)
+                    .padding(
+                        .trailing,
+                        ClipboardLayout.rowCopyButtonTrailingInset(usesOverlayScrollers: usesOverlayScrollers)
+                    )
+            }
         }
     }
 
@@ -161,13 +165,29 @@ struct ClipboardRowView: View {
     }
 
     private var trailingColumn: some View {
-        copyButton
-            .padding(.top, copyButtonRect.minY)
-            .frame(
-                width: ClipboardLayout.rowCopyButtonColumnWidth(usesOverlayScrollers: usesOverlayScrollers),
-                height: rowTotalHeight,
-                alignment: .topLeading
-            )
+        Group {
+            if let shortcutNumber {
+                shortcutNumberView(shortcutNumber)
+            } else {
+                copyButton
+            }
+        }
+        .padding(.top, copyButtonRect.minY)
+        .frame(
+            width: ClipboardLayout.rowCopyButtonColumnWidth(usesOverlayScrollers: usesOverlayScrollers),
+            height: rowTotalHeight,
+            alignment: .topLeading
+        )
+    }
+
+    /// 按住 ⌘ 时把复制图标换成数字，沿用按钮圆底，UI 变化最小。
+    private func shortcutNumberView(_ number: Int) -> some View {
+        Text(verbatim: "\(number)")
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(Color.primary.opacity(0.82))
+            .frame(width: ClipboardLayout.rowCopyButtonSize, height: ClipboardLayout.rowCopyButtonSize)
+            .background(Circle().fill(actionButtonFill))
     }
 
     private enum RowType {
@@ -262,17 +282,18 @@ struct ClipboardRowView: View {
                     width: ClipboardLayout.rowCopyButtonSize,
                     height: ClipboardLayout.rowCopyButtonSize
                 )
-                .background(
-                    Circle().fill(
-                        colorScheme == .dark
-                            ? Color(.sRGB, red: 90 / 255, green: 90 / 255, blue: 90 / 255).opacity(0.65)
-                            : Color(.sRGB, red: 200 / 255, green: 200 / 255, blue: 200 / 255).opacity(0.65)
-                    )
-                )
+                .background(Circle().fill(actionButtonFill))
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(NoPressFeedbackButtonStyle())
         .accessibilityLabel(Localizer.string("Copy"))
+    }
+
+    /// 行尾操作按钮的圆底；复制与编号共用。
+    private var actionButtonFill: Color {
+        colorScheme == .dark
+            ? Color(.sRGB, red: 90 / 255, green: 90 / 255, blue: 90 / 255).opacity(0.65)
+            : Color(.sRGB, red: 200 / 255, green: 200 / 255, blue: 200 / 255).opacity(0.65)
     }
 
     @ViewBuilder

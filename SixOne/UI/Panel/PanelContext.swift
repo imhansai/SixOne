@@ -48,6 +48,8 @@ final class PanelContext {
     let navigationState = NavigationState()
     let copyState = CopyState()
     let noticeState = NoticeState()
+    /// 按住 ⌘ 时显示快速粘贴编号。
+    let quickPasteHintState = QuickPasteHintState()
     let shareState = ShareState()
     /// 列表滚动条形态：`HistoryListTableView` 发布、行视图读取。
     let scrollerLayout = ScrollerLayoutState()

@@ -13,6 +13,7 @@ struct PanelWindowKeyHandlingTests {
     private final class FakeKeyHandler: PanelKeyHandling {
         var preDispatchResult = false
         var preDispatchCount = 0
+        var modifierFlagsChangedCount = 0
         var commandResult = false
         var commandCount = 0
         var defaultKeyDownCodes: Set<UInt16> = []
@@ -24,6 +25,10 @@ struct PanelWindowKeyHandlingTests {
         func handlePreDispatchKey(_ event: NSEvent) -> Bool {
             preDispatchCount += 1
             return preDispatchResult
+        }
+
+        func handleModifierFlagsChanged(_ event: NSEvent) {
+            modifierFlagsChangedCount += 1
         }
 
         func handleCommandKey(_ event: NSEvent) -> Bool {
@@ -150,6 +155,27 @@ struct PanelWindowKeyHandlingTests {
         ))
         #expect(handler.preDispatchCount == 1)
         #expect(handler.commandCount == 1)
+    }
+
+    @Test("修饰键变化只通知编号提示，不走按键路由")
+    func modifierFlagsChangedRoutes() {
+        let (panel, handler, _) = makePanel()
+        defer { panel.orderOut(nil) }
+        let event = NSEvent.keyEvent(
+            with: .flagsChanged,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: 0,
+            windowNumber: panel.windowNumber,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: UInt16(kVK_Command)
+        )!
+        panel.sendEvent(event)
+        #expect(handler.modifierFlagsChangedCount == 1)
+        #expect(handler.preDispatchCount == 0)
     }
 
     @Test("非 keyDown 事件不经过 pre-dispatch")

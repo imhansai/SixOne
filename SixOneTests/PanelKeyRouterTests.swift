@@ -218,6 +218,46 @@ struct PanelKeyRouterTests {
         #expect(PanelKeyRouter.route(down, context: preview) == .panel(.stepPreview(by: 1)))
     }
 
+    @Test("⌘+数字：粘贴完整可见行；⌘⇧ 纯文本，越界吞掉，预览/编辑/菜单让路")
+    func quickPasteVisibleRows() {
+        var list = PanelKeyContext()
+        list.visibleRowCount = 5
+        #expect(route(PanelKeyCode.one, .command, list)
+            == .panel(.pasteVisibleRow(offset: 0, asPlainText: false)))
+        #expect(route(PanelKeyCode.three, .command, list)
+            == .panel(.pasteVisibleRow(offset: 2, asPlainText: false)))
+        #expect(route(PanelKeyCode.two, [.command, .shift], list)
+            == .panel(.pasteVisibleRow(offset: 1, asPlainText: true)))
+        #expect(route(PanelKeyCode.nine, .command, list) == .panel(.consume),
+                "越界数字吞掉，不落到 AppKit 响提示音")
+        #expect(route(PanelKeyCode.one, [.command, .option], list) == .standard,
+                "⌥⌘+数字不是快速粘贴")
+        #expect(route(PanelKeyCode.one, [], list) == .standard)
+
+        let repeated = PanelKeyPress(keyCode: PanelKeyCode.one, modifiers: .command, isARepeat: true)
+        #expect(PanelKeyRouter.route(repeated, context: list) == .standard,
+                "按住不放不能反复触发粘贴")
+
+        var search = PanelKeyContext(isSearchFocused: true)
+        search.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, search)
+            == .panel(.pasteVisibleRow(offset: 0, asPlainText: false)),
+                "搜索框聚焦时也能直接粘")
+
+        var preview = PanelKeyContext(previewKind: .text)
+        preview.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, preview) == .standard)
+
+        var editing = PanelKeyContext(previewKind: .text)
+        editing.isEditing = true
+        editing.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, editing) == .standard)
+
+        var moreActions = PanelKeyContext(isMoreActionsFocused: true)
+        moreActions.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, moreActions) == .standard)
+    }
+
     @Test("列表：⌘F 是搜索别名，其它命令键交给菜单/响应链")
     func listKeys() {
         #expect(route(PanelKeyCode.f, .command) == .panel(.focusSearch))

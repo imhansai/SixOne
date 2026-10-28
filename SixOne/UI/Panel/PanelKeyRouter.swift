@@ -16,6 +16,15 @@ enum PanelKeyRouter {
         if context.isModalPresented { return .standard }
         if context.isIMEComposing { return .standard }
 
+        // ⌘+数字直粘完整可见行；搜索框聚焦时同样可用。
+        if let offset = press.quickPasteOffset, context.canQuickPasteVisibleRow {
+            guard offset < context.visibleRowCount else { return .panel(.consume) }
+            return .panel(.pasteVisibleRow(
+                offset: offset,
+                asPlainText: press.modifiers.contains(.shift)
+            ))
+        }
+
         if !context.isPreviewing,
            press.matches(PanelKeyCode.tab, .control)
             || press.matches(PanelKeyCode.tab, [.control, .shift]) {

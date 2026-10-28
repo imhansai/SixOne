@@ -163,6 +163,12 @@ struct ClipboardListView: View {
         }
     }
 
+    /// 按住 ⌘ 才读取可见范围，平时滚动不额外触发列表更新。
+    private var quickPasteRange: ClosedRange<Int>? {
+        guard context.quickPasteHintState.isShowing else { return nil }
+        return navigationState.fullyVisibleRange
+    }
+
     private var rowList: some View {
         HistoryListTableView(
             context: context,
@@ -173,13 +179,15 @@ struct ClipboardListView: View {
             isSelectionActive: navigationState.isSelectionActive,
             scrollRevision: navigationState.scrollRevision,
             isScrollBlocked: confirmationState.isPresenting,
+            quickPasteRange: quickPasteRange,
             onSelect: { select(id: $0) },
             onActivate: { activate(id: $0) },
             onCopy: { flashCopied(id: $0) },
             menuProvider: { row, anchor in rowMenuBuilder.makeMenu(for: row, anchor: anchor) },
-            onTopVisibleRowChanged: { first in
-                navigationState.fullyVisibleFirstIndex = first
-                store.noteTopVisibleIndex(first)
+            onVisibleRowRangeChanged: { range in
+                navigationState.fullyVisibleRange = range
+                navigationState.fullyVisibleFirstIndex = range.lowerBound
+                store.noteTopVisibleIndex(range.lowerBound)
             },
             onScrollerLayoutChanged: { usesOverlayScrollers in
                 // 行尾内缩跟随实际滚动条形态；写入可观察状态以触发行重建。

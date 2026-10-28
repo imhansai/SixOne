@@ -13,7 +13,8 @@ private func makeRowHost(
     rowCount: Int = 3,
     selectFirstRow: Bool = false,
     topPadding: CGFloat = 0,
-    bottomPadding: CGFloat = 0
+    bottomPadding: CGFloat = 0,
+    shortcutNumber: Int? = nil
 ) throws -> (host: NSHostingView<AnyView>, window: NSWindow, context: PanelContext) {
     let harness = try ClipboardHarness()
     let context = PanelContext(
@@ -30,6 +31,7 @@ private func makeRowHost(
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 ClipboardRowView(
                     row: row,
+                    shortcutNumber: shortcutNumber,
                     isSelected: selectFirstRow && index == 0,
                     isListActive: selectFirstRow,
                     listTopPadding: index == 0 ? topPadding : 0,
@@ -148,6 +150,14 @@ struct RowHitRegionTests {
             rowHost.rect.contains(CGPoint(x: rowHost.rect.maxX - 10, y: rowHost.rect.midY)),
             "行尾滚动条留白没有整行宿主覆盖，右键弹不出菜单"
         )
+    }
+
+    @Test("编号占位时不保留看不见的复制热区")
+    func shortcutNumberRemovesCopyHitTarget() throws {
+        let (host, window, _) = try makeRowHost(rowCount: 1, shortcutNumber: 1)
+        defer { window.orderOut(nil) }
+
+        #expect(copyHitTargets(in: host).isEmpty, "编号显示时点行尾不该还在悄悄复制")
     }
 
     @Test("复制命中目标与按钮矩形同源")

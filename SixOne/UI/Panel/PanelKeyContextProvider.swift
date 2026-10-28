@@ -13,6 +13,8 @@ struct PanelKeyContextProvider {
     let previewState: PreviewState
     /// 当前选中条目 id（列表只持轻量行，需要整条时按 id 补齐）。
     let selectedItemID: () -> UUID?
+    /// 完整可见且可编号的行数。
+    let visibleRowCount: () -> Int
 
     private var previewSurface: PreviewSurfaceProbe {
         PreviewSurfaceProbe(contentView: panel.contentView, firstResponder: panel.firstResponder)
@@ -48,6 +50,7 @@ struct PanelKeyContextProvider {
         )
         context.isSearchFocused = searchState.isFocused
         context.hasSelection = selectedItemID() != nil
+        context.visibleRowCount = visibleRowCount()
 
         return context
     }

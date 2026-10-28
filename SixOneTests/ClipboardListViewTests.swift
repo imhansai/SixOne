@@ -59,6 +59,9 @@ struct ClipboardListViewTests {
         #expect(interactionHosts.contains { $0.bounds.width > 100 }, "整行没有交互宿主，单击选不中")
 
         #expect(context.navigationState.fullyVisibleFirstIndex == 0, "首屏可见行起点不对")
+        let rangePublished = await Wait.until { context.navigationState.fullyVisibleRange != nil }
+        #expect(rangePublished, "完整可见范围没有发布，快速粘贴编号没有依据")
+        #expect(context.navigationState.fullyVisibleRange?.lowerBound == 0)
     }
 
     @Test("确认弹窗压着时列表停掉滚动，关掉后恢复")

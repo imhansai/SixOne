@@ -38,18 +38,20 @@ struct HistoryListTableView: NSViewRepresentable {
     let scrollRevision: Int
     /// 确认弹窗压着时停掉用户滚动（程序化滚动不受影响）。
     var isScrollBlocked = false
+    /// 按住 ⌘ 时的快速粘贴编号范围；nil 表示不显示编号。
+    var quickPasteRange: ClosedRange<Int>? = nil
 
     let onSelect: (UUID) -> Void
     let onActivate: (UUID) -> Void
     let onCopy: (UUID) -> Void
     let menuProvider: (HistoryRow, RowInteractionHost.HostView) -> NSMenu?
-    var onTopVisibleRowChanged: ((Int) -> Void)?
+    var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
     var onScrollerLayoutChanged: ((Bool) -> Void)?
     var beep: () -> Void = { NSSound.beep() }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
-            onTopVisibleRowChanged: onTopVisibleRowChanged,
+            onVisibleRowRangeChanged: onVisibleRowRangeChanged,
             onScrollerLayoutChanged: onScrollerLayoutChanged
         )
     }
@@ -95,7 +97,7 @@ struct HistoryListTableView: NSViewRepresentable {
         context.coordinator.observe(scrollView)
         DispatchQueue.main.async { [weak scrollView] in
             guard let scrollView else { return }
-            context.coordinator.publishTopVisibleRow()
+            context.coordinator.publishVisibleRowRange()
             context.coordinator.publishScrollerLayout(for: scrollView)
         }
         return scrollView
@@ -110,7 +112,7 @@ struct HistoryListTableView: NSViewRepresentable {
         defer { context.coordinator.isInViewUpdate = false }
 
         let coordinator = context.coordinator
-        coordinator.onTopVisibleRowChanged = onTopVisibleRowChanged
+        coordinator.onVisibleRowRangeChanged = onVisibleRowRangeChanged
         coordinator.onScrollerLayoutChanged = onScrollerLayoutChanged
         coordinator.apply(self)
 
@@ -123,12 +125,17 @@ struct HistoryListTableView: NSViewRepresentable {
 
         if coordinator.syncRows(with: self, in: tableView) {
             coordinator.pinDocumentHeight(tableView, in: scrollView)
+            // 过滤后行数变短不会产生边界通知，排一轮重算可见范围。
+            DispatchQueue.main.async {
+                context.coordinator.publishVisibleRowRange()
+            }
         }
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0
             context.allowsImplicitAnimation = false
             coordinator.syncSelectionAppearance(in: tableView)
+            coordinator.syncQuickPasteHints(in: tableView)
             coordinator.syncSelection(in: tableView)
             coordinator.handle(
                 self.context.navigationState.takePendingScrollCommands(),
@@ -147,15 +154,16 @@ struct HistoryListTableView: NSViewRepresentable {
         static let cellIdentifier = NSUserInterfaceItemIdentifier("SixOneHistoryRowCell")
         static let rowViewIdentifier = NSUserInterfaceItemIdentifier("SixOneHistoryRowView")
 
-        var onTopVisibleRowChanged: ((Int) -> Void)?
+        var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
         var onScrollerLayoutChanged: ((Bool) -> Void)?
         var isInViewUpdate = false
         weak var tableView: NSTableView?
 
         private var rows: [HistoryRow] = []
-        private var makeRow: ((HistoryRow, CGFloat, CGFloat) -> AnyView)?
+        private var makeRow: ((HistoryRow, Int, CGFloat, CGFloat) -> AnyView)?
         private var selectedItemID: UUID?
         private var isSelectionActive = false
+        private var quickPasteRange: ClosedRange<Int>?
         let rowClickTracker = RowClickTracker()
 
         private var reloadedDataRevision: Int?
@@ -167,9 +175,10 @@ struct HistoryListTableView: NSViewRepresentable {
             var isActive: Bool
         }
         private var renderedSelection = RenderedSelection(id: nil, isActive: false)
+        private var renderedQuickPasteRange: ClosedRange<Int>?
         private var beep: () -> Void = { NSSound.beep() }
 
-        private var lastPublishedTopVisibleRow: Int?
+        private var lastPublishedVisibleRowRange: ClosedRange<Int>?
         private var lastPublishedUsesOverlayScrollers: Bool?
         private var boundsObserver: NSObjectProtocol?
         private var frameObserver: NSObjectProtocol?
@@ -177,10 +186,10 @@ struct HistoryListTableView: NSViewRepresentable {
         private var clickMonitor: Any?
 
         init(
-            onTopVisibleRowChanged: ((Int) -> Void)?,
+            onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?,
             onScrollerLayoutChanged: ((Bool) -> Void)?
         ) {
-            self.onTopVisibleRowChanged = onTopVisibleRowChanged
+            self.onVisibleRowRangeChanged = onVisibleRowRangeChanged
             self.onScrollerLayoutChanged = onScrollerLayoutChanged
         }
 
@@ -190,16 +199,19 @@ struct HistoryListTableView: NSViewRepresentable {
         func apply(_ parent: HistoryListTableView) {
             selectedItemID = parent.selectedItemID
             isSelectionActive = parent.isSelectionActive
+            quickPasteRange = parent.quickPasteRange
             beep = parent.beep
             rowClickTracker.onSelect = parent.onSelect
             rowClickTracker.onActivate = parent.onActivate
             let tracker = rowClickTracker
             let selectedID = parent.selectedItemID
             let selectionActive = parent.isSelectionActive
-            makeRow = { [context = parent.context, locale = parent.locale] row, topPadding, bottomPadding in
+            let quickPasteRange = parent.quickPasteRange
+            makeRow = { [context = parent.context, locale = parent.locale] row, index, topPadding, bottomPadding in
                 AnyView(
                     ClipboardRowView(
                         row: row,
+                        shortcutNumber: Self.shortcutNumber(forRow: index, in: quickPasteRange),
                         isSelected: row.id == selectedID,
                         isListActive: selectionActive,
                         listTopPadding: topPadding,
@@ -255,7 +267,7 @@ struct HistoryListTableView: NSViewRepresentable {
                   let makeRow,
                   let cell = tableView.view(atColumn: 0, row: index, makeIfNecessary: false)
                     as? ListRowCellView else { return }
-            cell.setContent(makeRow(rows[index], topPadding(row: index), bottomPadding(row: index)))
+            cell.setContent(makeRow(rows[index], index, topPadding(row: index), bottomPadding(row: index)))
         }
 
         /// 修正 NSTableView 自算高度偏高导致的多余底部空白；内容比视口短时仍撑满视口。
@@ -295,6 +307,7 @@ struct HistoryListTableView: NSViewRepresentable {
             cell.setContent(
                 makeRow?(
                     rows[row],
+                    row,
                     topPadding(row: row),
                     bottomPadding(row: row)
                 ) ?? AnyView(Color.clear)
@@ -308,6 +321,13 @@ struct HistoryListTableView: NSViewRepresentable {
 
         private func bottomPadding(row: Int) -> CGFloat {
             row == rows.count - 1 ? ClipboardLayout.verticalPadding : 0
+        }
+
+        /// 编号从完整可见范围的首行起算；一屏最多 9 条。
+        static func shortcutNumber(forRow row: Int, in range: ClosedRange<Int>?) -> Int? {
+            guard let range, range.contains(row) else { return nil }
+            let number = row - range.lowerBound + 1
+            return number <= QuickPaste.rowLimit ? number : nil
         }
 
         /// 点击不改表格选中，选中真相只在 `NavigationState`。
@@ -325,6 +345,20 @@ struct HistoryListTableView: NSViewRepresentable {
             renderedSelection = current
             for id in Set([previous.id, current.id].compactMap { $0 }) {
                 guard let index = rows.firstIndex(where: { $0.id == id }) else { continue }
+                refreshRowContent(at: index, in: tableView)
+            }
+        }
+
+        /// 编号出现/消失或随滚动重排时，只刷新涉及到的行。
+        func syncQuickPasteHints(in tableView: NSTableView) {
+            guard quickPasteRange != renderedQuickPasteRange else { return }
+            let previous = renderedQuickPasteRange
+            renderedQuickPasteRange = quickPasteRange
+            var indices: Set<Int> = []
+            for range in [previous, quickPasteRange].compactMap({ $0 }) {
+                indices.formUnion(range)
+            }
+            for index in indices.sorted() where rows.indices.contains(index) {
                 refreshRowContent(at: index, in: tableView)
             }
         }
@@ -410,7 +444,7 @@ struct HistoryListTableView: NSViewRepresentable {
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.publishTopVisibleRow()
+                    self?.publishVisibleRowRange()
                 }
             }
             frameObserver = NotificationCenter.default.addObserver(
@@ -425,6 +459,8 @@ struct HistoryListTableView: NSViewRepresentable {
                         self.pinDocumentHeight(tableView, in: scrollView)
                     }
                     self.syncColumnWidth(for: scrollView)
+                    // 面板首次显示/布局变化时补发可见范围，不能只等滚动通知。
+                    self.publishVisibleRowRange()
                 }
             }
             styleObserver = NotificationCenter.default.addObserver(
@@ -511,15 +547,15 @@ struct HistoryListTableView: NSViewRepresentable {
             onScrollerLayoutChanged?(usesOverlay)
         }
 
-        func publishTopVisibleRow() {
-            guard let publish = onTopVisibleRowChanged, let tableView else { return }
+        func publishVisibleRowRange() {
+            guard let publish = onVisibleRowRangeChanged, let tableView else { return }
             guard let range = fullyVisibleRowRange(in: tableView) else { return }
-            guard range.lowerBound != lastPublishedTopVisibleRow else { return }
-            lastPublishedTopVisibleRow = range.lowerBound
+            guard range != lastPublishedVisibleRowRange else { return }
+            lastPublishedVisibleRowRange = range
             if isInViewUpdate {
-                DispatchQueue.main.async { publish(range.lowerBound) }
+                DispatchQueue.main.async { publish(range) }
             } else {
-                publish(range.lowerBound)
+                publish(range)
             }
         }
 

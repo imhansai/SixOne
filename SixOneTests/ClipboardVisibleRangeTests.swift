@@ -7,12 +7,12 @@ import AppKit
 import Testing
 @testable import SixOne
 
-/// 按用例 id 记录首个完整可见行，避免并行用例互相清计数。
+/// 按用例 id 记录完整可见范围，避免并行用例互相清计数。
 private enum VisibleRangeProbe {
-    nonisolated(unsafe) static var published: [UUID: [Int]] = [:]
+    nonisolated(unsafe) static var published: [UUID: [ClosedRange<Int>]] = [:]
 
-    nonisolated static func record(_ id: UUID, top: Int) {
-        published[id, default: []].append(top)
+    nonisolated static func record(_ id: UUID, range: ClosedRange<Int>) {
+        published[id, default: []].append(range)
     }
 
     nonisolated static func count(_ id: UUID) -> Int {
@@ -27,8 +27,8 @@ struct ClipboardVisibleRangeTests {
 
     private func makeCoordinator(id: UUID) -> HistoryListTableView.Coordinator {
         HistoryListTableView.Coordinator(
-            onTopVisibleRowChanged: { top in
-                VisibleRangeProbe.record(id, top: top)
+            onVisibleRowRangeChanged: { range in
+                VisibleRangeProbe.record(id, range: range)
             },
             onScrollerLayoutChanged: nil
         )
@@ -101,7 +101,7 @@ struct ClipboardVisibleRangeTests {
         defer { window.orderOut(nil) }
 
         coordinator.isInViewUpdate = true
-        coordinator.publishTopVisibleRow()
+        coordinator.publishVisibleRowRange()
         #expect(VisibleRangeProbe.count(id) == 0, "更新周期内不该同步写回")
 
         coordinator.isInViewUpdate = false
@@ -116,20 +116,22 @@ struct ClipboardVisibleRangeTests {
         let (_, _, window) = try makeHostedTable(coordinator, rows: makeRows())
         defer { window.orderOut(nil) }
 
-        coordinator.publishTopVisibleRow()
+        coordinator.publishVisibleRowRange()
         #expect(VisibleRangeProbe.count(id) == 1)
     }
 
-    @Test("首屏从第 0 行开始，行号由表格直接给出")
-    func publishesTopRowFromTableView() throws {
+    @Test("首屏从第 0 行开始，范围与表格判定一致")
+    func publishesRangeFromTableView() throws {
         let id = UUID()
         let coordinator = makeCoordinator(id: id)
-        let (_, _, window) = try makeHostedTable(coordinator, rows: makeRows())
+        let (_, tableView, window) = try makeHostedTable(coordinator, rows: makeRows())
         defer { window.orderOut(nil) }
 
-        coordinator.publishTopVisibleRow()
-        let top = try #require(VisibleRangeProbe.published[id]?.first)
-        #expect(top == 0)
+        coordinator.publishVisibleRowRange()
+        let published = try #require(VisibleRangeProbe.published[id]?.first)
+        let expected = try #require(coordinator.fullyVisibleRowRange(in: tableView))
+        #expect(published == expected)
+        #expect(published.lowerBound == 0)
     }
 
     @Test("只露一角的行不算可见：滚到半行处，范围首末都是完整行")
@@ -142,7 +144,8 @@ struct ClipboardVisibleRangeTests {
         scrollView.contentView.scroll(to: NSPoint(x: 0, y: ClipboardLayout.rowHeight * 3 - 20))
         scrollView.reflectScrolledClipView(scrollView.contentView)
 
-        let range = try #require(coordinator.fullyVisibleRowRange(in: tableView))
+        coordinator.publishVisibleRowRange()
+        let range = try #require(VisibleRangeProbe.published[id]?.last)
         let visible = tableView.visibleRect
         #expect(range.lowerBound > 0, "上边缘的半行被算成可见")
         #expect(visible.contains(tableView.rect(ofRow: range.lowerBound)), "首行不完整还算可见")

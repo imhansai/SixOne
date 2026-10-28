@@ -128,6 +128,8 @@ final class NavigationState {
     private(set) var pendingRevealItemID: UUID?
     /// 首个完整可见行；会话锚点与「是否滚到深处」都只认它。
     var fullyVisibleFirstIndex = 0
+    /// 完整可见行范围；快速粘贴编号与视口同源。
+    var fullyVisibleRange: ClosedRange<Int>?
     /// 列表为键盘焦点时实心高亮；搜索框/更多操作聚焦时保留选中但置灰。
     var isSelectionActive = false
 
