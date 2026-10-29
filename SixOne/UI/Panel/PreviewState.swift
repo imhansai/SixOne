@@ -35,12 +35,23 @@ final class PreviewState {
     private(set) var groupFilterBlurRequestID = 0
     private(set) var groupScrollRequest: GroupScrollRequest?
     private(set) var groupScrollRequestID = 0
+    /// 组内列表完整可见的行范围；编号与直粘都据此定位。
+    var groupVisibleRowRange: ClosedRange<Int>?
+    /// 组内复制反馈：按下标闪对勾，代际用于重复触发。
+    private(set) var groupCopyFeedbackIndex: Int?
+    private(set) var groupCopyFeedbackRevision = 0
 
     /// 单文件态是正在看的文件，列表态是选中的行；nil 时键盘动作按整条处理。
     var focusedGroupFileIndex: Int? { groupFileIndex ?? groupSelectedIndex }
 
     var isGroupFilterActive: Bool {
         !groupFilterText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 文件组总览：预览已打开但停在组内列表；⌘+数字据此粘组内文件。
+    var isGroupOverview: Bool {
+        guard let item, item.kind == .file, item.fileCount > 1 else { return false }
+        return groupFileIndex == nil
     }
 
     var visibleGroupFileIndices: [Int] {
@@ -71,6 +82,8 @@ final class PreviewState {
     /// 更新筛选词；选中行被筛掉时清空选中，并重新定位滚动。
     func setGroupFilterText(_ text: String) {
         groupFilterText = text
+        // 列表重排落定前，旧范围不能用来定编号。
+        groupVisibleRowRange = nil
         if let selected = groupSelectedIndex, !visibleGroupFileIndices.contains(selected) {
             groupSelectedIndex = nil
         }
@@ -176,6 +189,19 @@ final class PreviewState {
         }
     }
 
+    /// 标记组内文件已复制，对应行据此闪对勾。
+    func markGroupFileCopied(at index: Int) {
+        groupCopyFeedbackIndex = index
+        groupCopyFeedbackRevision &+= 1
+    }
+
+    /// 组内列表第 position 行对应的原始文件下标。
+    func groupFileIndex(atVisiblePosition position: Int) -> Int? {
+        let visible = visibleGroupFileIndices
+        guard visible.indices.contains(position) else { return nil }
+        return visible[position]
+    }
+
     func canMoveGroupSelection(by delta: Int, visibleIndices: [Int]) -> Bool {
         guard !visibleIndices.isEmpty, abs(delta) == 1 else { return false }
         guard let current = groupSelectedIndex, let position = visibleIndices.firstIndex(of: current) else {
@@ -244,6 +270,8 @@ final class PreviewState {
         groupFilterNeedsFocus = false
         groupScrollRequest = nil
         groupScrollRequestID = 0
+        groupVisibleRowRange = nil
+        groupCopyFeedbackIndex = nil
         item = nil
         shouldCommitEditing = false
         hasUnsavedChanges = false

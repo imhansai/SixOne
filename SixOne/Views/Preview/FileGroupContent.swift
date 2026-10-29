@@ -31,6 +31,8 @@ struct FileGroupContent: View {
                 scrollRequest: previewState.groupScrollRequest,
                 scrollRequestID: previewState.groupScrollRequestID,
                 isScrollBlocked: context.confirmationState.isPresenting,
+                quickPasteRange: quickPasteRange,
+                onVisibleRowRangeChanged: { previewState.groupVisibleRowRange = $0 },
                 onSelect: { index in
                     previewState.selectGroupFile(index)
                     // 收回键盘焦点，让方向键与裸 ⌫ 仍可用。
@@ -63,6 +65,12 @@ struct FileGroupContent: View {
     private var viewingGroupFileIndex: Int? {
         guard let index = previewState.groupFileIndex, groupURLs.indices.contains(index) else { return nil }
         return index
+    }
+
+    /// 按住 ⌘ 才读取可见范围，平时滚动不额外触发列表更新。
+    private var quickPasteRange: ClosedRange<Int>? {
+        guard context.quickPasteHintState.isShowing else { return nil }
+        return previewState.groupVisibleRowRange
     }
 
     /// 组内文件动作：打开与访达在此处理，粘贴/拷贝交给面板。

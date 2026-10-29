@@ -164,6 +164,15 @@ struct GroupFileFilterTests {
         #expect(state.visibleGroupFileIndices == [0, 1])
     }
 
+    @Test("筛选词变化作废旧可见范围，等列表重新发布")
+    func filterChangeInvalidatesVisibleRange() {
+        let state = PreviewState()
+        state.groupVisibleRowRange = 0...4
+        state.setGroupFilterText("png")
+        #expect(state.groupVisibleRowRange == nil,
+                "旧编号范围对应上一批可见行，重排前不能再用")
+    }
+
     @Test("筛选变化重新定位：无选中回顶，有选中带留白露出")
     func filterChangeRequestsScroll() {
         let state = makeState(paths: ["/tmp/a.png", "/tmp/b.png", "/tmp/c.png"])
@@ -183,6 +192,15 @@ struct GroupFileFilterTests {
         state.setGroupFilterText("a")
         #expect(state.groupScrollRequest == .row(0), "选中仍在结果里就把它露出来")
         #expect(state.groupScrollRequestID > requestID)
+    }
+
+    @Test("完整可见区位置映射回组内原始下标")
+    func visiblePositionMapsToOriginalIndex() {
+        let state = makeState(paths: ["/tmp/a.png", "/tmp/b.txt", "/tmp/c.png"])
+        state.setGroupFilterText("png")
+        #expect(state.groupFileIndex(atVisiblePosition: 0) == 0)
+        #expect(state.groupFileIndex(atVisiblePosition: 1) == 2)
+        #expect(state.groupFileIndex(atVisiblePosition: 2) == nil)
     }
 
     @Test("按文件名筛选，大小写不敏感")

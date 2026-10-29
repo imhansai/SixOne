@@ -410,16 +410,6 @@
         }
       }
     },
-    "Color Preview" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "颜色预览"
-          }
-        }
-      }
-    },
     "Copied" : {
       "localizations" : {
         "zh-Hans" : {
@@ -470,6 +460,26 @@
         }
       }
     },
+    "Copy Hex Value" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝色值"
+          }
+        }
+      }
+    },
+    "Copy Link" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝链接"
+          }
+        }
+      }
+    },
     "Copy Origin" : {
       "localizations" : {
         "zh-Hans" : {
@@ -486,6 +496,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拷贝路径"
+          }
+        }
+      }
+    },
+    "Copy Text" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝文本"
           }
         }
       }
@@ -891,16 +911,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "链接"
-          }
-        }
-      }
-    },
-    "Link Preview" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "链接预览"
           }
         }
       }
@@ -1436,16 +1446,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文本"
-          }
-        }
-      }
-    },
-    "Text Preview" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文本预览"
           }
         }
       }

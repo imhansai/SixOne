@@ -27,6 +27,8 @@ struct GroupListTableViewTests {
         scrollRequest: GroupScrollRequest? = nil,
         scrollRequestID: Int = 0,
         isScrollBlocked: Bool = false,
+        quickPasteRange: ClosedRange<Int>? = nil,
+        onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)? = nil,
         onSelect: @escaping (Int?) -> Void = { _ in }
     ) -> AnyView {
         AnyView(
@@ -40,6 +42,8 @@ struct GroupListTableViewTests {
                 scrollRequest: scrollRequest,
                 scrollRequestID: scrollRequestID,
                 isScrollBlocked: isScrollBlocked,
+                quickPasteRange: quickPasteRange,
+                onVisibleRowRangeChanged: onVisibleRowRangeChanged,
                 locale: RuntimeLanguage.shared.locale,
                 displayScale: 2,
                 onSelect: onSelect,
@@ -219,6 +223,65 @@ struct GroupListTableViewTests {
         #expect(seenCells.count <= 48, "单元格没有被复用：\(seenCells.count) 个实例")
     }
 
+    @Test("组列表发布完整可见范围，滚动后按新范围重发")
+    func publishesFullyVisibleRowRange() async throws {
+        let context = try TestPanel.context()
+        let files = makeFiles(40)
+        let probeID = UUID()
+        let (host, window) = OffscreenHost.make(
+            makeView(
+                context: context,
+                files: files,
+                onVisibleRowRangeChanged: { GroupVisibleRangeProbe.record(probeID, range: $0) }
+            ),
+            size: Self.viewportSize
+        )
+        defer { window.orderOut(nil) }
+
+        let scrollView = try #require(await OffscreenHost.waitForScrollView(in: host))
+        let tableView = try #require(scrollView.documentView as? NSTableView)
+        #expect(await Wait.until { tableView.numberOfRows == files.count }, "行没有落进表格")
+
+        #expect(await Wait.until { !GroupVisibleRangeProbe.ranges(probeID).isEmpty },
+                "完整可见范围没有发布，快速粘贴编号没有依据")
+        let first = try #require(GroupVisibleRangeProbe.ranges(probeID).last)
+        #expect(first.lowerBound == 0, "首屏应从第 0 行起编号")
+        #expect(tableView.visibleRect.contains(tableView.rect(ofRow: first.upperBound)),
+                "发布的末行并不完整可见")
+
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: ClipboardLayout.rowHeight * 5))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        let scrolled = await Wait.until {
+            GroupVisibleRangeProbe.ranges(probeID).last?.lowerBound != first.lowerBound
+        }
+        #expect(scrolled, "滚动后没有按新的完整可见范围重发编号依据")
+    }
+
+    @Test("编号占位时组内行不再保留行尾复制热区")
+    func quickPasteRangeRemovesCopyHitTargets() async throws {
+        let context = try TestPanel.context()
+        let files = makeFiles(6)
+        let (host, window) = OffscreenHost.make(
+            makeView(context: context, files: files),
+            size: Self.viewportSize
+        )
+        defer { window.orderOut(nil) }
+
+        let scrollView = try #require(await OffscreenHost.waitForScrollView(in: host))
+        let tableView = try #require(scrollView.documentView as? NSTableView)
+        #expect(await Wait.until { tableView.numberOfRows == files.count }, "行没有落进表格")
+        #expect(await Wait.until { !copyHitTargets(in: host).isEmpty },
+                "未显示编号时应保留行尾复制热区")
+
+        host.rootView = makeView(
+            context: context,
+            files: files,
+            quickPasteRange: 0...(files.count - 1)
+        )
+        #expect(await Wait.until { copyHitTargets(in: host).isEmpty },
+                "编号显示时点行尾不该还在悄悄复制")
+    }
+
     @Test("行状态按原始下标复用")
     func rowStateStoreReusesStatePerIndex() {
         let store = GroupRowStateStore()
@@ -249,7 +312,103 @@ struct GroupListTableViewTests {
     }
 }
 
+@Suite("文件组快速粘贴提示")
+@MainActor
+struct GroupQuickPasteHintTests {
+    @Test("按住 ⌘ 后组内行换成编号并收起复制热区，松开恢复")
+    func holdingCommandReplacesCopyButtonsWithNumbers() async throws {
+        let context = try TestPanel.context()
+        let paths = (0..<6).map { "/tmp/sixone-quick-\($0).txt" }
+        let item = ClipboardItem(kind: .file, filePaths: paths)
+        context.previewState.item = item
+        context.previewState.scopedGroupURLs = paths.map {
+            ScopedFileURL(url: URL(fileURLWithPath: $0), needsStop: false)
+        }
+        let urls = context.previewState.scopedGroupURLs.map { $0?.url }
+
+        let (host, window) = OffscreenHost.make(
+            AnyView(
+                FileGroupContent(item: item, groupURLs: urls)
+                    .environment(context)
+                    .environment(\.locale, RuntimeLanguage.shared.locale)
+            ),
+            size: ClipboardLayout.panelSize
+        )
+        defer { window.orderOut(nil) }
+
+        let scrollView = try #require(await OffscreenHost.waitForScrollView(in: host))
+        let tableView = try #require(scrollView.documentView as? NSTableView)
+        #expect(await Wait.until { tableView.numberOfRows == paths.count }, "行没有落进表格")
+        #expect(await Wait.until { context.previewState.groupVisibleRowRange != nil },
+                "组列表没有发布完整可见范围")
+        #expect(await Wait.until { !copyHitTargets(in: host).isEmpty },
+                "未按住 ⌘ 时应保留行尾复制热区")
+
+        context.quickPasteHintState.handleModifiers(.command)
+        #expect(await Wait.until { context.quickPasteHintState.isShowing },
+                "按住 ⌘ 没有进入编号提示")
+        #expect(await Wait.until { copyHitTargets(in: host).isEmpty },
+                "按住 ⌘ 后行尾复制热区没有让位给编号")
+
+        context.quickPasteHintState.handleModifiers([])
+        #expect(!context.quickPasteHintState.isShowing)
+        #expect(await Wait.until { !copyHitTargets(in: host).isEmpty },
+                "松开 ⌘ 后行尾复制热区没有恢复")
+    }
+
+    @Test("⌘C 等外部复制也会让组内对应行闪对勾")
+    func groupCopyFeedbackReachesRow() async throws {
+        let context = try TestPanel.context()
+        let file = GroupFileEntry(index: 1, path: "/tmp/sixone-copy-1.txt", url: nil)
+        let state = FileGroupRowState()
+        let (host, window) = OffscreenHost.make(
+            AnyView(
+                FileGroupRow(
+                    file: file,
+                    state: state,
+                    rowID: file.rowID,
+                    clickTracker: RowClickTracker(),
+                    isSelected: false,
+                    isListActive: true,
+                    sourceAppBundleIdentifier: nil,
+                    thumbnailCache: context.caches.fileGroupThumbnails,
+                    displayScale: 2,
+                    onSelect: { _ in },
+                    onPreview: { _ in },
+                    onCommand: { _, _ in },
+                    onShare: { _, _ in }
+                )
+                .environment(context)
+            ),
+            size: NSSize(width: ClipboardLayout.panelWidth, height: ClipboardLayout.rowHeight)
+        )
+        defer { window.orderOut(nil) }
+        host.layoutSubtreeIfNeeded()
+
+        context.previewState.markGroupFileCopied(at: 1)
+        #expect(await Wait.until { state.isCopied }, "复制反馈没有落到对应行")
+    }
+}
+
+@MainActor
+private func copyHitTargets(in host: NSView) -> [RowCopyHitTarget.HostView] {
+    OffscreenHost.allSubviews(of: host).compactMap { $0 as? RowCopyHitTarget.HostView }
+}
+
 @MainActor
 private final class SelectionProbe {
     var values: [Int?] = []
+}
+
+/// 按用例 id 记录组列表发布的完整可见范围，避免并行用例互相清计数。
+private enum GroupVisibleRangeProbe {
+    nonisolated(unsafe) static var published: [UUID: [ClosedRange<Int>]] = [:]
+
+    nonisolated static func record(_ id: UUID, range: ClosedRange<Int>) {
+        published[id, default: []].append(range)
+    }
+
+    nonisolated static func ranges(_ id: UUID) -> [ClosedRange<Int>] {
+        published[id] ?? []
+    }
 }

@@ -18,6 +18,9 @@ struct GroupListTableView: NSViewRepresentable {
     let scrollRequestID: Int
     /// 确认弹窗期间停掉用户滚动（程序化滚动不受影响）。
     var isScrollBlocked = false
+    /// 按住 ⌘ 时的快速粘贴编号范围；nil 表示不显示编号。
+    var quickPasteRange: ClosedRange<Int>? = nil
+    var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)? = nil
     let locale: Locale
     let displayScale: CGFloat
 
@@ -79,6 +82,7 @@ struct GroupListTableView: NSViewRepresentable {
             context.coordinator.pinDocumentHeight(tableView, in: scrollView)
             context.coordinator.syncColumnWidth(for: scrollView)
             context.coordinator.performPendingScroll()
+            context.coordinator.publishVisibleRowRange()
         }
         return scrollView
     }
@@ -87,17 +91,25 @@ struct GroupListTableView: NSViewRepresentable {
         guard let tableView = scrollView.documentView as? NSTableView,
               let listScrollView = scrollView as? ListScrollView else { return }
         listScrollView.isScrollBlocked = isScrollBlocked
+        // 更新期间由 reload/滚动触发的发布排到下一轮，避免写回 body 正在读的状态。
+        context.coordinator.isInViewUpdate = true
+        defer { context.coordinator.isInViewUpdate = false }
         context.coordinator.apply(self)
 
         if context.coordinator.syncRows(with: self, in: tableView) {
             context.coordinator.pinDocumentHeight(tableView, in: scrollView)
+            // 过滤后行数变短不会产生边界通知，排一轮重算可见范围。
+            DispatchQueue.main.async {
+                context.coordinator.publishVisibleRowRange()
+            }
         }
 
-        // 选中外观、选中镜像与滚动在同一无动画事务里完成。
+        // 选中外观、编号、选中镜像与滚动在同一无动画事务里完成。
         NSAnimationContext.runAnimationGroup { animation in
             animation.duration = 0
             animation.allowsImplicitAnimation = false
             context.coordinator.syncSelectionAppearance(in: tableView)
+            context.coordinator.syncQuickPasteHints(in: tableView)
             context.coordinator.syncSelection(in: tableView)
             context.coordinator.performPendingScroll()
         }
@@ -114,10 +126,14 @@ struct GroupListTableView: NSViewRepresentable {
         static let cellIdentifier = NSUserInterfaceItemIdentifier("SixOneGroupFileRowCell")
         static let rowViewIdentifier = NSUserInterfaceItemIdentifier("SixOneGroupFileRowView")
 
+        var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
+        var isInViewUpdate = false
+
         private var files: [GroupFileEntry] = []
-        private var makeRow: ((GroupFileEntry, CGFloat, CGFloat) -> AnyView)?
+        private var makeRow: ((GroupFileEntry, Int, CGFloat, CGFloat) -> AnyView)?
         private var selectedIndex: Int?
         private var isListActive = false
+        private var quickPasteRange: ClosedRange<Int>?
         /// 所有行宿主共用，重建列表不丢点击。
         let rowClickTracker = RowClickTracker()
         private var rowIndexByID: [UUID: Int] = [:]
@@ -133,18 +149,25 @@ struct GroupListTableView: NSViewRepresentable {
             var isActive: Bool
         }
         private var renderedSelection = RenderedSelection(index: nil, isActive: false)
+        private var renderedQuickPasteRange: ClosedRange<Int>?
 
         private var scrollRequest: GroupScrollRequest?
         private var scrollRequestID = 0
         private var handledScrollRequestID: Int?
 
+        private var lastPublishedVisibleRowRange: ClosedRange<Int>?
+
         weak var tableView: NSTableView?
         weak var scrollView: ListScrollView?
+        private var boundsObserver: NSObjectProtocol?
         private var frameObserver: NSObjectProtocol?
         private var clickMonitor: Any?
         private var blankPressLocation: NSPoint?
 
         isolated deinit {
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
             if let frameObserver {
                 NotificationCenter.default.removeObserver(frameObserver)
             }
@@ -158,10 +181,12 @@ struct GroupListTableView: NSViewRepresentable {
         func apply(_ parent: GroupListTableView) {
             selectedIndex = parent.selectedIndex
             isListActive = parent.isListActive
+            quickPasteRange = parent.quickPasteRange
             scrollRequest = parent.scrollRequest
             scrollRequestID = parent.scrollRequestID
             onSelect = parent.onSelect
             onCommand = parent.onCommand
+            onVisibleRowRangeChanged = parent.onVisibleRowRangeChanged
 
             let tracker = rowClickTracker
             // 点击落点由列表收口：抬起可能落在别的行上，闭包不能跟着行走。
@@ -176,14 +201,16 @@ struct GroupListTableView: NSViewRepresentable {
 
             let selected = parent.selectedIndex
             let active = parent.isListActive
+            let quickPasteRange = parent.quickPasteRange
             let rowStates = rowStates
-            makeRow = { [context = parent.context, locale = parent.locale, displayScale = parent.displayScale] file, topPadding, bottomPadding in
+            makeRow = { [context = parent.context, locale = parent.locale, displayScale = parent.displayScale] file, rowIndex, topPadding, bottomPadding in
                 AnyView(
                     FileGroupRow(
                         file: file,
                         state: rowStates.state(for: file.index),
                         rowID: file.rowID,
                         clickTracker: tracker,
+                        shortcutNumber: Self.shortcutNumber(forRow: rowIndex, in: quickPasteRange),
                         isSelected: file.index == selected,
                         isListActive: active,
                         sourceAppBundleIdentifier: parent.sourceAppBundleIdentifier,
@@ -241,7 +268,12 @@ struct GroupListTableView: NSViewRepresentable {
                   let makeRow,
                   let cell = tableView.view(atColumn: 0, row: index, makeIfNecessary: false)
                     as? ListRowCellView else { return }
-            cell.setContent(makeRow(files[index], topPadding(row: index), bottomPadding(row: index)))
+            cell.setContent(makeRow(
+                files[index],
+                index,
+                topPadding(row: index),
+                bottomPadding(row: index)
+            ))
         }
 
         func pinDocumentHeight(_ tableView: NSTableView, in scrollView: NSScrollView) {
@@ -282,6 +314,7 @@ struct GroupListTableView: NSViewRepresentable {
             cell.setContent(
                 makeRow?(
                     files[row],
+                    row,
                     topPadding(row: row),
                     bottomPadding(row: row)
                 ) ?? AnyView(Color.clear)
@@ -295,6 +328,10 @@ struct GroupListTableView: NSViewRepresentable {
 
         private func bottomPadding(row: Int) -> CGFloat {
             row == files.count - 1 ? ClipboardLayout.groupListPadding : 0
+        }
+
+        static func shortcutNumber(forRow row: Int, in range: ClosedRange<Int>?) -> Int? {
+            QuickPaste.shortcutNumber(forRow: row, in: range)
         }
 
         /// 点击不改表格选中，真相只在 PreviewState。
@@ -312,6 +349,20 @@ struct GroupListTableView: NSViewRepresentable {
             for index in Set([previous.index, current.index].compactMap { $0 }) {
                 guard let position = files.firstIndex(where: { $0.index == index }) else { continue }
                 refreshRowContent(at: position, in: tableView)
+            }
+        }
+
+        /// 编号出现/消失或随滚动重排时，只刷新涉及到的行。
+        func syncQuickPasteHints(in tableView: NSTableView) {
+            guard quickPasteRange != renderedQuickPasteRange else { return }
+            let previous = renderedQuickPasteRange
+            renderedQuickPasteRange = quickPasteRange
+            var indices: Set<Int> = []
+            for range in [previous, quickPasteRange].compactMap({ $0 }) {
+                indices.formUnion(range)
+            }
+            for index in indices.sorted() where files.indices.contains(index) {
+                refreshRowContent(at: index, in: tableView)
             }
         }
 
@@ -371,10 +422,37 @@ struct GroupListTableView: NSViewRepresentable {
             scrollView.scrollViewport(toY: targetY)
         }
 
+        // MARK: - 可见范围
+
+        func publishVisibleRowRange() {
+            guard let publish = onVisibleRowRangeChanged, let tableView else { return }
+            guard let range = fullyVisibleRowRange(in: tableView) else { return }
+            guard range != lastPublishedVisibleRowRange else { return }
+            lastPublishedVisibleRowRange = range
+            if isInViewUpdate {
+                DispatchQueue.main.async { publish(range) }
+            } else {
+                publish(range)
+            }
+        }
+
+        func fullyVisibleRowRange(in tableView: NSTableView) -> ClosedRange<Int>? {
+            ListRowVisibility.fullyVisibleRowRange(in: tableView)
+        }
+
         // MARK: - 观察
 
         func observe(_ scrollView: NSScrollView) {
             removeObservers()
+            boundsObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.publishVisibleRowRange()
+                }
+            }
             frameObserver = NotificationCenter.default.addObserver(
                 forName: NSView.frameDidChangeNotification,
                 object: scrollView.contentView,
@@ -386,6 +464,7 @@ struct GroupListTableView: NSViewRepresentable {
                     self.syncColumnWidth(for: scrollView)
                     // 首次布局才拿得到视口高度，挂起的滚动在这里补一次。
                     self.performPendingScroll()
+                    self.publishVisibleRowRange()
                 }
             }
             // 行视图可能在按下与抬起间被回收，由事件监听兜底。
@@ -453,6 +532,10 @@ struct GroupListTableView: NSViewRepresentable {
         }
 
         func removeObservers() {
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
+            boundsObserver = nil
             if let frameObserver {
                 NotificationCenter.default.removeObserver(frameObserver)
             }

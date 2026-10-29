@@ -26,6 +26,23 @@ enum HistoryListScrollGeometry {
     }
 }
 
+/// 列表完整可见行的统一判定；历史列表与文件组列表共用。
+enum ListRowVisibility {
+    /// 完整可见 = 整行落在可视矩形内；只喂「列表停在哪」这类策略。
+    static func fullyVisibleRowRange(in tableView: NSTableView) -> ClosedRange<Int>? {
+        let visible = tableView.visibleRect
+        let intersecting = tableView.rows(in: visible)
+        guard intersecting.location != NSNotFound, intersecting.length > 0 else { return nil }
+        let slack = visible.insetBy(dx: 0, dy: -ClipboardLayout.geometryTolerance)
+        var first = intersecting.location
+        var last = intersecting.location + intersecting.length - 1
+        while first <= last, !slack.contains(tableView.rect(ofRow: first)) { first += 1 }
+        while last >= first, !slack.contains(tableView.rect(ofRow: last)) { last -= 1 }
+        guard first <= last else { return nil }
+        return first...last
+    }
+}
+
 struct HistoryListTableView: NSViewRepresentable {
     let context: PanelContext
     let rows: [HistoryRow]
@@ -323,11 +340,8 @@ struct HistoryListTableView: NSViewRepresentable {
             row == rows.count - 1 ? ClipboardLayout.verticalPadding : 0
         }
 
-        /// 编号从完整可见范围的首行起算；一屏最多 9 条。
         static func shortcutNumber(forRow row: Int, in range: ClosedRange<Int>?) -> Int? {
-            guard let range, range.contains(row) else { return nil }
-            let number = row - range.lowerBound + 1
-            return number <= QuickPaste.rowLimit ? number : nil
+            QuickPaste.shortcutNumber(forRow: row, in: range)
         }
 
         /// 点击不改表格选中，选中真相只在 `NavigationState`。
@@ -559,18 +573,8 @@ struct HistoryListTableView: NSViewRepresentable {
             }
         }
 
-        /// 完整可见 = 整行落在可视矩形内；只喂「列表停在哪」这类策略。
         func fullyVisibleRowRange(in tableView: NSTableView) -> ClosedRange<Int>? {
-            let visible = tableView.visibleRect
-            let intersecting = tableView.rows(in: visible)
-            guard intersecting.location != NSNotFound, intersecting.length > 0 else { return nil }
-            let slack = visible.insetBy(dx: 0, dy: -ClipboardLayout.geometryTolerance)
-            var first = intersecting.location
-            var last = intersecting.location + intersecting.length - 1
-            while first <= last, !slack.contains(tableView.rect(ofRow: first)) { first += 1 }
-            while last >= first, !slack.contains(tableView.rect(ofRow: last)) { last -= 1 }
-            guard first <= last else { return nil }
-            return first...last
+            ListRowVisibility.fullyVisibleRowRange(in: tableView)
         }
 
         func syncColumnWidth(for scrollView: NSScrollView) {

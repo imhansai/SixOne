@@ -283,6 +283,34 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.one, .command, moreActions) == .standard)
     }
 
+    @Test("文件组总览：⌘+数字粘贴组内可见文件；单文件态与普通预览让路")
+    func quickPasteGroupFiles() {
+        var group = PanelKeyContext(previewKind: .file, previewFileCount: 4)
+        group.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, group)
+            == .panel(.pasteVisibleGroupFile(offset: 0, asPlainText: false)))
+        #expect(route(PanelKeyCode.two, [.command, .shift], group)
+            == .panel(.pasteVisibleGroupFile(offset: 1, asPlainText: true)))
+        #expect(route(PanelKeyCode.four, .command, group) == .panel(.consume),
+                "越界数字吞掉，不落到 AppKit 响提示音")
+
+        group.isGroupFilterFocused = true
+        #expect(route(PanelKeyCode.one, .command, group)
+            == .panel(.pasteVisibleGroupFile(offset: 0, asPlainText: false)),
+                "组筛选框聚焦时也能直接粘")
+
+        var viewing = PanelKeyContext(previewKind: .file, previewFileCount: 4)
+        viewing.isViewingGroupFile = true
+        viewing.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, viewing) == .standard,
+                "组内单文件态没有编号直粘")
+
+        var single = PanelKeyContext(previewKind: .file, previewFileCount: 1)
+        single.visibleRowCount = 3
+        #expect(route(PanelKeyCode.one, .command, single) == .standard,
+                "单文件条目仍走普通预览，不进入组内快速粘贴")
+    }
+
     @Test("列表：⌘F 是搜索别名，其它命令键交给菜单/响应链")
     func listKeys() {
         #expect(route(PanelKeyCode.f, .command) == .panel(.focusSearch))

@@ -61,6 +61,29 @@ struct PreviewStateTests {
         #expect(!state.hasUnsavedChanges)
     }
 
+    @Test("关闭预览：清掉组列表可见范围与复制反馈")
+    func closeResetsGroupListState() {
+        let state = PreviewState()
+        state.groupVisibleRowRange = 0...3
+        state.markGroupFileCopied(at: 2)
+
+        state.close()
+
+        #expect(state.groupVisibleRowRange == nil)
+        #expect(state.groupCopyFeedbackIndex == nil)
+    }
+
+    @Test("组内文件复制反馈按代际推进，同一文件重复复制也能再闪")
+    func groupCopyFeedbackAdvances() {
+        let state = PreviewState()
+        state.markGroupFileCopied(at: 2)
+        #expect(state.groupCopyFeedbackIndex == 2)
+        let revision = state.groupCopyFeedbackRevision
+
+        state.markGroupFileCopied(at: 2)
+        #expect(state.groupCopyFeedbackRevision == revision + 1)
+    }
+
     @Test("⌘S 请求：只在编辑态递增，且不退出编辑")
     func requestSaveOnlyWhileEditing() {
         let state = PreviewState()

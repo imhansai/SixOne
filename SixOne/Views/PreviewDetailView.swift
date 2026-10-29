@@ -5,6 +5,66 @@
 import AppKit
 import SwiftUI
 
+/// 主标题后的复制按钮：复制该类型的内容标识。
+struct PreviewHeaderCopy {
+    let text: String
+    let help: String
+}
+
+enum PreviewHeaderCopyAction {
+    @MainActor
+    static func make(
+        for item: ClipboardItem,
+        isEditing: Bool,
+        fileNameTitle: String?,
+        linkOrigin: String?
+    ) -> PreviewHeaderCopy? {
+        guard !isEditing else { return nil }
+        switch item.kind {
+        case .text:
+            guard let text = item.text, !text.isEmpty else { return nil }
+            return PreviewHeaderCopy(text: text, help: Localizer.string("Copy Text"))
+        case .image, .file:
+            guard let fileNameTitle, !fileNameTitle.isEmpty else { return nil }
+            return PreviewHeaderCopy(text: fileNameTitle, help: Localizer.string("Copy File Name"))
+        case .link:
+            if let linkOrigin {
+                return PreviewHeaderCopy(text: linkOrigin, help: Localizer.string("Copy Origin"))
+            }
+            // 无 host 的链接，复制地址本身。
+            guard let text = item.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return nil }
+            return PreviewHeaderCopy(text: text, help: Localizer.string("Copy Link"))
+        case .color:
+            guard let hex = item.colorHexString else { return nil }
+            return PreviewHeaderCopy(text: hex, help: Localizer.string("Copy Hex Value"))
+        }
+    }
+}
+
+/// 预览顶栏主标题：各类型都尽量给出内容身份，而不是类别名。
+enum PreviewHeaderTitle {
+    @MainActor
+    static func mainTitle(
+        for item: ClipboardItem,
+        isEditing: Bool,
+        fileNameTitle: String?,
+        linkOrigin: String?
+    ) -> String {
+        if isEditing { return Localizer.string("Edit") }
+        switch item.kind {
+        case .text, .color:
+            // 文本取首行、颜色取色值，比类别名更能辨认。
+            return item.displayTitle
+        case .image, .file:
+            return fileNameTitle ?? item.displayTitle
+        case .link:
+            // 无 host 的链接（mailto: 等）用地址本身。
+            return linkOrigin ?? item.displayTitle
+        }
+    }
+}
+
 /// 预览内容视图：顶栏标题 + 内容区；文本可内联编辑，文件按类型选渲染器，自身不带玻璃材质。
 struct PreviewDetailView: View {
     let item: ClipboardItem
@@ -213,22 +273,14 @@ struct PreviewDetailView: View {
                         Text(mainTitle)
                             .font(.system(size: 20, weight: .semibold))
                             .lineLimit(1)
-                            .truncationMode(.middle)
+                            .truncationMode(titleTruncationMode)
                             // 文字不参与命中，留出拖动面板的区域。
                             .allowsHitTesting(false)
                             .appTooltipIf(item.kind == .link, text: linkOrigin ?? mainTitle)
-                        if let fileName = fileNameTitle {
+                        if let titleCopy {
                             CopyTextButton(
-                                text: fileName,
-                                help: Localizer.string("Copy File Name")
-                            ) { text in
-                                manager.copyPlainText(text)
-                            }
-                        }
-                        if let linkOrigin, !previewState.isEditing {
-                            CopyTextButton(
-                                text: linkOrigin,
-                                help: Localizer.string("Copy Origin")
+                                text: titleCopy.text,
+                                help: titleCopy.help
                             ) { text in
                                 manager.copyPlainText(text)
                             }
@@ -382,17 +434,27 @@ struct PreviewDetailView: View {
     // MARK: - 标题与副标题
 
     private var mainTitle: String {
-        if previewState.isEditing { return Localizer.string("Edit") }
-        switch item.kind {
-        case .text:
-            return Localizer.string("Text Preview")
-        case .image, .file:
-            return fileNameTitle ?? item.displayTitle
-        case .link:
-            return linkOrigin ?? Localizer.string("Link Preview")
-        case .color:
-            return Localizer.string("Color Preview")
-        }
+        PreviewHeaderTitle.mainTitle(
+            for: item,
+            isEditing: previewState.isEditing,
+            fileNameTitle: fileNameTitle,
+            linkOrigin: linkOrigin
+        )
+    }
+
+    /// 主标题旁的复制按钮；各类型都给出统一入口。
+    private var titleCopy: PreviewHeaderCopy? {
+        PreviewHeaderCopyAction.make(
+            for: item,
+            isEditing: previewState.isEditing,
+            fileNameTitle: fileNameTitle,
+            linkOrigin: linkOrigin
+        )
+    }
+
+    /// 文本标题是内容片段，尾部截断更易读；文件名与链接仍从中间截断。
+    private var titleTruncationMode: Text.TruncationMode {
+        item.kind == .text ? .tail : .middle
     }
 
     private var linkOrigin: String? {

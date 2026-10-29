@@ -87,6 +87,10 @@ struct FileGroupPreview: View {
     let scrollRequestID: Int
     /// 确认弹窗期间停掉用户滚动（程序化滚动不受影响）。
     let isScrollBlocked: Bool
+    /// 按住 ⌘ 时的快速粘贴编号范围；nil 表示不显示编号。
+    let quickPasteRange: ClosedRange<Int>?
+    /// 列表发布完整可见行范围，快速粘贴据此定位。
+    let onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
     let onSelect: (Int?) -> Void
     let onPreview: (Int) -> Void
     let onCommand: (GroupFileCommand, Int) -> Void
@@ -107,6 +111,8 @@ struct FileGroupPreview: View {
                 scrollRequest: scrollRequest,
                 scrollRequestID: scrollRequestID,
                 isScrollBlocked: isScrollBlocked,
+                quickPasteRange: quickPasteRange,
+                onVisibleRowRangeChanged: onVisibleRowRangeChanged,
                 locale: locale,
                 displayScale: displayScale,
                 onSelect: onSelect,
@@ -198,6 +204,8 @@ struct FileGroupRow: View {
     let state: FileGroupRowState
     let rowID: UUID
     let clickTracker: RowClickTracker
+    /// 按住 ⌘ 时的快速粘贴编号；不显示时为空。
+    var shortcutNumber: Int? = nil
     let isSelected: Bool
     let isListActive: Bool
     let sourceAppBundleIdentifier: String?
@@ -261,22 +269,29 @@ struct FileGroupRow: View {
                 clickTracker: clickTracker
             )
         }
-        // 复制按钮命中目标在宿主之上，其余点击放行弹菜单。
+        // 复制命中层在宿主之上，其余点击放行给宿主；编号占位时让整行照常响应。
         .overlay(alignment: .topTrailing) {
-            RowCopyHitTarget(
-                onCopy: copyFile,
-                onPressChanged: { isCopyButtonPressed = $0 }
-            )
-                .frame(width: copyButtonRect.width, height: copyButtonRect.height)
-                .padding(.top, copyButtonRect.minY)
-                .padding(
-                    .trailing,
-                    ClipboardLayout.rowCopyButtonTrailingInset(usesOverlayScrollers: usesOverlayScrollers)
+            if shortcutNumber == nil {
+                RowCopyHitTarget(
+                    onCopy: copyFile,
+                    onPressChanged: { isCopyButtonPressed = $0 }
                 )
+                    .frame(width: copyButtonRect.width, height: copyButtonRect.height)
+                    .padding(.top, copyButtonRect.minY)
+                    .padding(
+                        .trailing,
+                        ClipboardLayout.rowCopyButtonTrailingInset(usesOverlayScrollers: usesOverlayScrollers)
+                    )
+            }
         }
         // 内容变化时重跑；迟到的缩略图由取消丢弃。
         .task(id: file) {
             await state.load(file: file, cache: thumbnailCache, displayScale: displayScale)
+        }
+        // 复制反馈由控制器统一发回，按钮、菜单与 ⌘C 都会闪对勾。
+        .onChange(of: context.previewState.groupCopyFeedbackRevision) { _, _ in
+            guard context.previewState.groupCopyFeedbackIndex == index else { return }
+            state.markCopied()
         }
     }
 
@@ -387,13 +402,22 @@ struct FileGroupRow: View {
     }
 
     private var trailingColumn: some View {
-        copyButton
-            .padding(.top, copyButtonRect.minY)
-            .frame(
-                width: ClipboardLayout.rowCopyButtonColumnWidth(usesOverlayScrollers: usesOverlayScrollers),
-                height: rowTotalHeight,
-                alignment: .topLeading
-            )
+        Group {
+            if let shortcutNumber {
+                RowActionButton(
+                    content: .number(shortcutNumber),
+                    isActiveSelection: isActiveSelection
+                )
+            } else {
+                copyButton
+            }
+        }
+        .padding(.top, copyButtonRect.minY)
+        .frame(
+            width: ClipboardLayout.rowCopyButtonColumnWidth(usesOverlayScrollers: usesOverlayScrollers),
+            height: rowTotalHeight,
+            alignment: .topLeading
+        )
     }
 
     private var copyButton: some View {
@@ -410,8 +434,6 @@ struct FileGroupRow: View {
 
     private func copyFile() {
         onCommand(.copy, index)
-        guard url != nil else { return }
-        state.markCopied()
     }
 
     @ViewBuilder

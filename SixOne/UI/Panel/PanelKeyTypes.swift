@@ -88,6 +88,8 @@ enum PanelKeyAction: Equatable {
     case activateFocusedGroupFile(index: Int)
     /// 粘贴当前完整可见区的第 offset 行（0 起）。
     case pasteVisibleRow(offset: Int, asPlainText: Bool)
+    /// 粘贴文件组列表完整可见区的第 offset 个文件（0 起）。
+    case pasteVisibleGroupFile(offset: Int, asPlainText: Bool)
 
     // 移动
     case stepPreview(by: Int)
@@ -139,9 +141,14 @@ struct PanelKeyContext {
 
     var isPreviewing: Bool { previewKind != nil }
 
-    /// 列表（含搜索框聚焦）可用快速粘贴；预览、编辑与更多操作菜单让路。
+    /// 多文件组总览：预览已打开，但停在组内的文件列表。
+    var isGroupOverview: Bool {
+        previewKind == .file && previewFileCount > 1 && !isViewingGroupFile
+    }
+
+    /// 列表（含搜索框/组筛选框）可用快速粘贴；预览只放行文件组总览。
     var canQuickPasteVisibleRow: Bool {
-        !isPreviewing && !isEditing && !isMoreActionsFocused
+        !isEditing && !isMoreActionsFocused && (!isPreviewing || isGroupOverview)
     }
 }
 

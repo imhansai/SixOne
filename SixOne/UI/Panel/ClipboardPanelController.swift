@@ -77,7 +77,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         previewState: previewState,
         selectedItemID: { [weak self] in self?.cursor.selectedItemID },
         visibleRowCount: { [weak self] in
-            guard let range = self?.navigationState.fullyVisibleRange else { return 0 }
+            guard let range = self?.quickPasteVisibleRange else { return 0 }
             return min(range.count, QuickPaste.rowLimit)
         }
     )
@@ -520,6 +520,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     private func copyGroupFile(at index: Int, of item: ClipboardItem) {
         if manager.copy(item, fileAt: index) {
             copyState.itemID = item.id
+            previewState.markGroupFileCopied(at: index)
             return
         }
         let path = item.allFilePaths.indices.contains(index) ? item.allFilePaths[index] : ""
@@ -736,6 +737,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         pasteFlow.paste(full)
     }
 
+    /// 可编号的完整可见行：组总览取组内列表，其余取外层历史列表。
+    private var quickPasteVisibleRange: ClosedRange<Int>? {
+        previewState.isGroupOverview ? previewState.groupVisibleRowRange : navigationState.fullyVisibleRange
+    }
+
     /// ⌘+数字：先选中当前完整可见区的第 offset 行再粘贴；失败时面板保留并沿用现有提示。
     private func pasteVisibleRow(offset: Int, asPlainText: Bool) {
         guard let range = navigationState.fullyVisibleRange else { return }
@@ -746,6 +752,19 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         if asPlainText, !full.kind.hasPlainText { return }
         navigationState.selectedItemID = id
         pasteFlow.paste(full, asPlainText: asPlainText)
+    }
+
+    /// ⌘+数字：选中并粘贴组列表完整可见区的第 offset 个文件。
+    private func pasteVisibleGroupFile(offset: Int, asPlainText: Bool) {
+        guard previewState.isGroupOverview, let item = previewState.item else { return }
+        // 文件没有纯文本形态，⇧ 变体不动作（与外层列表一致）。
+        guard !asPlainText else { return }
+        guard let range = previewState.groupVisibleRowRange else { return }
+        let position = range.lowerBound + offset
+        guard range.contains(position),
+              let index = previewState.groupFileIndex(atVisiblePosition: position) else { return }
+        previewState.selectGroupFile(index)
+        pasteFlow.paste(item, fileIndex: index)
     }
 
     private func deleteSelectedItem() {
@@ -1105,6 +1124,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             if let item = previewState.item { pasteFlow.paste(item, fileIndex: index) }
         case .pasteVisibleRow(let offset, let asPlainText):
             pasteVisibleRow(offset: offset, asPlainText: asPlainText)
+        case .pasteVisibleGroupFile(let offset, let asPlainText):
+            pasteVisibleGroupFile(offset: offset, asPlainText: asPlainText)
 
         case .stepPreview(let delta):
             cursor.stepPreview(direction: delta)

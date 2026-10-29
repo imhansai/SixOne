@@ -16,13 +16,15 @@ enum PanelKeyRouter {
         if context.isModalPresented { return .standard }
         if context.isIMEComposing { return .standard }
 
-        // ⌘+数字直粘完整可见行；搜索框聚焦时同样可用。
+        // ⌘+数字直粘完整可见行；搜索框/组筛选框聚焦时同样可用。
         if let offset = press.quickPasteOffset, context.canQuickPasteVisibleRow {
             guard offset < context.visibleRowCount else { return .panel(.consume) }
-            return .panel(.pasteVisibleRow(
-                offset: offset,
-                asPlainText: press.modifiers.contains(.shift)
-            ))
+            let asPlainText = press.modifiers.contains(.shift)
+            // 文件组总览：编号对应组内列表，粘贴的是单个文件。
+            if context.isGroupOverview {
+                return .panel(.pasteVisibleGroupFile(offset: offset, asPlainText: asPlainText))
+            }
+            return .panel(.pasteVisibleRow(offset: offset, asPlainText: asPlainText))
         }
 
         if !context.isPreviewing,

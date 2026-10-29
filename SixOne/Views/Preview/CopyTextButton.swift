@@ -42,7 +42,8 @@ struct CopyTextButton: View {
         .pointerStyle(.link)
         .appTooltip(didCopy ? Localizer.string("Copied") : help)
         .accessibilityLabel(help)
-        .accessibilityValue(text)
+        // 长文本只把开头交给辅助功能，避免整段复制。
+        .accessibilityValue(text.count > 200 ? String(text.prefix(200)) + "…" : text)
         .onChange(of: text) { _, _ in
             resetTask?.cancel()
             didCopy = false

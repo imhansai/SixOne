@@ -23,4 +23,14 @@ struct QuickPasteRowNumberTests {
         #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 8, in: long) == 9)
         #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 9, in: long) == nil)
     }
+
+    @Test("组内列表与历史列表共用同一套编号规则")
+    func groupListUsesSameNumbering() {
+        let range = 2...6
+        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 2, in: range) == 1)
+        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 6, in: range) == 5)
+        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 1, in: range) == nil)
+        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 7, in: range) == nil)
+        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 0, in: nil) == nil)
+    }
 }
