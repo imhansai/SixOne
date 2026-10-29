@@ -2,7 +2,7 @@
 //  PreviewHeaderActionButton.swift
 //  SixOne
 //
-//  预览顶栏的图标按钮：悬停 8%、按下 16% 的圆底；菜单标签也复用同一外观。
+//  预览顶栏的图标按钮：1px 轮廓，悬停 8%、按下 16%；菜单标签也复用同一外观。
 //
 
 import SwiftUI
@@ -47,11 +47,7 @@ struct PreviewHeaderMenuLabel: View {
 
     var body: some View {
         PreviewHeaderIcon(systemImage: systemImage)
-            .background(
-                Circle().fill(
-                    PreviewHeaderActionButtonStyle.fill(isHovered: isHovered, isPressed: false)
-                )
-            )
+            .background(PreviewHeaderActionBackground(isHovered: isHovered))
             .onHover { isHovered = $0 }
             .animation(.easeOut(duration: 0.12), value: isHovered)
     }
@@ -63,14 +59,23 @@ private struct PreviewHeaderActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                Circle().fill(
-                    Self.fill(isHovered: isHovered, isPressed: configuration.isPressed)
+                PreviewHeaderActionBackground(
+                    isHovered: isHovered,
+                    isPressed: configuration.isPressed
                 )
             )
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
+}
 
-    static func fill(isHovered: Bool, isPressed: Bool) -> Color {
-        Color.primary.opacity(isPressed ? 0.16 : (isHovered ? 0.08 : 0))
+private struct PreviewHeaderActionBackground: View {
+    var isHovered = false
+    var isPressed = false
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.primary.opacity(isPressed ? 0.16 : (isHovered ? 0.08 : 0)))
+            Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+        }
     }
 }

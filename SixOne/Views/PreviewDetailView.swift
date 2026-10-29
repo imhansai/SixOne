@@ -126,7 +126,7 @@ struct PreviewDetailView: View {
     }
 
     private var groupActions: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: ClipboardLayout.headerActionSpacing) {
             PreviewHeaderActionButton(
                 systemImage: "square.and.arrow.up",
                 help: Localizer.string("Share")
@@ -154,7 +154,7 @@ struct PreviewDetailView: View {
     private var groupFilterField: some View {
         SearchField(
             text: previewState.groupFilterText,
-            placeholder: Localizer.string("Search…"),
+            placeholder: Localizer.string("Search Files in Group"),
             focusRequestID: previewState.groupFilterFocusRequestID,
             blurRequestID: previewState.groupFilterBlurRequestID,
             identifier: .groupFilterField,
@@ -179,7 +179,7 @@ struct PreviewDetailView: View {
     }
 
     private var groupInfoStack: some View {
-        VStack(alignment: .trailing, spacing: 1) {
+        VStack(alignment: .center, spacing: 1) {
             Text(groupCountText)
                 .font(.system(size: 12, weight: .medium))
                 .monospacedDigit()
@@ -247,22 +247,24 @@ struct PreviewDetailView: View {
                 .padding(.leading, ClipboardLayout.previewTitleInset)
                 Spacer()
 
-                // 显示格式开关仅只读态出现，编辑态隐去但占位。
-                if item.kind == .text, item.attributedTextData != nil {
-                    formattingToggleButton
-                        .opacity(previewState.isEditing ? 0 : 1)
-                        .allowsHitTesting(!previewState.isEditing)
-                }
-                if item.kind == .link, linkURL != nil {
-                    openLinkButton
-                } else if item.kind == .file, fileURL != nil {
-                    openWithMenu
-                }
-                if item.kind == .text || item.kind == .link {
-                    editToggleButton
-                }
+                HStack(spacing: ClipboardLayout.headerActionSpacing) {
+                    // 显示格式开关仅只读态出现，编辑态隐去但占位。
+                    if item.kind == .text, item.attributedTextData != nil {
+                        formattingToggleButton
+                            .opacity(previewState.isEditing ? 0 : 1)
+                            .allowsHitTesting(!previewState.isEditing)
+                    }
+                    if item.kind == .link, linkURL != nil {
+                        openLinkButton
+                    } else if item.kind == .file, fileURL != nil {
+                        openWithMenu
+                    }
+                    if item.kind == .text || item.kind == .link {
+                        editToggleButton
+                    }
 
-                closePreviewButton
+                    closePreviewButton
+                }
             }
         }
     }

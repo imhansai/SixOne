@@ -1275,7 +1275,18 @@
         }
       }
     },
+    "Search Files in Group" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索多文件组"
+          }
+        }
+      }
+    },
     "Search…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
