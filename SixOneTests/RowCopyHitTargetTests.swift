@@ -11,6 +11,7 @@ import Testing
 struct RowCopyHitTargetTests {
     private final class Recorder {
         var copies = 0
+        var pressStates: [Bool] = []
     }
 
     private func makeTarget() -> (RowCopyHitTarget.HostView, NSWindow) {
@@ -55,6 +56,57 @@ struct RowCopyHitTargetTests {
     ) {
         view.mouseDown(with: mouseEvent(.leftMouseDown, in: window, at: point, clickCount: clickCount))
         view.mouseUp(with: mouseEvent(.leftMouseUp, in: window, at: point, clickCount: clickCount))
+    }
+
+    @Test("按下高亮，抬起复位")
+    func pressHighlightTracksGesture() {
+        let recorder = Recorder()
+        let (view, window) = makeTarget()
+        defer { window.orderOut(nil) }
+        view.onCopy = { recorder.copies += 1 }
+        view.onPressChanged = { recorder.pressStates.append($0) }
+
+        let point = CGPoint(x: 13, y: 13)
+        view.mouseDown(with: mouseEvent(.leftMouseDown, in: window, at: point, clickCount: 1))
+        #expect(recorder.pressStates == [true])
+
+        view.mouseUp(with: mouseEvent(.leftMouseUp, in: window, at: point, clickCount: 1))
+        #expect(recorder.pressStates == [true, false])
+        #expect(recorder.copies == 1)
+    }
+
+    @Test("拖出取消复制，高亮同样复位")
+    func dragOutReleasesPress() {
+        let recorder = Recorder()
+        let (view, window) = makeTarget()
+        defer { window.orderOut(nil) }
+        view.onCopy = { recorder.copies += 1 }
+        view.onPressChanged = { recorder.pressStates.append($0) }
+
+        view.mouseDown(
+            with: mouseEvent(.leftMouseDown, in: window, at: CGPoint(x: 13, y: 13), clickCount: 1)
+        )
+        view.mouseUp(
+            with: mouseEvent(.leftMouseUp, in: window, at: CGPoint(x: 40, y: 13), clickCount: 1)
+        )
+
+        #expect(recorder.copies == 0)
+        #expect(recorder.pressStates == [true, false])
+    }
+
+    @Test("行被移除时高亮复位")
+    func removingTargetReleasesPress() {
+        let recorder = Recorder()
+        let (view, window) = makeTarget()
+        defer { window.orderOut(nil) }
+        view.onPressChanged = { recorder.pressStates.append($0) }
+
+        view.mouseDown(
+            with: mouseEvent(.leftMouseDown, in: window, at: CGPoint(x: 13, y: 13), clickCount: 1)
+        )
+        view.removeFromSuperview()
+
+        #expect(recorder.pressStates == [true, false])
     }
 
     @Test("单击复制一次")

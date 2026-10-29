@@ -31,6 +31,8 @@ struct ClipboardRowView: View {
     @Environment(\.locale) private var locale
     @Environment(PanelContext.self) private var context
 
+    @State private var isCopyButtonPressed = false
+
     private var isActiveSelection: Bool { isSelected && isListActive }
 
     private var isCopied: Bool {
@@ -105,7 +107,10 @@ struct ClipboardRowView: View {
         // 复制命中层在宿主之上，其余事件放行给宿主；编号占位时让整行照常响应。
         .overlay(alignment: .topTrailing) {
             if shortcutNumber == nil {
-                RowCopyHitTarget(onCopy: onCopy)
+                RowCopyHitTarget(
+                    onCopy: onCopy,
+                    onPressChanged: { isCopyButtonPressed = $0 }
+                )
                     .frame(width: copyButtonRect.width, height: copyButtonRect.height)
                     .padding(.top, copyButtonRect.minY)
                     .padding(
@@ -167,7 +172,10 @@ struct ClipboardRowView: View {
     private var trailingColumn: some View {
         Group {
             if let shortcutNumber {
-                shortcutNumberView(shortcutNumber)
+                RowActionButton(
+                    content: .number(shortcutNumber),
+                    isActiveSelection: isActiveSelection
+                )
             } else {
                 copyButton
             }
@@ -178,16 +186,6 @@ struct ClipboardRowView: View {
             height: rowTotalHeight,
             alignment: .topLeading
         )
-    }
-
-    /// 按住 ⌘ 时把复制图标换成数字，沿用按钮圆底，UI 变化最小。
-    private func shortcutNumberView(_ number: Int) -> some View {
-        Text(verbatim: "\(number)")
-            .font(.system(size: 14, weight: .semibold, design: .rounded))
-            .monospacedDigit()
-            .foregroundStyle(Color.primary.opacity(0.82))
-            .frame(width: ClipboardLayout.rowCopyButtonSize, height: ClipboardLayout.rowCopyButtonSize)
-            .background(Circle().fill(actionButtonFill))
     }
 
     private enum RowType {
@@ -275,25 +273,14 @@ struct ClipboardRowView: View {
 
     private var copyButton: some View {
         Button(action: onCopy) {
-            Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.82))
-                .frame(
-                    width: ClipboardLayout.rowCopyButtonSize,
-                    height: ClipboardLayout.rowCopyButtonSize
-                )
-                .background(Circle().fill(actionButtonFill))
-                .contentTransition(.symbolEffect(.replace))
+            RowActionButton(
+                content: .copy(isCopied: isCopied),
+                isActiveSelection: isActiveSelection,
+                isPressed: isCopyButtonPressed
+            )
         }
         .buttonStyle(NoPressFeedbackButtonStyle())
         .accessibilityLabel(Localizer.string("Copy"))
-    }
-
-    /// 行尾操作按钮的圆底；复制与编号共用。
-    private var actionButtonFill: Color {
-        colorScheme == .dark
-            ? Color(.sRGB, red: 90 / 255, green: 90 / 255, blue: 90 / 255).opacity(0.65)
-            : Color(.sRGB, red: 200 / 255, green: 200 / 255, blue: 200 / 255).opacity(0.65)
     }
 
     @ViewBuilder
@@ -427,9 +414,3 @@ struct ClipboardRowView: View {
     }
 }
 
-/// 行内按钮不要按下反馈，避免与整行选中态打架。
-private struct NoPressFeedbackButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-    }
-}

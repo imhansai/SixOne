@@ -10,20 +10,25 @@ import SwiftUI
 
 struct RowCopyHitTarget: NSViewRepresentable {
     let onCopy: () -> Void
+    /// 按下状态用于按钮高亮；取消或移除时复位。
+    var onPressChanged: (Bool) -> Void = { _ in }
 
     func makeNSView(context: Context) -> HostView {
         let view = HostView()
         view.onCopy = onCopy
+        view.onPressChanged = onPressChanged
         view.setAccessibilityElement(false)
         return view
     }
 
     func updateNSView(_ view: HostView, context: Context) {
         view.onCopy = onCopy
+        view.onPressChanged = onPressChanged
     }
 
     final class HostView: NSView {
         var onCopy: (() -> Void)?
+        var onPressChanged: ((Bool) -> Void)?
 
         private var isPressed = false
         private var pressLocationInWindow: NSPoint?
@@ -43,12 +48,12 @@ struct RowCopyHitTarget: NSViewRepresentable {
         override func mouseDown(with event: NSEvent) {
             isPressed = true
             pressLocationInWindow = event.locationInWindow
+            onPressChanged?(true)
         }
 
         override func mouseUp(with event: NSEvent) {
+            defer { releasePress() }
             guard isPressed, let press = pressLocationInWindow else { return }
-            isPressed = false
-            pressLocationInWindow = nil
             // 指针自己拖出不算点击；行被应用挪走不算。
             let travel = hypot(
                 event.locationInWindow.x - press.x,
@@ -61,6 +66,19 @@ struct RowCopyHitTarget: NSViewRepresentable {
             // 一次手势只复制一次，双击第二下不触发。
             guard event.clickCount == 1 else { return }
             onCopy?()
+        }
+
+        /// 行被回收或挪走时也要复位，避免高亮卡住。
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { releasePress() }
+        }
+
+        private func releasePress() {
+            guard isPressed else { return }
+            isPressed = false
+            pressLocationInWindow = nil
+            onPressChanged?(false)
         }
     }
 }

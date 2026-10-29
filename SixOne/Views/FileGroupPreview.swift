@@ -213,6 +213,8 @@ struct FileGroupRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(PanelContext.self) private var context
 
+    @State private var isCopyButtonPressed = false
+
     private var index: Int { file.index }
     private var url: URL? { file.url }
     private var name: String { file.name }
@@ -261,7 +263,10 @@ struct FileGroupRow: View {
         }
         // 复制按钮命中目标在宿主之上，其余点击放行弹菜单。
         .overlay(alignment: .topTrailing) {
-            RowCopyHitTarget(onCopy: copyFile)
+            RowCopyHitTarget(
+                onCopy: copyFile,
+                onPressChanged: { isCopyButtonPressed = $0 }
+            )
                 .frame(width: copyButtonRect.width, height: copyButtonRect.height)
                 .padding(.top, copyButtonRect.minY)
                 .padding(
@@ -393,23 +398,13 @@ struct FileGroupRow: View {
 
     private var copyButton: some View {
         Button(action: copyFile) {
-            Image(systemName: state.isCopied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.82))
-                .frame(
-                    width: ClipboardLayout.rowCopyButtonSize,
-                    height: ClipboardLayout.rowCopyButtonSize
-                )
-                .background(
-                    Circle().fill(
-                        colorScheme == .dark
-                            ? Color(.sRGB, red: 90 / 255, green: 90 / 255, blue: 90 / 255).opacity(0.65)
-                            : Color(.sRGB, red: 200 / 255, green: 200 / 255, blue: 200 / 255).opacity(0.65)
-                    )
-                )
-                .contentTransition(.symbolEffect(.replace))
+            RowActionButton(
+                content: .copy(isCopied: state.isCopied),
+                isActiveSelection: isActiveSelection,
+                isPressed: isCopyButtonPressed
+            )
         }
-        .buttonStyle(GroupRowNoPressFeedbackButtonStyle())
+        .buttonStyle(NoPressFeedbackButtonStyle())
         .accessibilityLabel(Localizer.string("Copy"))
     }
 
@@ -476,12 +471,5 @@ struct FileGroupRow: View {
     private var titleTooltipDetail: String {
         if let url { return url.path }
         return String(format: Localizer.string("File no longer exists: %@"), name)
-    }
-}
-
-/// 复制按钮不要按下反馈，避免与整行选中态冲突。
-private struct GroupRowNoPressFeedbackButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
     }
 }
