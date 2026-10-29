@@ -127,7 +127,7 @@ struct PreviewDetailView: View {
 
     private var groupActions: some View {
         HStack(spacing: 2) {
-            GroupHeaderIconButton(
+            PreviewHeaderActionButton(
                 systemImage: "square.and.arrow.up",
                 help: Localizer.string("Share")
             ) {
@@ -135,14 +135,14 @@ struct PreviewDetailView: View {
             }
             .background(ViewAnchor(box: shareAnchor))
 
-            GroupHeaderIconButton(
+            PreviewHeaderActionButton(
                 systemImage: "folder",
                 help: Localizer.string("Reveal in Finder")
             ) {
                 revealGroup()
             }
 
-            GroupHeaderIconButton(
+            PreviewHeaderActionButton(
                 systemImage: "xmark",
                 help: Localizer.string("Close Preview")
             ) {
@@ -216,10 +216,19 @@ struct PreviewDetailView: View {
                             .truncationMode(.middle)
                             // 文字不参与命中，留出拖动面板的区域。
                             .allowsHitTesting(false)
+                            .appTooltipIf(item.kind == .link, text: linkOrigin ?? mainTitle)
                         if let fileName = fileNameTitle {
                             CopyTextButton(
                                 text: fileName,
                                 help: Localizer.string("Copy File Name")
+                            ) { text in
+                                manager.copyPlainText(text)
+                            }
+                        }
+                        if let linkOrigin, !previewState.isEditing {
+                            CopyTextButton(
+                                text: linkOrigin,
+                                help: Localizer.string("Copy Origin")
                             ) { text in
                                 manager.copyPlainText(text)
                             }
@@ -260,7 +269,7 @@ struct PreviewDetailView: View {
 
     /// 只读态关闭预览；编辑态取消编辑；组内单文件态退回组列表。
     private var closePreviewButton: some View {
-        Button {
+        PreviewHeaderActionButton(systemImage: "xmark", help: closeButtonHelp) {
             if previewState.isEditing {
                 // 有改动时由面板先弹确认，不能直接丢弃。
                 if let actions {
@@ -273,21 +282,7 @@ struct PreviewDetailView: View {
             } else {
                 previewState.close()
             }
-        } label: {
-            if previewState.isEditing {
-                PreviewPillLabel(
-                    systemImage: "xmark",
-                    title: Localizer.string("Cancel")
-                )
-            } else {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 28, height: 28)
-            }
         }
-        .buttonStyle(.plain)
-        .appTooltip(closeButtonHelp)
-        .accessibilityLabel(Text(closeButtonHelp))
     }
 
     private var closeButtonHelp: String {
@@ -392,10 +387,15 @@ struct PreviewDetailView: View {
         case .image, .file:
             return fileNameTitle ?? item.displayTitle
         case .link:
-            return Localizer.string("Link Preview")
+            return linkOrigin ?? Localizer.string("Link Preview")
         case .color:
             return Localizer.string("Color Preview")
         }
+    }
+
+    private var linkOrigin: String? {
+        guard item.kind == .link else { return nil }
+        return LinkPreview.origin(of: item.text)
     }
 
     private var fileNameTitle: String? {
@@ -462,50 +462,31 @@ struct PreviewDetailView: View {
     // MARK: - 顶栏按钮
 
     private var editToggleButton: some View {
-        Button {
+        PreviewHeaderActionButton(
+            systemImage: previewState.isEditing ? "checkmark" : "pencil",
+            help: previewState.isEditing
+                ? Localizer.string("Finish editing and save")
+                : Localizer.string("Edit text")
+        ) {
             if previewState.isEditing {
                 // 置位「退出即落盘」再退出编辑态。
                 previewState.finishEditing()
             } else {
                 previewState.startEditing()
             }
-        } label: {
-            PreviewPillLabel(
-                systemImage: previewState.isEditing ? "checkmark" : "pencil",
-                title: previewState.isEditing ? Localizer.string("Done") : Localizer.string("Edit")
-            )
         }
-        .buttonStyle(.plain)
-        .appTooltip(previewState.isEditing
-            ? Localizer.string("Finish editing and save")
-            : Localizer.string("Edit text"))
     }
 
-    /// 显示格式开关：隐藏影子撑宽，切换时宽度不变。
     private var formattingToggleButton: some View {
         let titleKey: String.LocalizationValue = previewState.showsFormatting
             ? "Show Plain Text"
             : "Show Formatting"
-        return Button {
+        return PreviewHeaderActionButton(
+            systemImage: previewState.showsFormatting ? "doc.plaintext" : "paintpalette",
+            help: Localizer.string(titleKey)
+        ) {
             previewState.showsFormatting.toggle()
-        } label: {
-            ZStack {
-                formattingToggleLabel(showsFormatting: false).hidden()
-                formattingToggleLabel(showsFormatting: true).hidden()
-                formattingToggleLabel(showsFormatting: previewState.showsFormatting)
-            }
         }
-        .buttonStyle(.plain)
-        .appTooltip(Localizer.string(titleKey))
-        .accessibilityLabel(Localizer.string(titleKey))
-    }
-
-    /// 胶囊内容；图标用不本地化的 SF Symbol，避免与中文文案重复。
-    private func formattingToggleLabel(showsFormatting: Bool) -> some View {
-        PreviewPillLabel(
-            systemImage: showsFormatting ? "doc.plaintext" : "paintpalette",
-            title: Localizer.string(showsFormatting ? "Show Plain Text" : "Show Formatting")
-        )
     }
 
     /// 按运行时语言给数字加千分位；模板用 %@ 而非 %d，才能跟随语言的分隔符。
@@ -543,7 +524,7 @@ struct PreviewDetailView: View {
                 revealInFinder()
             }
         } label: {
-            PreviewPillLabel(systemImage: "arrow.up.forward.app", title: Localizer.string("Open with"))
+            PreviewHeaderMenuLabel(systemImage: "arrow.up.forward.app")
         }
         .buttonStyle(.plain)
         .appTooltip(Localizer.string("Open with"))
@@ -622,16 +603,12 @@ struct PreviewDetailView: View {
     private var openLinkButton: some View {
         let isWeb = Self.isWebScheme(linkURL?.scheme)
         let titleKey: String.LocalizationValue = isWeb ? "Open in Browser" : "Open Link"
-        return Button {
+        return PreviewHeaderActionButton(
+            systemImage: isWeb ? "safari" : "arrow.up.forward.app",
+            help: Localizer.string(titleKey)
+        ) {
             openLink()
-        } label: {
-            PreviewPillLabel(
-                systemImage: isWeb ? "safari" : "arrow.up.forward.app",
-                title: Localizer.string(titleKey)
-            )
         }
-        .buttonStyle(.plain)
-        .appTooltip(Localizer.string(titleKey))
     }
 
     /// 打开链接；无处理程序时提示，不静默失败。
@@ -731,50 +708,6 @@ struct PreviewDetailView: View {
     private struct GroupMeta {
         let totalSize: Int64
         let missingCount: Int
-    }
-}
-
-/// 预览顶栏胶囊标签：图标 + 文案，多处共用。
-private struct PreviewPillLabel: View {
-    let systemImage: String
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 26)
-        .background(
-            Capsule().fill(Color.primary.opacity(0.08))
-        )
-    }
-}
-
-private struct GroupHeaderIconButton: View {
-    let systemImage: String
-    let help: String
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle().fill(Color.primary.opacity(isHovered ? 0.08 : 0))
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
-        .appTooltip(help)
-        .accessibilityLabel(help)
     }
 }
 

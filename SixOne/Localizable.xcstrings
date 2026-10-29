@@ -470,6 +470,16 @@
         }
       }
     },
+    "Copy Origin" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝来源"
+          }
+        }
+      }
+    },
     "Copy Path" : {
       "localizations" : {
         "zh-Hans" : {
@@ -581,6 +591,7 @@
       }
     },
     "Done" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

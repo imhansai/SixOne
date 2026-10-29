@@ -326,7 +326,7 @@ struct ClipboardRowView: View {
             }
         case .link:
             ZStack(alignment: .bottomTrailing) {
-                systemIcon("link")
+                linkIcon
                 sourceBadge
             }
         case .color:
@@ -363,6 +363,23 @@ struct ClipboardRowView: View {
         } else {
             systemIcon("doc.text")
         }
+    }
+
+    /// 链接没有真实缩略图，用纸片卡片补上与其他文档图标一致的体积和轮廓。
+    private var linkIcon: some View {
+        Image(systemName: "link")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(Color.secondary)
+            .frame(width: 38, height: 38)
+            .background {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color(nsColor: .textBackgroundColor))
+                    .shadow(color: iconShadowColor, radius: 3, y: 1)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
     }
 
     private var thumbnail: NSImage? {
