@@ -23,7 +23,7 @@ enum AppModelContainer {
 
     /// 打开（或创建）历史库；参数用于测试隔离。
     static func make(isStoredInMemoryOnly: Bool, storeURL: URL? = nil) -> ModelContainer {
-        let schema = Schema(versionedSchema: SixOneSchemaV1.self)
+        let schema = Schema(versionedSchema: SixOneSchemaV2.self)
         let configuration = makeConfiguration(
             schema: schema,
             isStoredInMemoryOnly: isStoredInMemoryOnly,
@@ -33,16 +33,18 @@ enum AppModelContainer {
         do {
             return try ModelContainer(
                 for: schema,
+                migrationPlan: SixOneMigrationPlan.self,
                 configurations: [configuration]
             )
         } catch {
-            logger.error("打开历史库失败：\(error.localizedDescription, privacy: .public)")
+            logger.error("打开或迁移历史库失败：\(error.localizedDescription, privacy: .public)")
         }
 
         if !isStoredInMemoryOnly, let backup = backupUnreadableStore(at: configuration.url) {
             logger.notice("已把无法打开的历史库备份到 \(backup.lastPathComponent, privacy: .public)，改用新库")
             if let fresh = try? ModelContainer(
                 for: schema,
+                migrationPlan: SixOneMigrationPlan.self,
                 configurations: [configuration]
             ) {
                 return fresh
@@ -56,7 +58,11 @@ enum AppModelContainer {
             storeURL: nil
         )
         do {
-            return try ModelContainer(for: schema, configurations: [memoryConfiguration])
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: SixOneMigrationPlan.self,
+                configurations: [memoryConfiguration]
+            )
         } catch {
             // 内存库也失败则无数据层，停在启动阶段。
             logger.fault("无法创建数据容器（含内存兜底）：\(error.localizedDescription, privacy: .public)")

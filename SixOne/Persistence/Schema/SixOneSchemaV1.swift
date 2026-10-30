@@ -2,7 +2,8 @@
 //  SixOneSchemaV1.swift
 //  SixOne
 //
-//  当前模型定义（唯一一版）；开发阶段不保留历史版本与迁移路径。
+//  V1 已冻结：不要再改这里的字段或索引。当前版本见 `SixOneSchemaV2`，
+//  两者之间的迁移由 `SixOneMigrationPlan` 负责。
 //
 
 import Foundation
@@ -285,4 +286,4 @@ nonisolated enum SixOneSchemaV1: VersionedSchema {
     }
 }
 
-typealias ClipboardItem = SixOneSchemaV1.ClipboardItem
+// 类型别名在 `SixOneSchemaV2.swift`；V1 只供迁移使用。
