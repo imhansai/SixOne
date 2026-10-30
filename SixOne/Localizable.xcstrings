@@ -490,6 +490,16 @@
         }
       }
     },
+    "Copy Path" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝路径"
+          }
+        }
+      }
+    },
     "Copy Text" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1091,6 +1101,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "粘贴到其他应用"
+          }
+        }
+      }
+    },
+    "Path" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "路径"
           }
         }
       }

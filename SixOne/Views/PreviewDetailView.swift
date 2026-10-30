@@ -98,27 +98,38 @@ struct PreviewDetailView: View {
                 previewHeader
             }
 
-            ZStack {
-                content
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 只裁到内容区，避免图片/QuickLook/PDF 画出边界盖住顶栏。
-            .clipped()
-            .padding(isGroupListMode ? 0 : ClipboardLayout.previewInset)
-            .overlay(alignment: .bottom) {
-                if showsGroupFilePosition, let position = groupFilePosition {
-                    GroupFilePositionBadge(position: position.position, total: position.total)
-                        .padding(.bottom, 8)
-                        .transition(.opacity)
-                        .task(id: groupPositionRevealID) {
-                            try? await Task.sleep(for: .seconds(PanelTiming.groupPositionHint))
-                            guard !Task.isCancelled else { return }
-                            withAnimation(.easeIn(duration: 0.25)) {
-                                showsGroupFilePosition = false
+            VStack(spacing: ClipboardLayout.pathBarSpacing) {
+                ZStack {
+                    content
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 只裁到内容区，避免图片/QuickLook/PDF 画出边界盖住顶栏。
+                .clipped()
+                .overlay(alignment: .bottom) {
+                    if showsGroupFilePosition, let position = groupFilePosition {
+                        GroupFilePositionBadge(position: position.position, total: position.total)
+                            .padding(.bottom, 8)
+                            .transition(.opacity)
+                            .task(id: groupPositionRevealID) {
+                                try? await Task.sleep(for: .seconds(PanelTiming.groupPositionHint))
+                                guard !Task.isCancelled else { return }
+                                withAnimation(.easeIn(duration: 0.25)) {
+                                    showsGroupFilePosition = false
+                                }
                             }
-                        }
+                    }
+                }
+
+                if let pathBarLocation {
+                    FilePathBar(
+                        location: pathBarLocation,
+                        isReachable: pathBarIsReachable,
+                        onCopy: { manager.copyPlainText($0) },
+                        onPaste: { actions?.panelDidRequestPasteItem() }
+                    )
                 }
             }
+            .padding(isGroupListMode ? 0 : ClipboardLayout.previewInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(.rect(cornerRadius: cornerRadius))
@@ -631,6 +642,25 @@ struct PreviewDetailView: View {
             groupURLs: groupURLs,
             groupFileIndex: previewState.groupFileIndex
         )
+    }
+
+    /// 底部路径行：组总览不显示，其余有源文件的条目都显示。
+    private var pathBarLocation: FileLocation? {
+        guard !isGroupListMode else { return nil }
+        return fileLocation
+    }
+
+    /// 源文件是否仍可访问；失联时路径行前置警告。
+    private var pathBarIsReachable: Bool {
+        guard let pathBarLocation else { return true }
+        let url: URL? = if item.kind == .file, item.fileCount > 1,
+                           let index = previewState.groupFileIndex,
+                           groupURLs.indices.contains(index) {
+            groupURLs[index]
+        } else {
+            previewState.scopedFileURL?.url
+        }
+        return FileManager.default.fileExists(atPath: url?.path ?? pathBarLocation.path)
     }
 
     private func revealGroup() {
