@@ -41,7 +41,7 @@ struct SchemaMigrationTests {
 
         let keyed = try #require(items.first { $0.id == seeded.keyedID })
         #expect(keyed.contentKeySnapshot == seeded.keyedSnapshot, "已有快照不该被重算覆盖")
-        #expect(keyed.contentKeyVersion == ClipboardItem.currentContentKeyVersion)
+        #expect(keyed.contentKeyVersion == nil, "健康条目不再逐行补版本号")
     }
 
     @Test("迁移后再次打开不会重复迁移或丢数据")
@@ -60,7 +60,7 @@ struct SchemaMigrationTests {
         #expect(items.count == 3)
     }
 
-    @Test("V2 库升级到 V3：旧缩略图标记为旧版本，无缩略图保持 nil")
+    @Test("V2 库升级到 V3：旧缩略图保留，版本保持 nil 等待惰性重算")
     func migratesV2Thumbnails() throws {
         let fixture = try MigrationFixture()
         defer { fixture.cleanUp() }
@@ -75,7 +75,7 @@ struct SchemaMigrationTests {
 
         let withThumbnail = try #require(items.first { $0.id == seeded.thumbnailID })
         #expect(withThumbnail.thumbnailData == Data([1, 2, 3]))
-        #expect(withThumbnail.thumbnailVersion == ClipboardItem.legacyThumbnailVersion)
+        #expect(withThumbnail.thumbnailVersion == nil)
 
         let withoutThumbnail = try #require(items.first { $0.id == seeded.plainID })
         #expect(withoutThumbnail.thumbnailVersion == nil)

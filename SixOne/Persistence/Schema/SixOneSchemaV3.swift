@@ -37,7 +37,7 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
         @Attribute(.externalStorage) var imageData: Data?
         /// 列表缩略图，避免常驻原图。
         var thumbnailData: Data?
-        /// 缩略图生成版本；旧库迁移时标记为当前版本，改缩略图尺寸时可据此重算。
+        /// 缩略图生成版本；nil/旧版本会在列表显示时按当前尺寸重算。
         var thumbnailVersion: Int?
         /// 单路径列；多文件条目恒等于 `filePaths.first`。
         var filePath: String?
@@ -139,7 +139,7 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
         static let currentContentKeyVersion = 1
         /// 当前缩略图生成版本；改尺寸/编码时递增，旧缩略图可据此识别并重算。
         static let currentThumbnailVersion = 2
-        /// V2 时代的缩略图版本（256px），迁移时标记；列表看到旧版本会惰性重算。
+        /// V2 时代的缩略图版本（256px）；旧库迁移后保持 nil，列表看到非当前版本会惰性重算。
         static let legacyThumbnailVersion = 1
 
         /// 去重稳定标识；文本用 SHA256，避免超大文本驻留内存。

@@ -2,7 +2,7 @@
 //  SixOneMigrationPlan.swift
 //  SixOne
 //
-//  历史库版本迁移：V1 → V2 补齐派生快照；V2 → V3 给旧缩略图打版本（V3 同时新增 id 索引）。
+//  历史库版本迁移：V1 → V2 只补真正缺失的派生快照；V2 → V3 新增 id 索引与缩略图版本字段。
 //
 
 import Foundation
@@ -20,63 +20,30 @@ nonisolated enum SixOneMigrationPlan: SchemaMigrationPlan {
         [migrateV1toV2, migrateV2toV3]
     }
 
-    /// 结构迁移由 SwiftData 完成；这里补旧条目缺失的派生快照。
-    /// 补齐失败不回滚迁移：结构已经可用，派生快照缺失由读取路径兜底。
+    /// 结构迁移由 SwiftData 完成；这里只补旧条目真正缺失的派生快照。
+    /// 健康数据（快照齐全）不做任何逐行写入，避免大库首启被 5 万次更新拖住。
     static let migrateV1toV2 = MigrationStage.custom(
         fromVersion: SixOneSchemaV1.self,
         toVersion: SixOneSchemaV2.self,
         willMigrate: nil,
         didMigrate: { context in
-            backfillV2Snapshots(in: context)
+            backfillMissingSnapshots(in: context)
         }
     )
 
-    /// V3 的 id 索引随目标模型落地；这里给 V2 已有的缩略图打上当前版本。
-    static let migrateV2toV3 = MigrationStage.custom(
+    /// V3 只加索引与可空字段，交给轻量迁移；旧缩略图版本保持 nil，由列表惰性重算。
+    static let migrateV2toV3 = MigrationStage.lightweight(
         fromVersion: SixOneSchemaV2.self,
-        toVersion: SixOneSchemaV3.self,
-        willMigrate: nil,
-        didMigrate: { context in
-            markLegacyThumbnails(in: context)
-        }
+        toVersion: SixOneSchemaV3.self
     )
 
-    private static func backfillV2Snapshots(in context: ModelContext) {
+    private static func backfillMissingSnapshots(in context: ModelContext) {
         // 这一阶段的目标库还是 V2，必须显式取 V2 模型，不能用指向 V3 的类型别名。
-        var descriptor = FetchDescriptor<SixOneSchemaV2.ClipboardItem>(
-            predicate: #Predicate { $0.contentKeyVersion == nil }
-        )
-        // 幂等快照都在时只补版本号；不预取位图/富文本，避免大库迁移一次性读满内存。
-        descriptor.propertiesToFetch = [
-            \.id, \.kindRaw, \.contentKeySnapshot, \.contentKeyVersion,
-            \.searchText, \.filePathsSearchText, \.text, \.filePaths, \.filePath, \.colorData,
-        ]
-        guard let items = try? context.fetch(descriptor) else {
-            logger.error("迁移后读取旧条目失败，跳过派生快照补齐")
-            return
-        }
-        guard !items.isEmpty else { return }
-        logger.notice("迁移补齐 \(items.count, privacy: .public) 条旧条目的派生快照")
-
-        for item in items {
-            if item.contentKeySnapshot == nil {
-                item.refreshContentKey()
-            } else {
-                // V1 的快照由同一算法生成，只补版本号，避免为全部旧条目重读图片/正文。
-                // 去重算法以后若变化，新版本迁移要按版本重算，而不是沿用旧快照。
-                item.contentKeyVersion = SixOneSchemaV2.ClipboardItem.currentContentKeyVersion
-            }
-            if item.searchText == nil {
-                if item.kind == .text || item.kind == .link {
-                    item.refreshSearchText()
-                } else if item.kind == .color {
-                    item.refreshColorSearchText()
-                }
-            }
-            if item.filePathsSearchText == nil {
-                item.refreshFilePathsSearchText()
-            }
-        }
+        var changed = false
+        changed = backfillContentKeys(in: context) || changed
+        changed = backfillSearchTexts(in: context) || changed
+        changed = backfillFilePaths(in: context) || changed
+        guard changed else { return }
 
         do {
             try context.save()
@@ -85,23 +52,58 @@ nonisolated enum SixOneMigrationPlan: SchemaMigrationPlan {
         }
     }
 
-    private static func markLegacyThumbnails(in context: ModelContext) {
-        var descriptor = FetchDescriptor<ClipboardItem>(
-            predicate: #Predicate { $0.thumbnailVersion == nil && $0.thumbnailData != nil }
+    private static func backfillContentKeys(in context: ModelContext) -> Bool {
+        var descriptor = FetchDescriptor<SixOneSchemaV2.ClipboardItem>(
+            predicate: #Predicate { $0.contentKeySnapshot == nil }
         )
-        descriptor.propertiesToFetch = [\.id, \.thumbnailVersion]
-        guard let legacy = try? context.fetch(descriptor) else {
-            logger.error("迁移后读取旧缩略图失败，跳过缩略图版本")
-            return
+        descriptor.propertiesToFetch = [
+            \.id, \.kindRaw, \.text, \.imageData, \.filePath, \.filePaths,
+            \.colorData, \.contentKeySnapshot, \.contentKeyVersion,
+        ]
+        guard let items = try? context.fetch(descriptor), !items.isEmpty else { return false }
+        for item in items {
+            item.refreshContentKey()
         }
-        guard !legacy.isEmpty else { return }
-        for item in legacy {
-            item.thumbnailVersion = ClipboardItem.legacyThumbnailVersion
+        logger.notice("迁移补齐 \(items.count, privacy: .public) 条旧条目的去重快照")
+        return true
+    }
+
+    private static func backfillSearchTexts(in context: ModelContext) -> Bool {
+        // 文件/图片本来就没有 searchText，先按类型过滤，避免把健康数据也逐行写一遍。
+        var descriptor = FetchDescriptor<SixOneSchemaV2.ClipboardItem>(
+            predicate: #Predicate { $0.searchText == nil }
+        )
+        descriptor.propertiesToFetch = [\.id, \.kindRaw, \.text, \.colorData, \.searchText]
+        guard let items = try? context.fetch(descriptor), !items.isEmpty else { return false }
+
+        var changed = 0
+        for item in items {
+            let before = item.searchText
+            if item.kind == .text || item.kind == .link {
+                item.refreshSearchText()
+            } else if item.kind == .color {
+                item.refreshColorSearchText()
+            } else {
+                continue
+            }
+            if item.searchText != before { changed += 1 }
         }
-        do {
-            try context.save()
-        } catch {
-            logger.error("迁移后保存缩略图版本失败：\(error.localizedDescription, privacy: .public)")
+        guard changed > 0 else { return false }
+        logger.notice("迁移补齐 \(changed, privacy: .public) 条旧条目的搜索快照")
+        return true
+    }
+
+    private static func backfillFilePaths(in context: ModelContext) -> Bool {
+        // 只有带路径的条目才需要路径快照；文本条目继续留 nil。
+        var descriptor = FetchDescriptor<SixOneSchemaV2.ClipboardItem>(
+            predicate: #Predicate { $0.filePathsSearchText == nil && $0.filePath != nil }
+        )
+        descriptor.propertiesToFetch = [\.id, \.filePath, \.filePaths, \.filePathsSearchText]
+        guard let items = try? context.fetch(descriptor), !items.isEmpty else { return false }
+        for item in items {
+            item.refreshFilePathsSearchText()
         }
+        logger.notice("迁移补齐 \(items.count, privacy: .public) 条旧条目的路径快照")
+        return true
     }
 }
