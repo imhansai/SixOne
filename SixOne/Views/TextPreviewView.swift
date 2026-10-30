@@ -12,10 +12,6 @@ struct TextPreviewView: NSViewRepresentable {
 
     private static let defaultTextFont = NSFont.systemFont(ofSize: 14)
 
-    /// 正文左右留白，给浮层滚动条让位（滑块距右缘 9pt）。
-    /// 用 textContainerInset 而非 lineFragmentPadding；左右对称，链接底栏据此左对齐。
-    static let textLinePadding: CGFloat = 10
-
     /// 内容指纹：变化时刷新，避免比较超大 Data。
     let contentID: String
     let attributedTextData: Data?
@@ -64,9 +60,6 @@ struct TextPreviewView: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
-        // 正文留白交给 textContainerInset，浮层滚动条落在右侧留白上。
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainerInset = NSSize(width: Self.textLinePadding, height: 0)
         textView.drawsBackground = false
         textView.autoresizingMask = [.width]
         textView.minSize = .zero
