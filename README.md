@@ -24,7 +24,7 @@ A short clip: open the panel, preview and zoom an image, copy its source path, t
 
 ## Status
 
-**1.0.0, source release.** No prebuilt binaries — you build from source. The store is versioned (currently schema **V2**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates the existing store in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading to an older build.
+**1.0.0, source release.** No prebuilt binaries — you build from source. The store is versioned (currently schema **V3**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates the existing store in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading to an older build.
 
 **Non-goals:** cloud sync, accounts, multi-device history, an iOS client, auto-update. SixOne is deliberately a local-only, single-Mac tool.
 
@@ -123,7 +123,7 @@ The two former god objects are split by responsibility: `ClipboardManager` is a 
 | Add a view-side action (copy, save an edit, copy text) | Emit an intent through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; do not call `ClipboardManager` mutators from views. Tests: `RowMenuBuilderTests` / `TextPreviewFormattingTests` / `LinkPreviewInteractionTests` |
 | Add a setting | `SettingsStore` (persistence port is `SettingsStorage`) + the matching pane file (`Views/Settings/*SettingsView.swift`) |
 | Change the global hotkey (registration / key events) | `HotKeyManager` + two ports: `HotKeyRegistering` (registration, can fail) / `HotKeyEventMonitoring` (key events, dispatched per instance) + `HotKeyManagerTests` |
-| Add / change a model field | Copy `Persistence/Schema/SixOneSchemaV2.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Shape changes and `#Index` additions reach existing stores through the plan. Tests: `SchemaMigrationTests` |
+| Add / change a model field | Copy `Persistence/Schema/SixOneSchemaV3.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Shape changes and `#Index` additions reach existing stores through the plan. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
 | Change a fetch path | First decide "need the whole item" vs "only identity/paths": `ClipboardManager.fetchFullItem` / `ClipboardManager.fetchLightItem`. The list window is a different path — `ClipboardHistoryRepository.latest` on the background actor |
 | Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name: the fallback may only ever touch this app's own file |
 | Change how a file is reached after the fact (moved, renamed, or after a restart) | `SecurityScopedFileAccess`: bookmark first, original path as fallback, at most 100 bookmarks per copy. Covered by `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
@@ -140,7 +140,7 @@ The two former god objects are split by responsibility: `ClipboardManager` is a 
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 583 tests in 93 suites, about 11 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 586 tests in 94 suites, about 11 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 Modules that touch system resources are driven by doubles, all under `SixOneTests/Support/`: the clipboard goes through `FakePasteboard` (so capture → dedup → touch-to-top is testable without overwriting your clipboard), settings and the hotkey through `InMemorySettingsStorage`, the hotkey event handler through `FakeHotKeyEventMonitor`, history reads through `FakeHistoryRepository`, offscreen windows and view-tree probes through `OffscreenHost` and `TestPanel`, temporary files through `TemporaryFiles`, and waiting through `Wait`. Preview, positioning, keyboard decisions, and focus policy are pure functions or pure value inputs. The performance benchmark in `HistoryBenchmarkTests` is skipped unless a switch file exists (`.benchmark-history` at the repo root, or `/tmp/sixone-benchmark`); do not leave either behind, as it slows the full suite down.
 

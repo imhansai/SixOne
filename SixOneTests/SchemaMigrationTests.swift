@@ -60,6 +60,27 @@ struct SchemaMigrationTests {
         #expect(items.count == 3)
     }
 
+    @Test("V2 库升级到 V3：旧缩略图打上当前版本，无缩略图保持 nil")
+    func migratesV2Thumbnails() throws {
+        let fixture = try MigrationFixture()
+        defer { fixture.cleanUp() }
+        let seeded = try fixture.seedV2Store()
+
+        let container = AppModelContainer.make(
+            isStoredInMemoryOnly: false,
+            storeURL: fixture.storeURL
+        )
+        let items = try container.mainContext.fetch(FetchDescriptor<ClipboardItem>())
+        #expect(items.count == 2)
+
+        let withThumbnail = try #require(items.first { $0.id == seeded.thumbnailID })
+        #expect(withThumbnail.thumbnailData == Data([1, 2, 3]))
+        #expect(withThumbnail.thumbnailVersion == ClipboardItem.currentThumbnailVersion)
+
+        let withoutThumbnail = try #require(items.first { $0.id == seeded.plainID })
+        #expect(withoutThumbnail.thumbnailVersion == nil)
+    }
+
     @Test("全新库按当前版本创建，写入后重新打开仍在")
     func freshStoreUsesCurrentSchema() throws {
         let fixture = try MigrationFixture()
@@ -124,6 +145,32 @@ private struct MigrationFixture {
 
         try context.save()
         return (text.id, file.id, keyed.id, keyedSnapshot)
+    }
+
+    /// 用冻结的 V2 schema 建库，带一条旧缩略图和一条无缩略图条目。
+    func seedV2Store() throws -> (thumbnailID: UUID, plainID: UUID) {
+        let schema = Schema(versionedSchema: SixOneSchemaV2.self)
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+
+        let withThumbnail = SixOneSchemaV2.ClipboardItem(
+            kind: .image,
+            imageData: Data([9, 9]),
+            thumbnailData: Data([1, 2, 3]),
+            contentType: "PNG"
+        )
+        withThumbnail.refreshTitleSnapshot()
+        withThumbnail.refreshContentKey()
+        context.insert(withThumbnail)
+
+        let plain = SixOneSchemaV2.ClipboardItem(kind: .text, text: "no thumbnail")
+        plain.refreshTitleSnapshot()
+        plain.refreshContentKey()
+        context.insert(plain)
+
+        try context.save()
+        return (withThumbnail.id, plain.id)
     }
 
     func seedCurrentStore() throws {

@@ -36,9 +36,11 @@ final class ClipboardThumbnailScheduler {
             guard let self else { return }
             await MainActor.run {
                 guard let item = self.writer.fetchFullItem(id: id),
-                      item.thumbnailData != thumb else { return }
+                      item.thumbnailData != thumb
+                        || item.thumbnailVersion != ClipboardItem.currentThumbnailVersion else { return }
                 self.previewCache.remove(for: "thumb-\(item.id.uuidString)")
                 item.thumbnailData = thumb
+                item.thumbnailVersion = ClipboardItem.currentThumbnailVersion
                 self.writer.save("写入缩略图")
                 self.events.post(.thumbnailUpdated(id: id))
             }

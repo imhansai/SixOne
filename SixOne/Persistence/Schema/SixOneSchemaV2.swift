@@ -2,8 +2,8 @@
 //  SixOneSchemaV2.swift
 //  SixOne
 //
-//  当前模型定义（V2）。V2 在 V1 上增加去重 key 版本字段与 `contentKeySnapshot` 索引；
-//  V1 → V2 的迁移会补齐旧条目缺失的派生快照。V1 已冻结，改字段从 V2 复制出新版本。
+//  V2 已冻结：不要再改这里的字段或索引。当前版本见 `SixOneSchemaV3`。
+//  V2 在 V1 上增加去重 key 版本字段与 `contentKeySnapshot` 索引。
 //
 
 import Foundation
@@ -292,5 +292,4 @@ nonisolated enum SixOneSchemaV2: VersionedSchema {
     }
 }
 
-/// 当前版本：业务代码只认这个名字；升级 schema 时改这里，不要改已冻结的旧版本。
-typealias ClipboardItem = SixOneSchemaV2.ClipboardItem
+// 类型别名在 `SixOneSchemaV3.swift`；V2 只供迁移使用。

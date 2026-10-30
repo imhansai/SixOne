@@ -23,7 +23,7 @@ enum AppModelContainer {
 
     /// 打开（或创建）历史库；参数用于测试隔离。
     static func make(isStoredInMemoryOnly: Bool, storeURL: URL? = nil) -> ModelContainer {
-        let schema = Schema(versionedSchema: SixOneSchemaV2.self)
+        let schema = Schema(versionedSchema: SixOneSchemaV3.self)
         let configuration = makeConfiguration(
             schema: schema,
             isStoredInMemoryOnly: isStoredInMemoryOnly,

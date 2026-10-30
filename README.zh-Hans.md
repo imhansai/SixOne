@@ -24,7 +24,7 @@ macOS 菜单栏剪贴板历史工具。全局快捷键（默认 `⌃⌘V`）唤�
 
 ## 项目状态
 
-**1.0.0，源码发布。** 不提供预编译包 —— 从源码构建。库已版本化（当前 schema **V2**），通过 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移现有库，改 schema 不再需要清空历史。迁移是单向的：回退到旧版本前请先备份库文件。
+**1.0.0，源码发布。** 不提供预编译包 —— 从源码构建。库已版本化（当前 schema **V3**），通过 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移现有库，改 schema 不再需要清空历史。迁移是单向的：回退到旧版本前请先备份库文件。
 
 **非目标：** 云同步、账号体系、多设备历史、iOS 客户端、自动更新。SixOne 有意做成只在本机、只服务单台 Mac 的工具。
 
@@ -123,7 +123,7 @@ open build/Build/Products/Debug/SixOne.app
 | 加一个视图侧动作（复制、保存编辑、复制文字） | 经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 发意图，落到 `PanelActionHandler`；不要在视图里直接调 `ClipboardManager` 的写方法。测试：`RowMenuBuilderTests` / `TextPreviewFormattingTests` / `LinkPreviewInteractionTests` |
 | 加一个设置项 | `SettingsStore`（持久化口是 `SettingsStorage`）+ 对应面板的文件（`Views/Settings/*SettingsView.swift`） |
 | 改全局快捷键（注册 / 按键事件） | `HotKeyManager` + 两个口：`HotKeyRegistering`（注册，会失败）/ `HotKeyEventMonitoring`（按键事件，按实例分发）+ `HotKeyManagerTests` |
-| 加 / 改一个模型字段 | 从 `Persistence/Schema/SixOneSchemaV2.swift` 复制出新的 `SixOneSchemaV<N>`（不要改已冻结的版本），在 `SixOneMigrationPlan` 里加一个 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。形状变化和 `#Index` 会通过迁移计划落到既有库。测试：`SchemaMigrationTests` |
+| 加 / 改一个模型字段 | 从 `Persistence/Schema/SixOneSchemaV3.swift` 复制出新的 `SixOneSchemaV<N>`（不要改已冻结的版本），在 `SixOneMigrationPlan` 里加一个 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。形状变化和 `#Index` 会通过迁移计划落到既有库。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
 | 动取数路径 | 先分清「要整条」还是「只要身份/路径」：分别走 `ClipboardManager.fetchFullItem` / `ClipboardManager.fetchLightItem`；列表取窗是另一条路径，走后台 actor 上的 `ClipboardHistoryRepository.latest` |
 | 改库文件位置，或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名：兜底只允许动本应用自己的那个文件 |
 | 改「事后怎么找回那个文件」（被移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark。用例见 `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
@@ -140,7 +140,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 583 项用例、93 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 586 项用例、94 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
 
 不碰系统资源的模块都靠替身驱动，替身集中在 `SixOneTests/Support/`：剪贴板走 `FakePasteboard`（因此「捕获 → 去重 → 触达置顶」可测而不会覆写你的剪贴板），设置与快捷键走 `InMemorySettingsStorage`，按键事件处理器走 `FakeHotKeyEventMonitor`，历史读取走 `FakeHistoryRepository`，离屏窗口与视图树探针走 `OffscreenHost` 与 `TestPanel`，临时文件走 `TemporaryFiles`，等待走 `Wait`。预览、定位、键盘决策、焦点策略都是纯函数或纯值输入。`HistoryBenchmarkTests` 里的性能基准只有在开关文件存在时才跑（仓库根的 `.benchmark-history`，或 `/tmp/sixone-benchmark`）；跑完别把开关文件留下，它会让全量测试变慢。
 
