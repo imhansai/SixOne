@@ -1,13 +1,12 @@
 //
 //  ClipboardPanelController.swift
 //  SixOne
-//  面板控制器：显示/隐藏/定位、会话恢复、面板级动作与键盘执行。
+//  面板控制器：面板级动作、菜单命令与键盘执行；窗口生命周期在 `PanelWindowLifecycle`。
 
 import AppKit
-import QuickLookUI
 import SwiftUI
 
-/// 剪贴板面板控制：显示隐藏、焦点处理、菜单命令与键盘 action。
+/// 剪贴板面板控制：面板级动作、菜单命令与键盘 action。
 final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHandler, PanelKeyHandling, NSMenuItemValidation {
     private let panel: ClipboardPanel
     private let context: PanelContext
@@ -25,24 +24,79 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     private let shareState: ShareState
     private let quickPasteHintState: QuickPasteHintState
     private let searchSession: PanelSearchSession
-    /// 上次收起时的界面快照；首次唤出前为 nil。
-    private var session: PanelSession?
-    /// 挂起期间摘下的 Quick Look 预览项。
-    private var suspendedQuickLookItemURL: URL?
-    private var previousApplication: NSRunningApplication?
-
-    var positionProvider: (() -> NSRect?)?
 
     var onOpenSettings: (() -> Void)?
 
-    /// 收起那一拍摘掉设置窗口的 key/main 候选，收完恢复（未建窗口时无需做事）。
-    var setSettingsKeyAndMainSuspended: ((_ suspended: Bool) -> Void)?
-
-    private var mouseMonitor: Any?
-    private var resignObserver: NSObjectProtocol?
-    private var becomeKeyObserver: NSObjectProtocol?
-    private var becomeActiveObserver: NSObjectProtocol?
     private var hostingController: NSViewController?
+
+    /// 窗口显示/收起、定位、会话恢复与焦点判定。
+    private lazy var lifecycle = PanelWindowLifecycle(
+        panel: panel,
+        manager: manager,
+        store: store,
+        panelState: panelState,
+        confirmationState: confirmationState,
+        searchState: searchState,
+        moreActionsState: moreActionsState,
+        previewState: previewState,
+        navigationState: navigationState,
+        noticeState: noticeState,
+        shareState: shareState,
+        quickPasteHintState: quickPasteHintState,
+        cursor: cursor,
+        sharing: sharing
+    )
+
+    private lazy var itemActions = PanelItemActions(
+        manager: manager,
+        store: store,
+        panel: panel,
+        previewState: previewState,
+        navigationState: navigationState,
+        copyState: copyState,
+        noticeState: noticeState,
+        confirmationState: confirmationState,
+        cursor: cursor,
+        previewLauncher: previewLauncher,
+        pasteFlow: pasteFlow,
+        sharing: sharing,
+        handOff: { [weak self] in
+            self?.lifecycle.hide(restoresPreviousApplication: false)
+        }
+    )
+
+    private lazy var editingSession = PanelEditingSession(
+        panel: panel,
+        previewState: previewState,
+        confirmationState: confirmationState,
+        moreActionsState: moreActionsState,
+        hide: { [weak self] in self?.lifecycle.hide() }
+    )
+
+    private lazy var keyExecutor = PanelKeyActionExecutor(
+        panel: panel,
+        itemActions: itemActions,
+        editingSession: editingSession,
+        cursor: cursor,
+        previewState: previewState,
+        previewLauncher: previewLauncher,
+        pasteFlow: pasteFlow,
+        focusZones: focusZones,
+        searchState: searchState,
+        hide: { [weak self] in self?.lifecycle.hide() },
+        fullItem: { [weak self] id in self?.manager.fetchFullItem(id: id) }
+    )
+
+    var positionProvider: (() -> NSRect?)? {
+        get { lifecycle.positionProvider }
+        set { lifecycle.positionProvider = newValue }
+    }
+
+    /// 收起那一拍摘掉设置窗口的 key/main 候选，收完恢复（未建窗口时无需做事）。
+    var setSettingsKeyAndMainSuspended: ((_ suspended: Bool) -> Void)? {
+        get { lifecycle.setSettingsKeyAndMainSuspended }
+        set { lifecycle.setSettingsKeyAndMainSuspended = newValue }
+    }
     private lazy var previewLauncher = PreviewLauncher(
         manager: manager,
         previewState: previewState,
@@ -60,7 +114,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         requestReveal: { [weak self] id in
             self?.navigationState.requestRevealAfterStoreChange(id: id)
         },
-        previousApplication: { [weak self] in self?.previousApplication },
+        previousApplication: { [weak self] in self?.lifecycle.previousApplicationForPaste },
         hide: { [weak self] in self?.hide() }
     )
     private lazy var cursor = PanelSelectionCursor(
@@ -126,97 +180,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             into: panel
         )
 
-        // 失去 key 时延后判定收起：resign 到达时新 key 窗口可能还没挂上。
-        resignObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                // 不恢复原应用，避免 SixOne 自己的设置窗口抢 key 时切走应用。
-                self?.quickPasteHintState.cancel()
-                self?.hideIfFocusLeft(restoresPreviousApplication: false)
-            }
-        }
-
-        // 拿到 key 就激活应用：nonactivating 面板光成为 key 不会回到前台，手势只派给激活应用。
-        becomeKeyObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.activateApp()
-            }
-        }
-
-        // 应用回到前台：停在「选服务」的分享会话已结束；执行中的服务由自身回话。
-        becomeActiveObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, case .picking = self.shareState.stage else { return }
-                self.sharing.finishPickingSessions()
-            }
-        }
-    }
-
-    /// 用 WindowServer 侧状态而非 `NSApp.isActive`，避免焦点切换瞬间读到旧值。
-    private var isAppFrontmost: Bool {
-        NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
-    }
-
-    /// 前台是别的进程的非 regular 辅助面板（自动填充、指纹认证）；排除本进程。
-    private var isSystemHelperFrontmost: Bool {
-        guard let frontmost = NSWorkspace.shared.frontmostApplication,
-              frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
-        return frontmost.activationPolicy != .regular
-    }
-
-    /// 搜索框或预览正文是否正在编辑；面板失 key 后编辑会话仍在，所以仍可据此判断。
-    private var isEditingText: Bool {
-        previewState.isEditing || searchState.isFocused || panel.firstResponder is NSTextView
-    }
-
-    /// 用类型判断而非 `.shared`，避免比较时把字体/颜色面板提前创建出来。
-    private var isTextAuxiliaryPanelKey: Bool {
-        guard let keyWindow = NSApp.keyWindow else { return false }
-        return keyWindow is NSFontPanel || keyWindow is NSColorPanel
-    }
-
-    /// 正按着菜单栏状态项；这一下由按钮动作（鼠标抬起）负责，不能收面板。
-    private var isPressingStatusItem: Bool {
-        guard NSEvent.pressedMouseButtons != 0 else { return false }
-        guard let rect = positionProvider?() else { return false }
-        return rect.contains(NSEvent.mouseLocation)
-    }
-
-    /// 查现场交给 `PanelFocusPolicy`；`clickedOutside` 表示用户主动点了面板外面。
-    private func focusSnapshot(clickedOutside: Bool) -> PanelFocusSnapshot {
-        PanelFocusSnapshot(
-            isSharing: shareState.isActive,
-            hasAttachedSheet: panel.attachedSheet != nil,
-            isPressingStatusItem: isPressingStatusItem,
-            isAppFrontmost: isAppFrontmost,
-            isPanelKeyWindow: panel.isKeyWindow,
-            isTextAuxiliaryPanelKey: isTextAuxiliaryPanelKey,
-            hasApplicationSheet: NSApp.keyWindow?.sheetParent != nil,
-            isEditingText: isEditingText,
-            clickedOutside: clickedOutside,
-            isSystemHelperFrontmost: isSystemHelperFrontmost,
-            hasKeyWindow: NSApp.keyWindow != nil
-        )
-    }
-
-    /// 焦点真的离开时才隐藏；延后一拍，等新 key 窗口落定，避免辅助面板抢焦点时误收。
-    private func hideIfFocusLeft(restoresPreviousApplication: Bool, clickedOutside: Bool = false) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.panel.isVisible else { return }
-            guard PanelFocusPolicy.shouldHide(self.focusSnapshot(clickedOutside: clickedOutside)) else { return }
-            self.hide(restoresPreviousApplication: restoresPreviousApplication)
-        }
+        // 沿用之前的时机：控制器构造时就装好焦点/激活监听。
+        _ = lifecycle
     }
 
     private func makeRootView() -> some View {
@@ -229,55 +194,19 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     // MARK: - 面板级动作（PanelActionHandler）
 
     func panelDidActivate(id: UUID, asPlainText: Bool) {
-        guard let item = fullItem(id: id) else { return }
-        // 无纯文本形态的条目回落普通粘贴。
-        pasteFlow.paste(item, asPlainText: asPlainText && item.kind.hasPlainText)
+        itemActions.activate(id: id, asPlainText: asPlainText)
     }
 
     func panelDidRequestDelete(id: UUID) {
-        guard manager.fetchLightItem(id: id) != nil else { return }
-        confirmationState.pendingDeletionID = id
-        ConfirmationAlert.present(
-            on: panel,
-            title: Localizer.string("Delete Item?"),
-            message: Localizer.string("This cannot be undone."),
-            actionTitle: Localizer.string("Delete"),
-            onAction: { [weak self] in self?.panelDidConfirmDelete(id: id) },
-            onCancel: { [weak self] in self?.confirmationState.pendingDeletionID = nil }
-        )
-    }
-
-    private func panelDidConfirmDelete(id: UUID) {
-        confirmationState.pendingDeletionID = nil
-        guard let item = manager.fetchLightItem(id: id) else { return }
-        if previewState.item?.id == item.id {
-            previewState.close()
-        }
-        manager.delete(id: item.id)
-        if cursor.selectedItemID == item.id {
-            cursor.selectedItemID = nil
-            navigationState.isSelectionActive = false
-        }
+        itemActions.requestDelete(id: id)
     }
 
     func panelDidPasteAsPlainText(id: UUID) {
-        guard let item = fullItem(id: id) else { return }
-        pasteFlow.paste(item, asPlainText: true)
+        itemActions.pasteAsPlainText(id: id)
     }
 
     func panelDidRequestOpen(id: UUID) {
-        guard let item = fullItem(id: id) else { return }
-        openExternally(item)
-    }
-
-    /// 用 `activate(from:)` 把前台应用当作交出激活的一方；状态栏路径上 `NSApp.activate()` 不被批准。
-    private func activateApp() {
-        guard !isAppFrontmost else { return }
-        guard let frontmost = NSWorkspace.shared.frontmostApplication else {
-            NSApp.activate()
-            return
-        }
-        NSRunningApplication.current.activate(from: frontmost, options: [])
+        itemActions.requestOpen(id: id)
     }
 
     var canRequestSettings: Bool { onOpenSettings != nil }
@@ -291,7 +220,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     func panelDidRequestShare(id: UUID, anchorView: NSView) {
-        sharing.shareRowItem(id: id, anchorView: anchorView)
+        itemActions.requestShare(id: id, anchorView: anchorView)
     }
 
     func panelDidRequestFocusContent() {
@@ -300,34 +229,47 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     func panelDidRequestGroupFileShare(at index: Int, anchorView: NSView) {
-        guard let item = previewState.item, item.kind == .file, item.fileCount > 1 else { return }
-        sharing.sharePreviewedFile(at: index, of: item, anchorView: anchorView)
+        itemActions.requestGroupFileShare(at: index, anchorView: anchorView)
     }
 
     func panelDidRequestShareGroup(anchorView: NSView?) {
-        guard let item = previewState.item, item.kind == .file, item.fileCount > 1,
-              let anchor = anchorView ?? panel.contentView else { return }
-        sharing.sharePreviewedGroup(item, anchorView: anchor)
+        itemActions.requestShareGroup(anchorView: anchorView)
     }
 
     func panelDidInvokeGroupFileCommand(_ command: GroupFileCommand, index: Int) {
-        handleGroupFileCommand(command, index: index)
+        itemActions.invokeGroupFileCommand(command, index: index)
     }
 
     func panelDidRequestEscape() {
-        handleEscape()
+        editingSession.handleEscape()
     }
 
     func panelDidRequestCancelEditing() {
-        requestCancelEditing()
+        editingSession.requestCancelEditing()
     }
 
     func panelDidRequestCopyItem() {
-        copySelectedItem()
+        itemActions.copySelectedItem()
     }
 
     func panelDidRequestPasteItem() {
-        pasteSelectedItem()
+        itemActions.pasteSelectedItem()
+    }
+
+    func panelDidRequestCopy(id: UUID) {
+        itemActions.copyItem(id: id)
+    }
+
+    func panelDidRequestCopyAsPlainText(id: UUID) {
+        itemActions.copyItemAsPlainText(id: id)
+    }
+
+    func panelDidRequestCopyText(_ text: String) {
+        itemActions.copyText(text)
+    }
+
+    func panelDidRequestSaveEditedText(id: UUID, text: String, richText: Data?) {
+        itemActions.saveEditedText(id: id, text: text, richText: richText)
     }
 
     func panelDidRequestSearchCancel() {
@@ -349,226 +291,38 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         focusZones.cycle(backwards: backwards)
     }
 
-    private func fullItem(id: UUID) -> ClipboardItem? {
-        manager.fetchFullItem(id: id)
-    }
-
     func toggle(anchor: PanelAnchor) {
-        if panel.isVisible {
-            hide()
-        } else {
-            show(anchor: anchor)
-        }
-    }
-
-    /// 先显示再成为 key/main；不当 main 的话激活前移的会是设置窗口。
-    private func present() {
-        panel.orderFrontRegardless()
-        panel.makeKey()
-        panel.makeMain()
+        lifecycle.toggle(anchor: anchor)
     }
 
     func show(anchor: PanelAnchor) {
-        guard !panel.isVisible else { return }
-        previousApplication = NSWorkspace.shared.frontmostApplication
-        positionPanel(anchor: anchor)
-        present()
-        noticeState.message = nil
-        searchState.isFocused = false
-        moreActionsState.isFocused = false
-        confirmationState.reset()
-        sharing.finishPickingSessions()
-        shareState.stage = .idle
-        store.setListVisible(true)
-        restoreSession()
-        panelState.isVisible = true
-        installMonitors()
+        lifecycle.show(anchor: anchor)
     }
 
     func handleCloseWindow() {
         if previewState.isEditing {
-            requestCancelEditing()
+            editingSession.requestCancelEditing()
         } else {
             hide()
         }
     }
 
     func hide(restoresPreviousApplication: Bool = true) {
-        guard panel.isVisible || panelState.isVisible else { return }
-        // 收起按自动保存处理，避免未提交编辑随退出丢失；显式取消不会走到这里。
-        commitEditingBeforeHiding()
-        quickPasteHintState.cancel()
-        captureSession()
-        panel.makeFirstResponder(nil)
-        searchState.isFocused = false
-        moreActionsState.isFocused = false
-        // 影片挂在视图树上，不停掉会在收起后继续出声。
-        suspendQuickLookPlayback()
-        sharing.finishPickingSessions()
-        shareState.stage = .idle
-        orderOutPanel()
-        panelState.isVisible = false
-        store.setListVisible(false)
-        removeMonitors()
-        // 仍激活（Esc/⌘W）时把焦点还给原应用；点面板外时其他应用已激活。
-        if restoresPreviousApplication, NSApp.isActive, let previousApplication {
-            NSApp.yieldActivation(to: previousApplication)
-            previousApplication.activate()
-        }
-    }
-
-    private func commitEditingBeforeHiding() {
-        guard previewState.isEditing else { return }
-        previewState.finishEditing()
+        lifecycle.hide(restoresPreviousApplication: restoresPreviousApplication)
     }
 
     func handleQuitAttempt() -> Bool {
-        guard previewState.isEditing else { return false }
-        requestCancelEditing()
-        return true
+        editingSession.handleQuitAttempt()
     }
 
-    /// orderOut 会把设置窗口顶成 key/main，这一拍先摘下它的候选资格。
-    private func orderOutPanel() {
-        setSettingsKeyAndMainSuspended?(true)
-        defer { setSettingsKeyAndMainSuspended?(false) }
-        panel.orderOut(nil)
-    }
-
-    // MARK: - 会话挂起 / 恢复
-
-    private func captureSession() {
-        let firstVisible = navigationState.fullyVisibleFirstIndex
-        session = PanelSession(
-            previewItemID: previewState.item?.id,
-            selectedItemID: cursor.selectedItemID,
-            topVisibleRowID: store.rows.indices.contains(firstVisible) ? store.rows[firstVisible].id : nil,
-            topVisibleIndex: firstVisible,
-            isSelectionActive: navigationState.isSelectionActive
-        )
-    }
-
-    /// 接回上次的预览、选中与滚动锚点；收起期间来过新复制就停到新顶部，停得深才不重载。
-    private func restoreSession() {
-        // 复制后立刻唤出时轮询还没认领，事件仍在流水线里；同样按「有新复制」处理。
-        let storeHasNewContent = store.takeNewContentWhileHidden()
-        let hasNewContent = storeHasNewContent || manager.hasUnpolledPasteboardChange
-        if hasNewContent || !(session?.isDeepScroll ?? false) {
-            store.loadLatest()
-        }
-
-        // 挂起期间条目可能已被裁剪，预览项取不到就关闭（授权随 close() 释放）。
-        if let previewID = session?.previewItemID,
-           previewState.item != nil,
-           manager.fetchLightItem(id: previewID) == nil {
-            previewState.close()
-        }
-
-        restoreQuickLookItemIfNeeded()
-
-        if let resolution = session?.resolve(againstRows: store.rows, hasNewContent: hasNewContent) {
-            cursor.selectedItemID = resolution.selectedItemID
-            navigationState.isSelectionActive = resolution.isSelectionActive
-            switch resolution.scrollTarget {
-            case .top:
-                navigationState.requestScrollToTop()
-            case .row(let rowID):
-                navigationState.requestScroll(toRow: rowID)
-            case nil:
-                break
-            }
-        } else {
-            cursor.selectedItemID = nil
-            navigationState.isSelectionActive = false
-        }
-
-        if previewState.item != nil, let textView = previewSurface.previewTextView() {
-            panel.makeFirstResponder(textView)
-        } else {
-            panel.makeFirstResponder(panel.contentView)
-        }
-    }
-
-    /// 影片播放跑在 QuickLookUIService，只有摘掉 previewItem 才会停（约 2s 尾音）。
-    private func suspendQuickLookPlayback() {
-        guard let view = previewSurface.quickLookView(),
-              let url = view.previewItem as? URL,
-              FilePreviewKind.isMovie(url) else { return }
-        suspendedQuickLookItemURL = url
-        view.previewItem = nil
-    }
-
-    private func restoreQuickLookItemIfNeeded() {
-        let suspended = suspendedQuickLookItemURL
-        suspendedQuickLookItemURL = nil
-        guard previewState.item != nil, let url = suspended else { return }
-        previewSurface.quickLookView()?.previewItem = url as NSURL
-    }
-
-    private func handleGroupFileCommand(_ command: GroupFileCommand, index: Int) {
-        guard let item = previewState.item, item.kind == .file, item.fileCount > 1 else { return }
-        switch command {
-        case .paste:
-            pasteFlow.paste(item, fileIndex: index)
-        case .copy:
-            copyGroupFile(at: index, of: item)
-        case .open, .reveal:
-            break
-        }
-    }
-
-    private func copyGroupFile(at index: Int, of item: ClipboardItem) {
-        if manager.copy(item, fileAt: index) {
-            copyState.itemID = item.id
-            previewState.markGroupFileCopied(at: index)
-            return
-        }
-        let path = item.allFilePaths.indices.contains(index) ? item.allFilePaths[index] : ""
-        noticeState.showMissingFile(URL(fileURLWithPath: path).lastPathComponent)
-    }
-
-    private func openExternally(_ item: ClipboardItem) {
-        // 文件组逐个用各自默认应用打开；NSWorkspace 没有批量按默认应用打开的 API。
-        if item.kind == .file, item.fileCount > 1 {
-            let urls = manager.resolvedFileURLs(for: item).compactMap { $0 }
-            guard !urls.isEmpty else {
-                noticeState.showMissingFile(item.displayTitle)
-                return
-            }
-            for url in urls { NSWorkspace.shared.open(url) }
-            hide(restoresPreviousApplication: false)
-            return
-        }
-
-        guard let url = manager.fileURL(for: item) else {
-            // 文件条目是不存在了，图片条目是取不到内容。
-            if item.kind == .file {
-                noticeState.showMissingFile(item.displayTitle)
-            } else {
-                noticeState.showInaccessibleFile(item.displayTitle)
-            }
-            return
-        }
-        NSWorkspace.shared.open(url)
-        hide(restoresPreviousApplication: false)
-    }
-
-    private func activateSelected(asPlainText: Bool) {
-        guard let id = cursor.selectedItemID, let item = fullItem(id: id) else { return }
-        pasteFlow.paste(item, asPlainText: asPlainText && item.kind.hasPlainText)
+    func handleEscape() {
+        editingSession.handleEscape()
     }
 
     // MARK: - 菜单命令
 
-    /// 命令作用条目：预览打开时优先预览项，否则按列表选中查库。
-    private var currentLightItem: ClipboardItem? {
-        if let preview = previewState.item { return preview }
-        guard let id = cursor.selectedItemID else { return nil }
-        return manager.fetchLightItem(id: id)
-    }
-
     private var commandAvailability: PanelCommandAvailability {
-        let item = currentLightItem
+        let item = itemActions.currentItem
         let kind = item?.kind
         let hasOpenTarget = item.map { manager.canOpenExternally(id: $0.id) } ?? false
         let hasRevealableFile: Bool = {
@@ -597,36 +351,27 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     @objc func copy(_ sender: Any?) {
-        copySelectedItem()
+        itemActions.copySelectedItem()
     }
 
     @objc func paste(_ sender: Any?) {
-        pasteSelectedItem()
+        itemActions.pasteSelectedItem()
     }
 
     @objc func copyAsPlainText(_ sender: Any?) {
-        guard let item = currentLightItem, item.kind.hasPlainText else { return }
-        manager.copyAsPlainText(id: item.id)
-        copyState.itemID = item.id
+        itemActions.copyAsPlainTextForCurrentItem()
     }
 
     @objc func pasteAsPlainText(_ sender: Any?) {
-        guard let item = currentLightItem, item.kind.hasPlainText,
-              let full = fullItem(id: item.id) else { return }
-        pasteFlow.paste(full, asPlainText: true)
+        itemActions.pasteAsPlainTextForCurrentItem()
     }
 
     @objc func delete(_ sender: Any?) {
-        deleteSelectedItem()
+        itemActions.deleteSelectedItem()
     }
 
     @objc func previewSelectedItem(_ sender: Any?) {
-        if previewState.item != nil {
-            previewState.close()
-            return
-        }
-        guard let item = currentLightItem, let full = fullItem(id: item.id) else { return }
-        previewLauncher.present(full)
+        itemActions.previewCurrentItem()
     }
 
     /// ⌘S：保存当前正文，但保持编辑态；「完成」才退出编辑。
@@ -635,59 +380,23 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     @objc func openSelectedItem(_ sender: Any?) {
-        guard let item = currentLightItem, let full = fullItem(id: item.id) else { return }
-        openExternally(full)
+        itemActions.openCurrentItem()
     }
 
     @objc func revealSelectedItem(_ sender: Any?) {
-        guard let item = currentLightItem else { return }
-        if item.kind == .file, item.fileCount > 1 {
-            let urls = manager.resolvedFileURLs(for: item).compactMap { $0 }
-            guard !urls.isEmpty else {
-                noticeState.showMissingFile(item.displayTitle)
-                return
-            }
-            NSWorkspace.shared.activateFileViewerSelecting(urls)
-        } else if let url = manager.fileURL(for: item, allowTemporaryCopy: false) {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        } else {
-            noticeState.showMissingFile(item.displayTitle)
-            return
-        }
-        hide(restoresPreviousApplication: false)
+        itemActions.revealCurrentItem()
     }
 
     @objc func shareSelectedItem(_ sender: Any?) {
-        guard let item = currentLightItem, let anchor = panel.contentView else { return }
-        if previewState.item?.id == item.id, item.kind == .file, item.fileCount > 1 {
-            if let index = previewState.focusedGroupFileIndex {
-                sharing.sharePreviewedFile(at: index, of: item, anchorView: anchor)
-            } else {
-                sharing.sharePreviewedGroup(item, anchorView: anchor)
-            }
-            return
-        }
-        sharing.shareRowItem(id: item.id, anchorView: anchor)
+        itemActions.shareCurrentItem()
     }
 
     @objc func clearHistory(_ sender: Any?) {
-        panelDidRequestClearHistory()
+        itemActions.requestClearHistory()
     }
 
     func panelDidRequestClearHistory() {
-        guard !store.rows.isEmpty else { return }
-        confirmationState.isClearingHistory = true
-        ConfirmationAlert.present(
-            on: panel,
-            title: Localizer.string("Clear History?"),
-            message: Localizer.string("This deletes all clipboard history. It cannot be undone."),
-            actionTitle: Localizer.string("Clear History"),
-            onAction: { [weak self] in
-                self?.manager.clearAll()
-                self?.confirmationState.isClearingHistory = false
-            },
-            onCancel: { [weak self] in self?.confirmationState.isClearingHistory = false }
-        )
+        itemActions.requestClearHistory()
     }
 
     @objc func focusSearch(_ sender: Any?) {
@@ -706,7 +415,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             previewState.focusGroupFilter()
             return
         }
-        if let textView = previewSurface.previewTextView() {
+        if let textView = editingSession.previewSurface.previewTextView() {
             textView.performTextFinderAction(sender)
             return
         }
@@ -715,61 +424,9 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         }
     }
 
-    private func copySelectedItem() {
-        guard let item = currentLightItem else { return }
-        if item.kind == .file, item.fileCount > 1,
-           let index = previewState.focusedGroupFileIndex {
-            copyGroupFile(at: index, of: item)
-            return
-        }
-        manager.copy(id: item.id)
-        copyState.itemID = item.id
-    }
-
-    private func pasteSelectedItem() {
-        guard let item = currentLightItem else { return }
-        if item.kind == .file, item.fileCount > 1,
-           let index = previewState.focusedGroupFileIndex {
-            pasteFlow.paste(item, fileIndex: index)
-            return
-        }
-        guard let full = fullItem(id: item.id) else { return }
-        pasteFlow.paste(full)
-    }
-
     /// 组总览取组内列表，其余取历史列表。
     private var quickPasteVisibleRange: ClosedRange<Int>? {
         previewState.isGroupOverview ? previewState.groupVisibleRowRange : navigationState.fullyVisibleRange
-    }
-
-    /// ⌘+数字：先选中当前完整可见区的第 offset 行再粘贴；失败时面板保留并沿用现有提示。
-    private func pasteVisibleRow(offset: Int, asPlainText: Bool) {
-        guard let range = navigationState.fullyVisibleRange else { return }
-        let index = range.lowerBound + offset
-        guard range.contains(index), store.rows.indices.contains(index) else { return }
-        let id = store.rows[index].id
-        guard let full = fullItem(id: id) else { return }
-        if asPlainText, !full.kind.hasPlainText { return }
-        navigationState.selectedItemID = id
-        pasteFlow.paste(full, asPlainText: asPlainText)
-    }
-
-    /// ⌘+数字：粘贴组内可见区的第 offset 个文件。
-    private func pasteVisibleGroupFile(offset: Int, asPlainText: Bool) {
-        guard previewState.isGroupOverview, let item = previewState.item else { return }
-        // 文件没有纯文本形态，⇧ 变体不动作（与外层列表一致）。
-        guard !asPlainText else { return }
-        guard let range = previewState.groupVisibleRowRange else { return }
-        let position = range.lowerBound + offset
-        guard range.contains(position),
-              let index = previewState.groupFileIndex(atVisiblePosition: position) else { return }
-        previewState.selectGroupFile(index)
-        pasteFlow.paste(item, fileIndex: index)
-    }
-
-    private func deleteSelectedItem() {
-        guard let item = currentLightItem else { return }
-        panelDidRequestDelete(id: item.id)
     }
 
     // MARK: - 菜单校验
@@ -808,119 +465,9 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             if menuItem.tag == NSTextFinder.Action.showFindInterface.rawValue {
                 return panel.isKeyWindow
             }
-            return previewSurface.previewTextView() != nil
+            return editingSession.previewSurface.previewTextView() != nil
         default:
             return false
-        }
-    }
-
-    private var previewSurface: PreviewSurfaceProbe {
-        PreviewSurfaceProbe(contentView: panel.contentView, firstResponder: panel.firstResponder)
-    }
-
-    /// 关查找栏并把焦点还给文本视图；再按 Esc 才退出预览。
-    private func closePreviewFindBar() {
-        guard let textView = previewSurface.previewTextView() else { return }
-        // 必须交给 NSTextFinder 关闭，直接翻 isFindBarVisible 会留下高亮浮层。
-        TextPreviewView.dismissFindInterface(in: textView)
-        textView.window?.makeFirstResponder(textView)
-    }
-
-    /// 用带 tag 的发送者让文本视图把命令转给内部 NSTextFinder；取不到视图时返回 false。
-    @discardableResult
-    private func performPreviewFindCommand(_ command: NSTextFinder.Action) -> Bool {
-        guard let textView = previewSurface.previewTextView() else { return false }
-        let sender = NSMenuItem()
-        sender.tag = command.rawValue
-        textView.performTextFinderAction(sender)
-        return true
-    }
-
-    /// Esc 分层退出：确认弹窗 → 查找栏 → 更多操作 → 预览 → 面板。
-    func handleEscape() {
-        if confirmationState.isPresenting {
-            confirmationState.reset()
-            return
-        }
-        if panel.attachedSheet != nil { return }
-        if previewSurface.isFindBarVisible {
-            closePreviewFindBar()
-            return
-        }
-        if moreActionsState.isFocused {
-            hide()
-            return
-        }
-        if previewState.item != nil {
-            if previewState.isEditing {
-                requestCancelEditing()
-            } else {
-                previewState.close()
-            }
-            return
-        }
-        hide()
-    }
-
-    private func requestCancelEditing() {
-        guard previewState.isEditing else { return }
-        guard previewState.hasUnsavedChanges else {
-            previewState.cancelEditing()
-            return
-        }
-        // 已有 sheet 压着（如 Finder 分享面板）就不再叠一层。
-        guard panel.attachedSheet == nil else { return }
-        confirmationState.isDiscardingPreviewEdit = true
-        ConfirmationAlert.present(
-            on: panel,
-            title: Localizer.string("Discard Changes?"),
-            message: Localizer.string("Your edits will be lost."),
-            actionTitle: Localizer.string("Discard Changes"),
-            onAction: { [weak self] in
-                guard let self else { return }
-                self.confirmationState.isDiscardingPreviewEdit = false
-                self.previewState.cancelEditing()
-            },
-            onCancel: { [weak self] in
-                guard let self else { return }
-                self.confirmationState.isDiscardingPreviewEdit = false
-                self.focusPreviewEditor()
-            }
-        )
-    }
-
-    private func focusPreviewEditor() {
-        guard previewState.item != nil,
-              let textView = previewSurface.previewTextView() else { return }
-        panel.makeFirstResponder(textView)
-    }
-
-    // MARK: - 定位
-
-    private func positionPanel(anchor: PanelAnchor) {
-        let screens = NSScreen.screens.map { PanelPositioner.Screen($0) }
-        panel.setFrameOrigin(PanelPositioner.origin(
-            for: anchor,
-            panelSize: panel.frame.size,
-            statusItemRect: positionProvider?(),
-            mouseLocation: NSEvent.mouseLocation,
-            screens: screens,
-            mainScreen: NSScreen.main.map { PanelPositioner.Screen($0) } ?? screens.first
-        ))
-    }
-
-    // MARK: - 监听
-
-    private func installMonitors() {
-        removeMonitors()
-
-        // 点面板外只是线索，真正是否收起交给 hideIfFocusLeft。
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
-            guard let self, self.panel.isVisible else { return }
-            guard !self.panel.frame.contains(NSEvent.mouseLocation) else { return }
-            self.hideIfFocusLeft(restoresPreviousApplication: true, clickedOutside: true)
         }
     }
 
@@ -940,7 +487,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         guard case .panel(let action) = PanelKeyRouter.route(press, context: context) else {
             return false
         }
-        return apply(action)
+        return keyExecutor.apply(action)
     }
 
     /// 只认 ⌘ / ⌘⇧；预览、编辑、菜单弹出时编号不出现。
@@ -975,7 +522,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
            previewState.item != nil,
            !isTextEditing,
            !(panel.firstResponder is PreviewTextView) {
-            pasteSelectedItem()
+            itemActions.pasteSelectedItem()
             return true
         }
 
@@ -990,8 +537,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     private var isTextEditing: Bool {
         previewState.isEditing
             || searchState.isFocused
-            || previewSurface.isFindBarVisible
-            || previewSurface.isFocusedOnGroupFilter
+            || editingSession.previewSurface.isFindBarVisible
+            || editingSession.previewSurface.isFocusedOnGroupFilter
     }
 
     func shouldUseDefaultKeyDown(for event: NSEvent) -> Bool {
@@ -1068,13 +615,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     @objc func insertNewline(_ sender: Any?) {
-        if let item = previewState.item, item.kind == .file, item.fileCount > 1,
-           let index = previewState.focusedGroupFileIndex {
-            pasteFlow.paste(item, fileIndex: index)
-            return
-        }
-        guard let item = currentLightItem, let full = fullItem(id: item.id) else { return }
-        pasteFlow.paste(full)
+        itemActions.pasteSelectedItem()
     }
 
     @objc func insertTab(_ sender: Any?) {
@@ -1086,84 +627,12 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     @objc func deleteBackward(_ sender: Any?) {
-        deleteSelectedItem()
+        itemActions.deleteSelectedItem()
     }
 
     /// 外接键盘的 Delete（⌦），与 Backspace 相同。
     @objc func deleteForward(_ sender: Any?) {
-        deleteSelectedItem()
+        itemActions.deleteSelectedItem()
     }
 
-    /// 执行判定出的动作。返回 false 表示这一步没做成，事件继续交给 AppKit。
-    private func apply(_ action: PanelKeyAction) -> Bool {
-        switch action {
-        case .consume:
-            break
-
-        case .hidePanel:
-            hide()
-        case .cycleFocus(let backwards):
-            focusZones.cycle(backwards: backwards)
-
-        case .focusSearch:
-            focusZones.focusSearch()
-
-        case .escape:
-            handleEscape()
-        case .cancelEditing:
-            requestCancelEditing()
-        case .dismissPreviewFindBar:
-            closePreviewFindBar()
-        case .performPreviewFindCommand(let command):
-            guard performPreviewFindCommand(command) else { return false }
-        case .openPreviewForSelection:
-            if let selectedID = cursor.selectedItemID, let item = fullItem(id: selectedID) {
-                previewLauncher.present(item)
-            }
-        case .closePreview:
-            previewState.close()
-
-        case .activateSelectedItem(let asPlainText):
-            activateSelected(asPlainText: asPlainText)
-        case .activateFocusedGroupFile(let index):
-            if let item = previewState.item { pasteFlow.paste(item, fileIndex: index) }
-        case .pasteVisibleRow(let offset, let asPlainText):
-            pasteVisibleRow(offset: offset, asPlainText: asPlainText)
-        case .pasteVisibleGroupFile(let offset, let asPlainText):
-            pasteVisibleGroupFile(offset: offset, asPlainText: asPlainText)
-
-        case .stepPreview(let delta):
-            cursor.stepPreview(direction: delta)
-        case .jumpPreview(let index):
-            cursor.jumpPreview(to: index)
-        case .jumpPreviewToOldest:
-            cursor.jumpPreviewToOldest()
-        case .moveGroupSelection(let delta):
-            previewState.moveGroupSelection(by: delta, visibleIndices: previewState.visibleGroupFileIndices)
-        case .jumpGroupSelection(let toFirst):
-            previewState.jumpGroupSelection(toFirst: toFirst, visibleIndices: previewState.visibleGroupFileIndices)
-        case .stepGroupFile(let delta):
-            previewState.stepGroupFile(delta: delta, visibleIndices: previewState.visibleGroupFileIndices)
-        case .jumpGroupFile(let toFirst):
-            previewState.jumpGroupFile(toFirst: toFirst, visibleIndices: previewState.visibleGroupFileIndices)
-        case .showGroupFile(let index):
-            previewState.showGroupFile(index)
-        case .showGroupOverview:
-            previewState.showGroupOverview()
-        case .focusGroupFilter:
-            searchState.resignFocus()
-            previewState.focusGroupFilter()
-        case .focusGroupList:
-            previewState.moveFromGroupFilterToList()
-            panel.makeFirstResponder(panel.contentView)
-        }
-        return true
-    }
-
-    private func removeMonitors() {
-        if let mouseMonitor {
-            NSEvent.removeMonitor(mouseMonitor)
-        }
-        mouseMonitor = nil
-    }
 }
