@@ -57,48 +57,19 @@ struct HistoryListTableView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = ListScrollView()
+        let (scrollView, tableView) = ListTableScaffold.make(
+            columnIdentifier: Coordinator.columnIdentifier
+        )
         scrollView.isScrollBlocked = isScrollBlocked
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasHorizontalScroller = false
-        scrollView.horizontalScrollElasticity = .none
-        scrollView.hasVerticalScroller = true
-        // 不设 contentInsets：它会把可滚动范围往两端撑开。
-        scrollView.automaticallyAdjustsContentInsets = false
-
-        let tableView = NSTableView()
-        tableView.headerView = nil
-        tableView.backgroundColor = .clear
-        tableView.selectionHighlightStyle = .none
-        tableView.allowsEmptySelection = true
-        tableView.allowsMultipleSelection = false
-        tableView.usesAlternatingRowBackgroundColors = false
-        tableView.gridStyleMask = []
-        tableView.intercellSpacing = .zero
-        tableView.rowHeight = ClipboardLayout.rowHeight
-        tableView.usesAutomaticRowHeights = false
-        tableView.style = .plain
-        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
-        tableView.autoresizingMask = [.width]
         tableView.dataSource = context.coordinator
         tableView.delegate = context.coordinator
 
-        let column = NSTableColumn(identifier: Coordinator.columnIdentifier)
-        column.resizingMask = .autoresizingMask
-        column.width = ClipboardLayout.panelWidth
-        column.minWidth = 120
-        tableView.addTableColumn(column)
-
-        scrollView.documentView = tableView
-        scrollView.contentView.postsFrameChangedNotifications = true
         context.coordinator.tableView = tableView
         context.coordinator.apply(self)
         context.coordinator.observe(scrollView)
         DispatchQueue.main.async { [weak scrollView] in
             guard let scrollView else { return }
-            context.coordinator.publishVisibleRowRange()
-            context.coordinator.publishScrollerLayout(for: scrollView)
+            context.coordinator.performInitialLayout(in: scrollView)
         }
         return scrollView
     }
@@ -131,9 +102,9 @@ struct HistoryListTableView: NSViewRepresentable {
             }
         }
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0
-            context.allowsImplicitAnimation = false
+        NSAnimationContext.runAnimationGroup { animation in
+            animation.duration = 0
+            animation.allowsImplicitAnimation = false
             coordinator.syncSelectionAppearance(in: tableView)
             coordinator.syncQuickPasteHints(in: tableView)
             coordinator.syncSelection(in: tableView)
@@ -149,22 +120,16 @@ struct HistoryListTableView: NSViewRepresentable {
         coordinator.removeObservers()
     }
 
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    final class Coordinator: ListTableCoordinator {
         static let columnIdentifier = NSUserInterfaceItemIdentifier("SixOneHistoryRow")
         static let cellIdentifier = NSUserInterfaceItemIdentifier("SixOneHistoryRowCell")
         static let rowViewIdentifier = NSUserInterfaceItemIdentifier("SixOneHistoryRowView")
-
-        var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
-        var onScrollerLayoutChanged: ((Bool) -> Void)?
-        var isInViewUpdate = false
-        weak var tableView: NSTableView?
 
         private var rows: [HistoryRow] = []
         private var makeRow: ((HistoryRow, Int, CGFloat, CGFloat) -> AnyView)?
         private var selectedItemID: UUID?
         private var isSelectionActive = false
         private var quickPasteRange: ClosedRange<Int>?
-        let rowClickTracker = RowClickTracker()
 
         private var reloadedDataRevision: Int?
         private var reloadedLocale: Locale?
@@ -178,22 +143,35 @@ struct HistoryListTableView: NSViewRepresentable {
         private var renderedQuickPasteRange: ClosedRange<Int>?
         private var beep: () -> Void = { NSSound.beep() }
 
-        private var lastPublishedVisibleRowRange: ClosedRange<Int>?
-        private var lastPublishedUsesOverlayScrollers: Bool?
-        private var boundsObserver: NSObjectProtocol?
-        private var frameObserver: NSObjectProtocol?
-        private var styleObserver: NSObjectProtocol?
-        private var clickMonitor: Any?
-
-        init(
+        override init(
             onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?,
             onScrollerLayoutChanged: ((Bool) -> Void)?
         ) {
-            self.onVisibleRowRangeChanged = onVisibleRowRangeChanged
-            self.onScrollerLayoutChanged = onScrollerLayoutChanged
+            super.init(
+                onVisibleRowRangeChanged: onVisibleRowRangeChanged,
+                onScrollerLayoutChanged: onScrollerLayoutChanged
+            )
+            observesScrollerStyle = true
         }
 
-        // MARK: - 装载
+        // MARK: - 行数据
+
+        override var rowCount: Int { rows.count }
+        override var rowViewIdentifier: NSUserInterfaceItemIdentifier { Self.rowViewIdentifier }
+        override var cellIdentifier: NSUserInterfaceItemIdentifier { Self.cellIdentifier }
+
+        override func topPadding(row: Int) -> CGFloat {
+            row == 0 ? ClipboardLayout.verticalPadding : 0
+        }
+
+        override func bottomPadding(row: Int) -> CGFloat {
+            row == rows.count - 1 ? ClipboardLayout.verticalPadding : 0
+        }
+
+        override func makeRowContent(at index: Int, topPadding: CGFloat, bottomPadding: CGFloat) -> AnyView {
+            guard rows.indices.contains(index), let makeRow else { return AnyView(Color.clear) }
+            return makeRow(rows[index], index, topPadding, bottomPadding)
+        }
 
         /// 收下本轮落点与回调；行视图在这里拼好，环境逐行注入。
         func apply(_ parent: HistoryListTableView) {
@@ -259,73 +237,6 @@ struct HistoryListTableView: NSViewRepresentable {
             tableView.reloadData()
             renderedSelection = RenderedSelection(id: selectedItemID, isActive: isSelectionActive)
             return true
-        }
-
-        /// 原位替换一行内容，不动行视图与宿主，按住的手势不受影响。
-        private func refreshRowContent(at index: Int, in tableView: NSTableView) {
-            guard rows.indices.contains(index),
-                  let makeRow,
-                  let cell = tableView.view(atColumn: 0, row: index, makeIfNecessary: false)
-                    as? ListRowCellView else { return }
-            cell.setContent(makeRow(rows[index], index, topPadding(row: index), bottomPadding(row: index)))
-        }
-
-        /// 修正 NSTableView 自算高度偏高导致的多余底部空白；内容比视口短时仍撑满视口。
-        func pinDocumentHeight(_ tableView: NSTableView, in scrollView: NSScrollView) {
-            guard tableView.numberOfRows > 0 else { return }
-            let content = tableView.rect(ofRow: tableView.numberOfRows - 1).maxY
-            let target = max(content, scrollView.contentView.bounds.height)
-            guard abs(tableView.frame.height - target) > ClipboardLayout.geometryTolerance else { return }
-            tableView.frame.size.height = target
-        }
-
-        // MARK: - 数据源 / 代理
-
-        func numberOfRows(in tableView: NSTableView) -> Int {
-            rows.count
-        }
-
-        func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-            ClipboardLayout.rowHeight + topPadding(row: row) + bottomPadding(row: row)
-        }
-
-        func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-            if let recycled = tableView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
-                as? ListPlainRowView {
-                return recycled
-            }
-            let rowView = ListPlainRowView()
-            rowView.identifier = Self.rowViewIdentifier
-            return rowView
-        }
-
-        func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            guard rows.indices.contains(row) else { return nil }
-            let cell = (tableView.makeView(withIdentifier: Self.cellIdentifier, owner: self)
-                as? ListRowCellView)
-                ?? ListRowCellView(identifier: Self.cellIdentifier)
-            cell.setContent(
-                makeRow?(
-                    rows[row],
-                    row,
-                    topPadding(row: row),
-                    bottomPadding(row: row)
-                ) ?? AnyView(Color.clear)
-            )
-            return cell
-        }
-
-        private func topPadding(row: Int) -> CGFloat {
-            row == 0 ? ClipboardLayout.verticalPadding : 0
-        }
-
-        private func bottomPadding(row: Int) -> CGFloat {
-            row == rows.count - 1 ? ClipboardLayout.verticalPadding : 0
-        }
-
-        /// 点击不改表格选中，选中真相只在 `NavigationState`。
-        func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-            false
         }
 
         // MARK: - 选中外观
@@ -427,57 +338,10 @@ struct HistoryListTableView: NSViewRepresentable {
             }
         }
 
-        // MARK: - 观察
-
-        func observe(_ scrollView: NSScrollView) {
-            removeObservers()
-            boundsObserver = NotificationCenter.default.addObserver(
-                forName: NSView.boundsDidChangeNotification,
-                object: scrollView.contentView,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.publishVisibleRowRange()
-                }
-            }
-            frameObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: scrollView.contentView,
-                queue: .main
-            ) { [weak self, weak scrollView] _ in
-                MainActor.assumeIsolated {
-                    guard let self, let scrollView else { return }
-                    self.publishScrollerLayout(for: scrollView)
-                    if let tableView = self.tableView {
-                        self.pinDocumentHeight(tableView, in: scrollView)
-                    }
-                    self.syncColumnWidth(for: scrollView)
-                    // 面板首次显示/布局变化时补发可见范围，不能只等滚动通知。
-                    self.publishVisibleRowRange()
-                }
-            }
-            styleObserver = NotificationCenter.default.addObserver(
-                forName: NSScroller.preferredScrollerStyleDidChangeNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self, weak scrollView] _ in
-                MainActor.assumeIsolated {
-                    guard let self, let scrollView else { return }
-                    self.publishScrollerLayout(for: scrollView)
-                }
-            }
-            // 行视图可能在按下与抬起之间被回收，用窗口级监听收口手势。
-            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) {
-                [weak self] event in
-                MainActor.assumeIsolated {
-                    self?.handleClickMonitor(event)
-                }
-                return event
-            }
-        }
+        // MARK: - 点击
 
         /// 窗口级左键兜底；正常路径收口后追踪器已清空，不会重复落点。
-        private func handleClickMonitor(_ event: NSEvent) {
+        override func handleClickMonitor(_ event: NSEvent) {
             guard let tableView, event.window === tableView.window else { return }
             switch event.type {
             case .leftMouseDown:
@@ -497,66 +361,6 @@ struct HistoryListTableView: NSViewRepresentable {
             default:
                 break
             }
-        }
-
-        func removeObservers() {
-            for token in [boundsObserver, frameObserver, styleObserver] {
-                if let token { NotificationCenter.default.removeObserver(token) }
-            }
-            boundsObserver = nil
-            frameObserver = nil
-            styleObserver = nil
-            if let clickMonitor {
-                NSEvent.removeMonitor(clickMonitor)
-            }
-            clickMonitor = nil
-        }
-
-        isolated deinit {
-            if let boundsObserver {
-                NotificationCenter.default.removeObserver(boundsObserver)
-            }
-            if let frameObserver {
-                NotificationCenter.default.removeObserver(frameObserver)
-            }
-            if let styleObserver {
-                NotificationCenter.default.removeObserver(styleObserver)
-            }
-            if let clickMonitor {
-                NSEvent.removeMonitor(clickMonitor)
-            }
-        }
-
-        // MARK: - 发布
-
-        func needsScrollerLayoutPublish(for scrollView: NSScrollView) -> Bool {
-            lastPublishedUsesOverlayScrollers != ScrollerLayoutProbe.usesOverlayScrollers(in: scrollView)
-        }
-
-        func publishScrollerLayout(for scrollView: NSScrollView) {
-            let usesOverlay = ScrollerLayoutProbe.usesOverlayScrollers(in: scrollView)
-            guard lastPublishedUsesOverlayScrollers != usesOverlay else { return }
-            lastPublishedUsesOverlayScrollers = usesOverlay
-            onScrollerLayoutChanged?(usesOverlay)
-        }
-
-        func publishVisibleRowRange() {
-            guard let publish = onVisibleRowRangeChanged, let tableView else { return }
-            guard let range = ListRowVisibility.fullyVisibleRowRange(in: tableView) else { return }
-            guard range != lastPublishedVisibleRowRange else { return }
-            lastPublishedVisibleRowRange = range
-            if isInViewUpdate {
-                DispatchQueue.main.async { publish(range) }
-            } else {
-                publish(range)
-            }
-        }
-
-        func syncColumnWidth(for scrollView: NSScrollView) {
-            guard let tableView, let column = tableView.tableColumns.first else { return }
-            let width = scrollView.contentView.bounds.width
-            guard width > 0, abs(column.width - width) > ClipboardLayout.geometryTolerance else { return }
-            column.width = width
         }
     }
 }

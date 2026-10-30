@@ -2,7 +2,9 @@
 //  GroupListTableView.swift
 //  SixOne
 //
-//  文件组列表容器：沿用 HistoryListTableView 的虚拟化；选中真相在 PreviewState，行按原始下标定位。
+//  文件组列表容器：沿用历史列表的虚拟化与点击收口；选中真相在 PreviewState，
+//  行按原始下标定位。
+//
 
 import AppKit
 import SwiftUI
@@ -34,55 +36,20 @@ struct GroupListTableView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = ListScrollView()
+        let (scrollView, tableView) = ListTableScaffold.make(
+            columnIdentifier: Coordinator.columnIdentifier
+        )
         scrollView.isScrollBlocked = isScrollBlocked
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasHorizontalScroller = false
-        scrollView.horizontalScrollElasticity = .none
-        scrollView.hasVerticalScroller = true
-        // 不设 contentInsets：它会把可滚动范围撑到内容之外。
-        scrollView.automaticallyAdjustsContentInsets = false
-
-        let tableView = NSTableView()
-        tableView.headerView = nil
-        tableView.backgroundColor = .clear
-        // 表格不画选中，高亮由行视图自绘。
-        tableView.selectionHighlightStyle = .none
-        tableView.allowsEmptySelection = true
-        tableView.allowsMultipleSelection = false
-        tableView.usesAlternatingRowBackgroundColors = false
-        tableView.gridStyleMask = []
-        tableView.intercellSpacing = .zero
-        // 行高由 heightOfRow 给，首末行含列表留白。
-        tableView.rowHeight = ClipboardLayout.rowHeight
-        tableView.usesAutomaticRowHeights = false
-        tableView.style = .plain
-        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
-        tableView.autoresizingMask = [.width]
         tableView.dataSource = context.coordinator
         tableView.delegate = context.coordinator
 
-        let column = NSTableColumn(identifier: Coordinator.columnIdentifier)
-        column.resizingMask = .autoresizingMask
-        column.width = ClipboardLayout.panelWidth
-        column.minWidth = 120
-        tableView.addTableColumn(column)
-
-        scrollView.documentView = tableView
-        // 重新 tiling 后列宽与文档高度需要重新对齐。
-        scrollView.contentView.postsFrameChangedNotifications = true
         context.coordinator.tableView = tableView
-        context.coordinator.scrollView = scrollView
         context.coordinator.apply(self)
         context.coordinator.observe(scrollView)
         // 首轮布局需让出一轮。
         DispatchQueue.main.async { [weak scrollView] in
             guard let scrollView else { return }
-            context.coordinator.pinDocumentHeight(tableView, in: scrollView)
-            context.coordinator.syncColumnWidth(for: scrollView)
-            context.coordinator.performPendingScroll()
-            context.coordinator.publishVisibleRowRange()
+            context.coordinator.performInitialLayout(in: scrollView)
         }
         return scrollView
     }
@@ -121,24 +88,19 @@ struct GroupListTableView: NSViewRepresentable {
 
     // MARK: - 协调器
 
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    final class Coordinator: ListTableCoordinator {
         static let columnIdentifier = NSUserInterfaceItemIdentifier("SixOneGroupFileRow")
         static let cellIdentifier = NSUserInterfaceItemIdentifier("SixOneGroupFileRowCell")
         static let rowViewIdentifier = NSUserInterfaceItemIdentifier("SixOneGroupFileRowView")
-
-        var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
-        var isInViewUpdate = false
 
         private var files: [GroupFileEntry] = []
         private var makeRow: ((GroupFileEntry, Int, CGFloat, CGFloat) -> AnyView)?
         private var selectedIndex: Int?
         private var isListActive = false
         private var quickPasteRange: ClosedRange<Int>?
-        /// 所有行宿主共用，重建列表不丢点击。
-        let rowClickTracker = RowClickTracker()
         private var rowIndexByID: [UUID: Int] = [:]
         private let rowStates = GroupRowStateStore()
-        var onSelect: ((Int?) -> Void)?
+        private var onSelect: ((Int?) -> Void)?
         private var onCommand: ((GroupFileCommand, Int) -> Void)?
 
         /// 语言变化需重建行内文案。
@@ -154,29 +116,32 @@ struct GroupListTableView: NSViewRepresentable {
         private var scrollRequest: GroupScrollRequest?
         private var scrollRequestID = 0
         private var handledScrollRequestID: Int?
-
-        private var lastPublishedVisibleRowRange: ClosedRange<Int>?
-
-        weak var tableView: NSTableView?
-        weak var scrollView: ListScrollView?
-        private var boundsObserver: NSObjectProtocol?
-        private var frameObserver: NSObjectProtocol?
-        private var clickMonitor: Any?
         private var blankPressLocation: NSPoint?
 
-        isolated deinit {
-            if let boundsObserver {
-                NotificationCenter.default.removeObserver(boundsObserver)
-            }
-            if let frameObserver {
-                NotificationCenter.default.removeObserver(frameObserver)
-            }
-            if let clickMonitor {
-                NSEvent.removeMonitor(clickMonitor)
-            }
+        init() {
+            super.init(onVisibleRowRangeChanged: nil, onScrollerLayoutChanged: nil)
+            // 空结果时表格仍撑满视口，空态说明浮在上面。
+            pinsEmptyDocumentHeight = true
         }
 
-        // MARK: - 装载
+        // MARK: - 行数据
+
+        override var rowCount: Int { files.count }
+        override var rowViewIdentifier: NSUserInterfaceItemIdentifier { Self.rowViewIdentifier }
+        override var cellIdentifier: NSUserInterfaceItemIdentifier { Self.cellIdentifier }
+
+        override func topPadding(row: Int) -> CGFloat {
+            row == 0 ? ClipboardLayout.groupListPadding : 0
+        }
+
+        override func bottomPadding(row: Int) -> CGFloat {
+            row == files.count - 1 ? ClipboardLayout.groupListPadding : 0
+        }
+
+        override func makeRowContent(at index: Int, topPadding: CGFloat, bottomPadding: CGFloat) -> AnyView {
+            guard files.indices.contains(index), let makeRow else { return AnyView(Color.clear) }
+            return makeRow(files[index], index, topPadding, bottomPadding)
+        }
 
         func apply(_ parent: GroupListTableView) {
             selectedIndex = parent.selectedIndex
@@ -262,83 +227,10 @@ struct GroupListTableView: NSViewRepresentable {
             // 重建会清掉表格选中，下一轮重新同步。
             mirroredSelectionIndex = nil
             // 重建后范围相同也要重发，外部状态可能已清空。
-            lastPublishedVisibleRowRange = nil
+            invalidatePublishedVisibleRowRange()
             tableView.reloadData()
             renderedSelection = RenderedSelection(index: selectedIndex, isActive: isListActive)
             return true
-        }
-
-        /// 原位替换行内容，不动行视图与按住中的手势。
-        private func refreshRowContent(at index: Int, in tableView: NSTableView) {
-            guard files.indices.contains(index),
-                  let makeRow,
-                  let cell = tableView.view(atColumn: 0, row: index, makeIfNecessary: false)
-                    as? ListRowCellView else { return }
-            cell.setContent(makeRow(
-                files[index],
-                index,
-                topPadding(row: index),
-                bottomPadding(row: index)
-            ))
-        }
-
-        func pinDocumentHeight(_ tableView: NSTableView, in scrollView: NSScrollView) {
-            let content = tableView.numberOfRows > 0
-                ? tableView.rect(ofRow: tableView.numberOfRows - 1).maxY
-                : 0
-            let target = max(content, scrollView.contentView.bounds.height)
-            guard abs(tableView.frame.height - target) > ClipboardLayout.geometryTolerance else { return }
-            tableView.frame.size.height = target
-        }
-
-        // MARK: - 数据源 / 代理
-
-        func numberOfRows(in tableView: NSTableView) -> Int {
-            files.count
-        }
-
-        func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-            ClipboardLayout.rowHeight + topPadding(row: row) + bottomPadding(row: row)
-        }
-
-        func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-            // ListPlainRowView 无状态，按 identifier 回收复用安全。
-            if let recycled = tableView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
-                as? ListPlainRowView {
-                return recycled
-            }
-            let rowView = ListPlainRowView()
-            rowView.identifier = Self.rowViewIdentifier
-            return rowView
-        }
-
-        func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            guard files.indices.contains(row) else { return nil }
-            let cell = (tableView.makeView(withIdentifier: Self.cellIdentifier, owner: self)
-                as? ListRowCellView)
-                ?? ListRowCellView(identifier: Self.cellIdentifier)
-            cell.setContent(
-                makeRow?(
-                    files[row],
-                    row,
-                    topPadding(row: row),
-                    bottomPadding(row: row)
-                ) ?? AnyView(Color.clear)
-            )
-            return cell
-        }
-
-        private func topPadding(row: Int) -> CGFloat {
-            row == 0 ? ClipboardLayout.groupListPadding : 0
-        }
-
-        private func bottomPadding(row: Int) -> CGFloat {
-            row == files.count - 1 ? ClipboardLayout.groupListPadding : 0
-        }
-
-        /// 点击不改表格选中，真相只在 PreviewState。
-        func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-            false
         }
 
         // MARK: - 选中外观
@@ -397,7 +289,7 @@ struct GroupListTableView: NSViewRepresentable {
                 handledScrollRequestID = scrollRequestID
                 return
             }
-            guard let scrollView, let tableView else { return }
+            guard let scrollView = listScrollView, let tableView else { return }
             let visible = scrollView.contentView.bounds
             guard visible.height > 0 else { return }
 
@@ -424,59 +316,15 @@ struct GroupListTableView: NSViewRepresentable {
             scrollView.scrollViewport(toY: targetY)
         }
 
-        // MARK: - 可见范围
-
-        func publishVisibleRowRange() {
-            guard let publish = onVisibleRowRangeChanged, let tableView else { return }
-            guard let range = ListRowVisibility.fullyVisibleRowRange(in: tableView) else { return }
-            guard range != lastPublishedVisibleRowRange else { return }
-            lastPublishedVisibleRowRange = range
-            if isInViewUpdate {
-                DispatchQueue.main.async { publish(range) }
-            } else {
-                publish(range)
-            }
+        /// 布局落定后补一次挂起的滚动请求。
+        override func scrollViewDidLayout() {
+            performPendingScroll()
         }
 
-        // MARK: - 观察
-
-        func observe(_ scrollView: NSScrollView) {
-            removeObservers()
-            boundsObserver = NotificationCenter.default.addObserver(
-                forName: NSView.boundsDidChangeNotification,
-                object: scrollView.contentView,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.publishVisibleRowRange()
-                }
-            }
-            frameObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: scrollView.contentView,
-                queue: .main
-            ) { [weak self, weak scrollView] _ in
-                MainActor.assumeIsolated {
-                    guard let self, let scrollView, let tableView = self.tableView else { return }
-                    self.pinDocumentHeight(tableView, in: scrollView)
-                    self.syncColumnWidth(for: scrollView)
-                    // 首次布局才拿得到视口高度，挂起的滚动在这里补一次。
-                    self.performPendingScroll()
-                    self.publishVisibleRowRange()
-                }
-            }
-            // 行视图可能在按下与抬起间被回收，由事件监听兜底。
-            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) {
-                [weak self] event in
-                MainActor.assumeIsolated {
-                    self?.handleClickMonitor(event)
-                }
-                return event
-            }
-        }
+        // MARK: - 点击
 
         /// 窗口级左键兜底：行在按下/抬起间被回收时仍能完成落点。
-        private func handleClickMonitor(_ event: NSEvent) {
+        override func handleClickMonitor(_ event: NSEvent) {
             guard let tableView, event.window === tableView.window else { return }
             switch event.type {
             case .leftMouseDown:
@@ -527,29 +375,6 @@ struct GroupListTableView: NSViewRepresentable {
             )
             guard travel <= RowHitPolicy.clickPointerSlop else { return }
             onSelect?(nil)
-        }
-
-        func removeObservers() {
-            if let boundsObserver {
-                NotificationCenter.default.removeObserver(boundsObserver)
-            }
-            boundsObserver = nil
-            if let frameObserver {
-                NotificationCenter.default.removeObserver(frameObserver)
-            }
-            frameObserver = nil
-            if let clickMonitor {
-                NSEvent.removeMonitor(clickMonitor)
-            }
-            clickMonitor = nil
-        }
-
-        /// 列宽跟随可视宽度；常规重排由 autoresizing 完成。
-        func syncColumnWidth(for scrollView: NSScrollView) {
-            guard let tableView, let column = tableView.tableColumns.first else { return }
-            let width = scrollView.contentView.bounds.width
-            guard width > 0, abs(column.width - width) > ClipboardLayout.geometryTolerance else { return }
-            column.width = width
         }
     }
 }
