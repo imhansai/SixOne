@@ -24,7 +24,7 @@ macOS 菜单栏剪贴板历史工具。全局快捷键（默认 `⌃⌘V`）唤�
 
 ## 项目状态
 
-**1.0.0，源码发布。** 不提供预编译包 —— 从源码构建。库只有一版 schema 且**不保留迁移路径**：改 schema 可能需要清空历史，升级前请自行备份库文件。
+**1.0.0，源码发布。** 不提供预编译包 —— 从源码构建。库已版本化（当前 schema **V2**），通过 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移现有库，改 schema 不再需要清空历史。迁移是单向的：回退到旧版本前请先备份库文件。
 
 **非目标：** 云同步、账号体系、多设备历史、iOS 客户端、自动更新。SixOne 有意做成只在本机、只服务单台 Mac 的工具。
 
@@ -107,29 +107,32 @@ open build/Build/Products/Debug/SixOne.app
 
 数据单向流动、只走一条总线：`NSPasteboard` 变化在后台解析、去重、入库，然后经 `ClipboardHistoryEventBus` 广播；`HistoryListStore` 据此增量刷新。读历史走后台 actor 上的 `ClipboardHistoryRepository`，只回传轻量的 `HistoryRow` 值，大字段因此不进列表内存；写走主 context，且必须立刻对读可见。界面动作 —— 拷贝、粘贴、保存编辑、删除、清空 —— 都经同一条总线回灌，列表数据源因此不必知道是谁改的。
 
+原先的两个巨型类型按职责拆开：`ClipboardManager` 是捕获、历史写入、粘贴板回写、文件访问与缩略图的统一门面；`ClipboardPanelController` 把窗口生命周期、条目动作、编辑会话与按键执行分别交给 `PanelWindowLifecycle`、`PanelItemActions`、`PanelEditingSession` 与 `PanelKeyActionExecutor`。两个 NSTableView 列表共用 `ListTableCoordinator` 与 `ListTableScaffold`，各自只提供行数据、行内容、选中与滚动策略。视图只发复制/保存意图，经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 交给 `PanelActionHandler`；视图层把 manager 当作只读。
+
 **注释刻意写得短**：只记录仍然成立的约束，不写历史。测试是可执行的契约 —— 下表的每一项都指向钉住它的测试 —— 改一条非显然的规则前，先读对应类型和它的测试。
 
 ## 改代码时先看这里
 
 | 要改什么 | 落点 |
 | --- | --- |
-| 加 / 改一个按键分支 | `PanelKeyRouter`（窗口 pre-dispatch）+ `ClipboardPanelController` 的标准 action；命令键从 `MenuKeyEquivalentIndex` 取菜单项。测试：`PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
+| 加 / 改一个按键分支 | `PanelKeyRouter`（窗口 pre-dispatch）+ `PanelKeyActionExecutor` 执行判定结果；条目动作在 `PanelItemActions`，编辑与 Esc 在 `PanelEditingSession`；命令键从 `MenuKeyEquivalentIndex` 取菜单项。测试：`PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
 | 加一条「该不该收起面板」的规则 | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
-| 动面板的激活 / 图片预览的捏合手势 / 状态栏点击行为 | 手势只投递给**激活的**应用，所以唤出面板要让它成为 key 与 main，收起时要把设置窗口摘出 key/main 候选。key/main 交接规则见 `ClipboardPanelController` 与 `SettingsWindowPresentationTests` |
+| 动面板的激活 / 图片预览的捏合手势 / 状态栏点击行为 | 手势只投递给**激活的**应用，所以唤出面板要让它成为 key 与 main，收起时要把设置窗口摘出 key/main 候选。key/main 交接规则见 `PanelWindowLifecycle` 与 `SettingsWindowPresentationTests` |
 | 改搜索词管道（防抖 / 清空 / 唤出对齐） | `PanelSearchSession` + `PanelSearchSessionTests`；顶栏只把「输入变了」交进去 |
 | 加一个右键菜单项 | `ItemCommand`（标题、快捷键、布局）+ `ItemCommandTests`，动作落在 `RowMenuBuilder` / `FileGroupPreview` |
+| 加一个视图侧动作（复制、保存编辑、复制文字） | 经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 发意图，落到 `PanelActionHandler`；不要在视图里直接调 `ClipboardManager` 的写方法。测试：`RowMenuBuilderTests` / `TextPreviewFormattingTests` / `LinkPreviewInteractionTests` |
 | 加一个设置项 | `SettingsStore`（持久化口是 `SettingsStorage`）+ 对应面板的文件（`Views/Settings/*SettingsView.swift`） |
 | 改全局快捷键（注册 / 按键事件） | `HotKeyManager` + 两个口：`HotKeyRegistering`（注册，会失败）/ `HotKeyEventMonitoring`（按键事件，按实例分发）+ `HotKeyManagerTests` |
-| 加 / 改一个模型字段 | `Persistence/Schema/SixOneSchemaV1.swift`（唯一一版，直接改）。形状变化（含 `#Index`）只随新建库落盘；既有库会静默保持旧形状，要吃到改动得删库重建 |
+| 加 / 改一个模型字段 | 从 `Persistence/Schema/SixOneSchemaV2.swift` 复制出新的 `SixOneSchemaV<N>`（不要改已冻结的版本），在 `SixOneMigrationPlan` 里加一个 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。形状变化和 `#Index` 会通过迁移计划落到既有库。测试：`SchemaMigrationTests` |
 | 动取数路径 | 先分清「要整条」还是「只要身份/路径」：分别走 `ClipboardManager.fetchFullItem` / `ClipboardManager.fetchLightItem`；列表取窗是另一条路径，走后台 actor 上的 `ClipboardHistoryRepository.latest` |
 | 改库文件位置，或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名：兜底只允许动本应用自己的那个文件 |
 | 改「事后怎么找回那个文件」（被移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark。用例见 `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
 | 改「什么算不要记录」 | `PasteboardSnapshot.doNotRecordTypes` + `ClipboardCaptureTests`；判定必须留在读快照**之前** |
-| 动「粘贴进别的应用」 | `PanelPasteFlow`；`⌘V` 事件必须在碰剪贴板**之前**就确认建得出来 —— 面板一收起，提示就没人看得见了 |
+| 动「粘贴进别的应用」 | `PanelPasteFlow` + `PanelPasteEnvironment`（事件投递、应用控制、权限、调度、时钟、提示音）。`⌘V` 事件必须在碰剪贴板**之前**就确认建得出来 —— 面板一收起，提示就没人看得见了。测试：`PanelPasteFlowTests` |
 | 动排序键 / 触碰 `recencyID` | `OrderedUUID`（时间有序性）+ `OrderedUUIDTests`；排序按它倒序，生成顺序必须与比较顺序一致 |
 | 改文本文件的编码判定 | `TextFileReader`（BOM → UTF-8 → GB18030 → Latin-1）+ `TextFileReaderTests` |
 | 改列表选中移动 / 预览跟随 | `PanelSelectionCursor`（切预览失败要回滚）+ `PanelSelectionCursorTests` |
-| 动列表容器 / 滚动手感 / 可见区 | `HistoryListTableView`（组内列表是 `GroupListTableView`，两者共用 `ListRowPrimitives` / `HistoryListScrollGeometry`）+ `ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
+| 动列表容器 / 滚动手感 / 可见区 | `ListTableCoordinator` / `ListTableScaffold` 承载共用的 NSTableView 机制；`HistoryListTableView` 与 `GroupListTableView` 只提供行数据、行内容与选中。共用积木仍在 `ListRowPrimitives` / `HistoryListScrollGeometry`。测试：`ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
 | 动分享 | `PanelSharing`；面板侧只把锚点与「收起面板」交进去 |
 | 改装配（谁接谁） | `AppComposition` / `PanelAssembly`，并补一条接线用例（`AppCompositionTests`） |
 | 加一条本地化文案 | 代码里用 `Localizer.string(...)` / `LocalizedStringKey`，词条进 `Localizable.xcstrings`（英文为源语言，补 `zh-Hans`） |
@@ -137,17 +140,9 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 568 项用例、91 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 583 项用例、93 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
 
 不碰系统资源的模块都靠替身驱动，替身集中在 `SixOneTests/Support/`：剪贴板走 `FakePasteboard`（因此「捕获 → 去重 → 触达置顶」可测而不会覆写你的剪贴板），设置与快捷键走 `InMemorySettingsStorage`，按键事件处理器走 `FakeHotKeyEventMonitor`，历史读取走 `FakeHistoryRepository`，离屏窗口与视图树探针走 `OffscreenHost` 与 `TestPanel`，临时文件走 `TemporaryFiles`，等待走 `Wait`。预览、定位、键盘决策、焦点策略都是纯函数或纯值输入。`HistoryBenchmarkTests` 里的性能基准只有在开关文件存在时才跑（仓库根的 `.benchmark-history`，或 `/tmp/sixone-benchmark`）；跑完别把开关文件留下，它会让全量测试变慢。
-
-## 路线图
-
-以下是已知缺失的东西。没有时间表，也不构成「先别开 issue」的理由。
-
-**可维护性**
-
-- **拆掉两个大类型**：`ClipboardPanelController` 与 `ClipboardManager`，两者都揽了若干互不相关的职责。每次拆分单独开 issue、单独一个 PR，不改行为。
 
 ## 参与贡献
 

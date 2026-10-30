@@ -24,7 +24,7 @@ A short clip: open the panel, preview and zoom an image, copy its source path, t
 
 ## Status
 
-**1.0.0, source release.** No prebuilt binaries — you build from source. The store has a single schema version and **no migration path**: a schema change may require clearing history, so back up the store file before upgrading.
+**1.0.0, source release.** No prebuilt binaries — you build from source. The store is versioned (currently schema **V2**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates the existing store in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading to an older build.
 
 **Non-goals:** cloud sync, accounts, multi-device history, an iOS client, auto-update. SixOne is deliberately a local-only, single-Mac tool.
 
@@ -107,29 +107,32 @@ The code is layered one-way by "who depends on whom": a higher layer may depend 
 
 Data flows one way, over one bus: an `NSPasteboard` change is parsed off the main thread, de-duplicated, inserted, and posted on `ClipboardHistoryEventBus`; `HistoryListStore` then refreshes incrementally. Reads go through `ClipboardHistoryRepository` on a background actor and come back as lightweight `HistoryRow` values, so large fields never enter list memory; writes go through the main context and are immediately visible to reads. Every UI action — copy, paste, save an edit, delete, clear — flows back over that same bus, so the list never has to know who changed the data.
 
+The two former god objects are split by responsibility: `ClipboardManager` is a façade over capture, history writes, pasteboard writes, file access, and thumbnails; `ClipboardPanelController` delegates to `PanelWindowLifecycle`, `PanelItemActions`, `PanelEditingSession`, and `PanelKeyActionExecutor`. The two NSTableView-based lists share `ListTableCoordinator` and `ListTableScaffold`; each list only supplies rows, row content, selection, and its scroll policy. Views emit copy/save intents through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; they treat the manager as read-only.
+
 **Comments are deliberately terse**: they state the constraint that still matters, not the history behind it. The tests are the executable contract — the table below points to the suite that pins each area — so read the type and its tests before changing a non-obvious rule.
 
 ## Where to look when changing code
 
 | What to change | Where it goes |
 | --- | --- |
-| Add / change a key branch | `PanelKeyRouter` (window pre-dispatch) + standard actions in `ClipboardPanelController`; command keys come from `MenuKeyEquivalentIndex`. Tests: `PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
+| Add / change a key branch | `PanelKeyRouter` (window pre-dispatch) + `PanelKeyActionExecutor` for routed actions; item commands live in `PanelItemActions`, editing/escape in `PanelEditingSession`; command keys come from `MenuKeyEquivalentIndex`. Tests: `PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
 | Add a "should the panel hide" rule | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
-| Touch panel activation / image-preview pinch gestures / status-item click behaviour | Gesture events only reach the **active** app, so summoning the panel must make it key and main, and hiding must take the Settings window out of the key/main candidate set. See `ClipboardPanelController` and `SettingsWindowPresentationTests` for the key/main hand-off rules |
+| Touch panel activation / image-preview pinch gestures / status-item click behaviour | Gesture events only reach the **active** app, so summoning the panel must make it key and main, and hiding must take the Settings window out of the key/main candidate set. See `PanelWindowLifecycle` and `SettingsWindowPresentationTests` for the key/main hand-off rules |
 | Change the query pipeline (debounce / clear / reveal alignment) | `PanelSearchSession` + `PanelSearchSessionTests`; the top bar only hands in "the input changed" |
 | Add a context-menu item | `ItemCommand` (title, shortcut, layout) + `ItemCommandTests`, with behavior in `RowMenuBuilder` / `FileGroupPreview` |
+| Add a view-side action (copy, save an edit, copy text) | Emit an intent through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; do not call `ClipboardManager` mutators from views. Tests: `RowMenuBuilderTests` / `TextPreviewFormattingTests` / `LinkPreviewInteractionTests` |
 | Add a setting | `SettingsStore` (persistence port is `SettingsStorage`) + the matching pane file (`Views/Settings/*SettingsView.swift`) |
 | Change the global hotkey (registration / key events) | `HotKeyManager` + two ports: `HotKeyRegistering` (registration, can fail) / `HotKeyEventMonitoring` (key events, dispatched per instance) + `HotKeyManagerTests` |
-| Add / change a model field | `Persistence/Schema/SixOneSchemaV1.swift` (the single version, edit directly). A shape change — `#Index` included — only lands in a **newly created** store; an existing one keeps its old shape silently, so delete it to pick the change up |
+| Add / change a model field | Copy `Persistence/Schema/SixOneSchemaV2.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Shape changes and `#Index` additions reach existing stores through the plan. Tests: `SchemaMigrationTests` |
 | Change a fetch path | First decide "need the whole item" vs "only identity/paths": `ClipboardManager.fetchFullItem` / `ClipboardManager.fetchLightItem`. The list window is a different path — `ClipboardHistoryRepository.latest` on the background actor |
 | Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name: the fallback may only ever touch this app's own file |
 | Change how a file is reached after the fact (moved, renamed, or after a restart) | `SecurityScopedFileAccess`: bookmark first, original path as fallback, at most 100 bookmarks per copy. Covered by `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
 | Change what counts as "do not record" | `PasteboardSnapshot.doNotRecordTypes` + `ClipboardCaptureTests`; the check must stay *before* the snapshot is read |
-| Change paste-into-another-app | `PanelPasteFlow`; the `⌘V` event must be proven creatable *before* the clipboard is touched, because notices are invisible once the panel hides |
+| Change paste-into-another-app | `PanelPasteFlow` + `PanelPasteEnvironment` (event poster, app controller, permission, scheduler, clock, feedback). The `⌘V` event must be proven creatable *before* the clipboard is touched, because notices are invisible once the panel hides. Tests: `PanelPasteFlowTests` |
 | Change the sort key / touch `recencyID` | `OrderedUUID` (time ordering) + `OrderedUUIDTests`; sorting is by this column descending, and generation order must match comparison order |
 | Change text-file encoding detection | `TextFileReader` (BOM → UTF-8 → GB18030 → Latin-1) + `TextFileReaderTests` |
 | Change list selection movement / preview follow | `PanelSelectionCursor` (a failed preview switch must roll back) + `PanelSelectionCursorTests` |
-| Change the list container / scroll feel / visible range | `HistoryListTableView` (the group list is `GroupListTableView`; both share `ListRowPrimitives` / `HistoryListScrollGeometry`) + `ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
+| Change the list container / scroll feel / visible range | `ListTableCoordinator` / `ListTableScaffold` hold the shared NSTableView machinery; `HistoryListTableView` and `GroupListTableView` only supply rows, row content and selection. Shared primitives live in `ListRowPrimitives` / `HistoryListScrollGeometry`. Tests: `ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
 | Change share | `PanelSharing`; the panel side only hands in the anchor and "hide the panel" |
 | Change assembly (who wires to whom) | `AppComposition` / `PanelAssembly`, plus a wiring test (`AppCompositionTests`) |
 | Add a localized string | Use `Localizer.string(...)` / `LocalizedStringKey` in code, and add the entry to `Localizable.xcstrings` (English is the source language; add `zh-Hans`) |
@@ -137,17 +140,9 @@ Data flows one way, over one bus: an `NSPasteboard` change is parsed off the mai
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 568 tests in 91 suites, about 11 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 583 tests in 93 suites, about 11 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 Modules that touch system resources are driven by doubles, all under `SixOneTests/Support/`: the clipboard goes through `FakePasteboard` (so capture → dedup → touch-to-top is testable without overwriting your clipboard), settings and the hotkey through `InMemorySettingsStorage`, the hotkey event handler through `FakeHotKeyEventMonitor`, history reads through `FakeHistoryRepository`, offscreen windows and view-tree probes through `OffscreenHost` and `TestPanel`, temporary files through `TemporaryFiles`, and waiting through `Wait`. Preview, positioning, keyboard decisions, and focus policy are pure functions or pure value inputs. The performance benchmark in `HistoryBenchmarkTests` is skipped unless a switch file exists (`.benchmark-history` at the repo root, or `/tmp/sixone-benchmark`); do not leave either behind, as it slows the full suite down.
-
-## Roadmap
-
-What is knowingly missing. Nothing here has a date, and none of it is a reason not to open an issue.
-
-**Maintainability**
-
-- **Split the two large types**: `ClipboardPanelController` and `ClipboardManager`, which each hold several unrelated responsibilities. One issue and one PR per split, no behaviour change.
 
 ## Contributing
 
