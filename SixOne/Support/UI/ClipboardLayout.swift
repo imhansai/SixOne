@@ -22,14 +22,13 @@ enum ClipboardLayout {
     static let headerHorizontalInset: CGFloat = 10
     /// 顶栏操作按钮之间的间距；预览与文件组顶栏共用。
     static let headerActionSpacing: CGFloat = 12
-    static let contentInset: CGFloat = 18
-    /// 路径条高度与上下留白。
-    static let pathBarHeight: CGFloat = 20
-    static let pathBarInset: CGFloat = 13
 
-    /// 预览内容区尺寸（未扣路径条）。
-    static var previewContentWidth: CGFloat { panelWidth - contentInset * 2 }
-    static var previewContentHeight: CGFloat { panelHeight - headerHeight - contentInset * 2 }
+    /// 预览内容四周留白；组列表模式贴边以对齐外层列表。
+    static let previewInset: CGFloat = 16
+
+    /// 预览内容区尺寸（不含四周留白）。
+    static var previewContentWidth: CGFloat { panelWidth - previewInset * 2 }
+    static var previewContentHeight: CGFloat { panelHeight - headerHeight - previewInset * 2 }
 
     /// 基准解码图的长边上限：内容区最长边的 4 倍，覆盖 1×–2× 缩放。
     static var previewImageBasePixelSize: Int {

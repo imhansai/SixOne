@@ -35,7 +35,7 @@ struct ImagePreviewTests {
         #expect(view.magnification == zoomed, "body 重算把缩放复位了")
     }
 
-    @Test("手势区只覆盖图片视图，留白与路径条不接管")
+    @Test("手势区只覆盖图片视图，四周留白不接管")
     func gestureAreaStaysInsideContentView() throws {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 240),
@@ -54,14 +54,12 @@ struct ImagePreviewTests {
             sourcePixelSize: NSSize(width: 10, height: 10)
         )
         let imageView = ZoomableImageScrollView(tier: tier, identity: "test", finerTier: nil)
-        let inset = ClipboardLayout.contentInset
-        let gap = ClipboardLayout.pathBarInset
-        let bar = ClipboardLayout.pathBarHeight
+        let inset = ClipboardLayout.previewInset
         imageView.frame = NSRect(
             x: inset,
-            y: bar + gap,
+            y: inset,
             width: 300 - inset * 2,
-            height: 240 - inset - gap - bar
+            height: 240 - inset * 2
         )
         root.addSubview(imageView)
         defer { window.orderOut(nil) }
@@ -70,29 +68,28 @@ struct ImagePreviewTests {
         #expect(!imageView.contains(windowPoint: NSPoint(x: 9, y: 130)), "左侧留白不该生效")
         #expect(!imageView.contains(windowPoint: NSPoint(x: 291, y: 130)), "右侧留白不该生效")
         #expect(!imageView.contains(windowPoint: NSPoint(x: 150, y: 239)), "顶部留白不该生效")
-        #expect(!imageView.contains(windowPoint: NSPoint(x: 150, y: 26)), "路径条上方间距不该生效")
-        #expect(!imageView.contains(windowPoint: NSPoint(x: 150, y: 10)), "路径条不该生效")
+        #expect(!imageView.contains(windowPoint: NSPoint(x: 150, y: 10)), "底部留白不该生效")
         #expect(!imageView.contains(windowPoint: NSPoint(x: 400, y: 400)), "窗口外不该生效")
     }
 
-    @Test("捏合从内容区开始后，指针越过路径条仍持续到结束")
+    @Test("捏合从内容区开始后，指针越过内容边界仍持续到结束")
     func magnifyGateKeepsHandlingAfterLeavingContent() {
         var gate = ZoomableImageScrollView.MagnifyGate()
 
         let beforeBegin = gate.shouldHandle(phase: .changed, isInsideContent: true)
         let beganInside = gate.shouldHandle(phase: .began, isInsideContent: true)
-        let crossedPathBar = gate.shouldHandle(phase: .changed, isInsideContent: false)
+        let crossedBoundary = gate.shouldHandle(phase: .changed, isInsideContent: false)
         let endedOutside = gate.shouldHandle(phase: .ended, isInsideContent: false)
         let afterEnd = gate.shouldHandle(phase: .changed, isInsideContent: true)
 
         #expect(!beforeBegin, "没开始就不该接管")
         #expect(beganInside, "从内容区开始应接管")
-        #expect(crossedPathBar, "越过路径条不该中断")
+        #expect(crossedBoundary, "越过内容边界不该中断")
         #expect(endedOutside, "结束事件也要收尾")
         #expect(!afterEnd, "结束后不该继续接管")
     }
 
-    @Test("从留白或路径条开始的捏合不接管")
+    @Test("从留白开始的捏合不接管")
     func magnifyGateIgnoresGesturesStartingOutsideContent() {
         var gate = ZoomableImageScrollView.MagnifyGate()
 

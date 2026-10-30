@@ -2,7 +2,7 @@
 //  FileLocation.swift
 //  SixOne
 //
-//  预览路径条的文件位置：文件名 + 绝对路径。
+//  文件位置：文件名 + 绝对路径。
 //
 
 import Foundation

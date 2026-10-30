@@ -55,7 +55,7 @@ final class ZoomableImageScrollView: NSScrollView {
     private var magnifyEndObserver: NSObjectProtocol?
     private var dragOrigin: NSPoint?
     private var isDragging = false
-    /// 捏合接管状态：从内容区开始后持续到结束，越过路径条也不中断。
+    /// 捏合接管状态：从内容区开始后持续到结束，越过内容边界也不中断。
     private var magnifyGate = MagnifyGate()
 
     init(
@@ -287,7 +287,7 @@ final class ZoomableImageScrollView: NSScrollView {
         )
     }
 
-    /// 捏合接管：began 按起点决定，之后沿用；从留白/路径条开始则不接管。
+    /// 捏合接管：began 按起点决定，之后沿用；从留白开始则不接管。
     struct MagnifyGate {
         private var isHandling = false
 

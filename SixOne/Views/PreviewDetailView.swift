@@ -88,6 +88,8 @@ struct PreviewDetailView: View {
     @State private var shareAnchor = ViewAnchorBox()
     @State private var textStats: TextStats?
     @State private var statsRevision = 0
+    @State private var showsGroupFilePosition = false
+    @State private var groupPositionRevealID = 0
     var body: some View {
         VStack(spacing: 0) {
             if isGroupListMode {
@@ -96,51 +98,40 @@ struct PreviewDetailView: View {
                 previewHeader
             }
 
-            VStack(spacing: 0) {
-                ZStack {
-                    content
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // 只裁到内容区，避免图片/QuickLook/PDF 画出边界盖住顶栏。
-                .clipped()
-
-                if let fileLocation {
-                    HStack(spacing: 8) {
-                        if let position = groupFilePosition {
-                            Text("\(position.position) / \(position.total)")
-                                .font(.system(size: 11, weight: .medium))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                                .fixedSize()
-                        }
-                        FilePathBar(location: fileLocation) { text in
-                            manager.copyPlainText(text)
-                        }
-                    }
-                    .padding(.top, ClipboardLayout.pathBarInset)
-                }
+            ZStack {
+                content
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 组列表与外层列表同宽，留白由列表行给。
-            .padding(.horizontal, isGroupListMode ? 0 : ClipboardLayout.contentInset)
-            .padding(.top, isGroupListMode ? 0 : ClipboardLayout.contentInset)
-            .padding(
-                .bottom,
-                isGroupListMode
-                    ? 0
-                    : (fileLocation == nil ? ClipboardLayout.contentInset : ClipboardLayout.pathBarInset)
-            )
+            // 只裁到内容区，避免图片/QuickLook/PDF 画出边界盖住顶栏。
+            .clipped()
+            .padding(isGroupListMode ? 0 : ClipboardLayout.previewInset)
+            .overlay(alignment: .bottom) {
+                if showsGroupFilePosition, let position = groupFilePosition {
+                    GroupFilePositionBadge(position: position.position, total: position.total)
+                        .padding(.bottom, 8)
+                        .transition(.opacity)
+                        .task(id: groupPositionRevealID) {
+                            try? await Task.sleep(for: .seconds(PanelTiming.groupPositionHint))
+                            guard !Task.isCancelled else { return }
+                            withAnimation(.easeIn(duration: 0.25)) {
+                                showsGroupFilePosition = false
+                            }
+                        }
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(.rect(cornerRadius: cornerRadius))
         .onAppear {
             ensureMetadata()
+            revealGroupFilePosition()
         }
         .onChange(of: previewState.groupFileIndex) { _, _ in
             ensureMetadata()
             defaultApp = nil
             availableApps = []
             loadOpenWithApps()
+            revealGroupFilePosition()
         }
         .task(id: item.id) {
             await loadPreviewImage()
@@ -475,6 +466,18 @@ struct PreviewDetailView: View {
         return previewState.viewingGroupFilePosition
     }
 
+    /// 进入或切换组内文件时浮出位置。
+    private func revealGroupFilePosition() {
+        groupPositionRevealID += 1
+        guard groupFilePosition != nil else {
+            showsGroupFilePosition = false
+            return
+        }
+        withAnimation(.easeOut(duration: 0.15)) {
+            showsGroupFilePosition = true
+        }
+    }
+
     private var subtitle: String? {
         switch item.kind {
         case .text, .link:
@@ -772,6 +775,24 @@ struct PreviewDetailView: View {
     private struct GroupMeta {
         let totalSize: Int64
         let missingCount: Int
+    }
+}
+
+/// 组内文件位置浮层。
+private struct GroupFilePositionBadge: View {
+    let position: Int
+    let total: Int
+
+    var body: some View {
+        Text("\(position) / \(total)")
+            .font(.system(size: 11, weight: .medium))
+            .monospacedDigit()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(.regularMaterial))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 1))
+            .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+            .allowsHitTesting(false)
     }
 }
 

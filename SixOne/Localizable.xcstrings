@@ -490,16 +490,6 @@
         }
       }
     },
-    "Copy Path" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拷贝路径"
-          }
-        }
-      }
-    },
     "Copy Text" : {
       "localizations" : {
         "zh-Hans" : {

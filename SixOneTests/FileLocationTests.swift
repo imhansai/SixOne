@@ -1,7 +1,7 @@
 //
 //  FileLocationTests.swift
 //  SixOneTests
-//  路径条取值：文件名/路径拆分，以及哪些条目该显示。
+//  文件位置取值：文件名/路径拆分，以及哪些条目该显示。
 
 import Foundation
 import Testing
@@ -46,7 +46,7 @@ struct FileLocationTests {
         #expect(FileLocation(url: nil) == nil)
     }
 
-    // MARK: - 路径条取值
+    // MARK: - 文件位置取值
 
     @Test("没有源文件路径的条目不显示")
     func noSourcePath() {
