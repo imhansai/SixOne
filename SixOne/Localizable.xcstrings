@@ -610,17 +610,6 @@
         }
       }
     },
-    "Done" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成"
-          }
-        }
-      }
-    },
     "Edit" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1301,17 +1290,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索多文件组"
-          }
-        }
-      }
-    },
-    "Search…" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索…"
           }
         }
       }

@@ -5,7 +5,7 @@
 import AppKit
 import SwiftUI
 
-/// 主标题后的复制按钮：复制该类型的内容标识。
+/// 主标题后的复制按钮。
 struct PreviewHeaderCopy {
     let text: String
     let help: String
@@ -90,6 +90,7 @@ struct PreviewDetailView: View {
     @State private var statsRevision = 0
     @State private var showsGroupFilePosition = false
     @State private var groupPositionRevealID = 0
+    @State private var pathBarReachable = true
     var body: some View {
         VStack(spacing: 0) {
             if isGroupListMode {
@@ -123,7 +124,7 @@ struct PreviewDetailView: View {
                 if let pathBarLocation {
                     FilePathBar(
                         location: pathBarLocation,
-                        isReachable: pathBarIsReachable,
+                        isReachable: pathBarReachable,
                         onCopy: { manager.copyPlainText($0) },
                         onPaste: { actions?.panelDidRequestPasteItem() }
                     )
@@ -135,10 +136,12 @@ struct PreviewDetailView: View {
         .clipShape(.rect(cornerRadius: cornerRadius))
         .onAppear {
             ensureMetadata()
+            refreshPathBarReachability()
             revealGroupFilePosition()
         }
         .onChange(of: previewState.groupFileIndex) { _, _ in
             ensureMetadata()
+            refreshPathBarReachability()
             defaultApp = nil
             availableApps = []
             loadOpenWithApps()
@@ -444,7 +447,7 @@ struct PreviewDetailView: View {
         )
     }
 
-    /// 主标题旁的复制按钮；各类型都给出统一入口。
+    /// 主标题旁的复制按钮。
     private var titleCopy: PreviewHeaderCopy? {
         PreviewHeaderCopyAction.make(
             for: item,
@@ -454,7 +457,7 @@ struct PreviewDetailView: View {
         )
     }
 
-    /// 文本标题是内容片段，尾部截断更易读；文件名与链接仍从中间截断。
+    /// 文本尾部截断；文件名与链接中间截断。
     private var titleTruncationMode: Text.TruncationMode {
         item.kind == .text ? .tail : .middle
     }
@@ -606,6 +609,7 @@ struct PreviewDetailView: View {
         }
         .buttonStyle(.plain)
         .appTooltip(Localizer.string("Open with"))
+        .accessibilityLabel(Localizer.string("Open with"))
         .onAppear {
             loadOpenWithApps()
         }
@@ -644,15 +648,18 @@ struct PreviewDetailView: View {
         )
     }
 
-    /// 底部路径行：组总览不显示，其余有源文件的条目都显示。
+    /// 组总览不显示，其余有源文件的条目显示。
     private var pathBarLocation: FileLocation? {
         guard !isGroupListMode else { return nil }
         return fileLocation
     }
 
-    /// 源文件是否仍可访问；失联时路径行前置警告。
-    private var pathBarIsReachable: Bool {
-        guard let pathBarLocation else { return true }
+    /// 失联标记只在进入预览或切换组内项时更新。
+    private func refreshPathBarReachability() {
+        guard let location = pathBarLocation else {
+            pathBarReachable = true
+            return
+        }
         let url: URL? = if item.kind == .file, item.fileCount > 1,
                            let index = previewState.groupFileIndex,
                            groupURLs.indices.contains(index) {
@@ -660,7 +667,7 @@ struct PreviewDetailView: View {
         } else {
             previewState.scopedFileURL?.url
         }
-        return FileManager.default.fileExists(atPath: url?.path ?? pathBarLocation.path)
+        pathBarReachable = FileManager.default.fileExists(atPath: url?.path ?? location.path)
     }
 
     private func revealGroup() {
@@ -808,7 +815,6 @@ struct PreviewDetailView: View {
     }
 }
 
-/// 组内文件位置浮层。
 private struct GroupFilePositionBadge: View {
     let position: Int
     let total: Int

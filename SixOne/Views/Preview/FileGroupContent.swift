@@ -32,7 +32,11 @@ struct FileGroupContent: View {
                 scrollRequestID: previewState.groupScrollRequestID,
                 isScrollBlocked: context.confirmationState.isPresenting,
                 quickPasteRange: quickPasteRange,
-                onVisibleRowRangeChanged: { previewState.groupVisibleRowRange = $0 },
+                onVisibleRowRangeChanged: { range in
+                    // 延迟发布可能晚于切换，别写进下一个组。
+                    guard previewState.item?.id == item.id else { return }
+                    previewState.groupVisibleRowRange = range
+                },
                 onSelect: { index in
                     previewState.selectGroupFile(index)
                     // 收回键盘焦点，让方向键与裸 ⌫ 仍可用。
@@ -67,7 +71,7 @@ struct FileGroupContent: View {
         return index
     }
 
-    /// 按住 ⌘ 才读取可见范围，平时滚动不额外触发列表更新。
+    /// 按住 ⌘ 时才参与编号。
     private var quickPasteRange: ClosedRange<Int>? {
         guard context.quickPasteHintState.isShowing else { return nil }
         return previewState.groupVisibleRowRange

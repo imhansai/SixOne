@@ -737,7 +737,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         pasteFlow.paste(full)
     }
 
-    /// 可编号的完整可见行：组总览取组内列表，其余取外层历史列表。
+    /// 组总览取组内列表，其余取历史列表。
     private var quickPasteVisibleRange: ClosedRange<Int>? {
         previewState.isGroupOverview ? previewState.groupVisibleRowRange : navigationState.fullyVisibleRange
     }
@@ -754,7 +754,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         pasteFlow.paste(full, asPlainText: asPlainText)
     }
 
-    /// ⌘+数字：选中并粘贴组列表完整可见区的第 offset 个文件。
+    /// ⌘+数字：粘贴组内可见区的第 offset 个文件。
     private func pasteVisibleGroupFile(offset: Int, asPlainText: Bool) {
         guard previewState.isGroupOverview, let item = previewState.item else { return }
         // 文件没有纯文本形态，⇧ 变体不动作（与外层列表一致）。
@@ -1089,7 +1089,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         deleteSelectedItem()
     }
 
-    /// 全尺寸键盘的 Delete（⌦）走标准 deleteForward:，与外接键盘对齐。
+    /// 外接键盘的 Delete（⌦），与 Backspace 相同。
     @objc func deleteForward(_ sender: Any?) {
         deleteSelectedItem()
     }

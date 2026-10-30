@@ -25,14 +25,14 @@ enum ClipboardLayout {
 
     /// 预览内容四周留白；组列表模式贴边以对齐外层列表。
     static let previewInset: CGFloat = 16
-    /// 文件预览底部路径行的高度与到内容区的间距；高度对齐复制按钮。
+    /// 路径行高度与到内容区的间距。
     static let pathBarHeight: CGFloat = 20
     static let pathBarSpacing: CGFloat = 6
 
     /// 预览内容区尺寸（不含四周留白）。
     static var previewContentWidth: CGFloat { panelWidth - previewInset * 2 }
     static var previewContentHeight: CGFloat { panelHeight - headerHeight - previewInset * 2 }
-    /// 文件预览让出底部路径行后的内容区高度。
+    /// 扣除路径行后的内容区高度。
     static var previewFileContentHeight: CGFloat {
         previewContentHeight - pathBarHeight - pathBarSpacing
     }

@@ -87,9 +87,9 @@ struct FileGroupPreview: View {
     let scrollRequestID: Int
     /// 确认弹窗期间停掉用户滚动（程序化滚动不受影响）。
     let isScrollBlocked: Bool
-    /// 按住 ⌘ 时的快速粘贴编号范围；nil 表示不显示编号。
+    /// 按住 ⌘ 时的编号范围。
     let quickPasteRange: ClosedRange<Int>?
-    /// 列表发布完整可见行范围，快速粘贴据此定位。
+    /// 发布完整可见行范围。
     let onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)?
     let onSelect: (Int?) -> Void
     let onPreview: (Int) -> Void
@@ -204,7 +204,7 @@ struct FileGroupRow: View {
     let state: FileGroupRowState
     let rowID: UUID
     let clickTracker: RowClickTracker
-    /// 按住 ⌘ 时的快速粘贴编号；不显示时为空。
+    /// 快速粘贴编号。
     var shortcutNumber: Int? = nil
     let isSelected: Bool
     let isListActive: Bool
@@ -269,7 +269,7 @@ struct FileGroupRow: View {
                 clickTracker: clickTracker
             )
         }
-        // 复制命中层在宿主之上，其余点击放行给宿主；编号占位时让整行照常响应。
+        // 复制命中层在宿主之上；编号占位时让整行响应。
         .overlay(alignment: .topTrailing) {
             if shortcutNumber == nil {
                 RowCopyHitTarget(

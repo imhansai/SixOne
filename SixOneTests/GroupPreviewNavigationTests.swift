@@ -166,11 +166,19 @@ struct GroupFileFilterTests {
 
     @Test("筛选词变化作废旧可见范围，等列表重新发布")
     func filterChangeInvalidatesVisibleRange() {
-        let state = PreviewState()
-        state.groupVisibleRowRange = 0...4
+        let state = makeState(paths: ["/tmp/a.png", "/tmp/b.txt", "/tmp/c.png"])
+        state.groupVisibleRowRange = 0...2
         state.setGroupFilterText("png")
         #expect(state.groupVisibleRowRange == nil,
                 "旧编号范围对应上一批可见行，重排前不能再用")
+    }
+
+    @Test("筛选后可见集未变时保留可见范围")
+    func filterChangeKeepsRangeWhenSetUnchanged() {
+        let state = makeState(paths: ["/tmp/a.png", "/tmp/b.png"])
+        state.groupVisibleRowRange = 0...1
+        state.setGroupFilterText("png")
+        #expect(state.groupVisibleRowRange == 0...1)
     }
 
     @Test("筛选变化重新定位：无选中回顶，有选中带留白露出")

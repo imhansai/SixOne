@@ -18,7 +18,7 @@ struct GroupListTableView: NSViewRepresentable {
     let scrollRequestID: Int
     /// 确认弹窗期间停掉用户滚动（程序化滚动不受影响）。
     var isScrollBlocked = false
-    /// 按住 ⌘ 时的快速粘贴编号范围；nil 表示不显示编号。
+    /// 按住 ⌘ 时的编号范围。
     var quickPasteRange: ClosedRange<Int>? = nil
     var onVisibleRowRangeChanged: ((ClosedRange<Int>) -> Void)? = nil
     let locale: Locale
@@ -91,14 +91,14 @@ struct GroupListTableView: NSViewRepresentable {
         guard let tableView = scrollView.documentView as? NSTableView,
               let listScrollView = scrollView as? ListScrollView else { return }
         listScrollView.isScrollBlocked = isScrollBlocked
-        // 更新期间由 reload/滚动触发的发布排到下一轮，避免写回 body 正在读的状态。
+        // 更新中触发的发布排到下一轮，避免写回 body 正在读的状态。
         context.coordinator.isInViewUpdate = true
         defer { context.coordinator.isInViewUpdate = false }
         context.coordinator.apply(self)
 
         if context.coordinator.syncRows(with: self, in: tableView) {
             context.coordinator.pinDocumentHeight(tableView, in: scrollView)
-            // 过滤后行数变短不会产生边界通知，排一轮重算可见范围。
+            // 行数变短不产生边界通知，补一轮重算。
             DispatchQueue.main.async {
                 context.coordinator.publishVisibleRowRange()
             }
@@ -203,14 +203,18 @@ struct GroupListTableView: NSViewRepresentable {
             let active = parent.isListActive
             let quickPasteRange = parent.quickPasteRange
             let rowStates = rowStates
-            makeRow = { [context = parent.context, locale = parent.locale, displayScale = parent.displayScale] file, rowIndex, topPadding, bottomPadding in
+            makeRow = { [
+                context = parent.context,
+                locale = parent.locale,
+                displayScale = parent.displayScale
+            ] file, rowIndex, topPadding, bottomPadding in
                 AnyView(
                     FileGroupRow(
                         file: file,
                         state: rowStates.state(for: file.index),
                         rowID: file.rowID,
                         clickTracker: tracker,
-                        shortcutNumber: Self.shortcutNumber(forRow: rowIndex, in: quickPasteRange),
+                        shortcutNumber: QuickPaste.shortcutNumber(forRow: rowIndex, in: quickPasteRange),
                         isSelected: file.index == selected,
                         isListActive: active,
                         sourceAppBundleIdentifier: parent.sourceAppBundleIdentifier,
@@ -257,6 +261,8 @@ struct GroupListTableView: NSViewRepresentable {
             files = newFiles
             // 重建会清掉表格选中，下一轮重新同步。
             mirroredSelectionIndex = nil
+            // 重建后范围相同也要重发，外部状态可能已清空。
+            lastPublishedVisibleRowRange = nil
             tableView.reloadData()
             renderedSelection = RenderedSelection(index: selectedIndex, isActive: isListActive)
             return true
@@ -330,10 +336,6 @@ struct GroupListTableView: NSViewRepresentable {
             row == files.count - 1 ? ClipboardLayout.groupListPadding : 0
         }
 
-        static func shortcutNumber(forRow row: Int, in range: ClosedRange<Int>?) -> Int? {
-            QuickPaste.shortcutNumber(forRow: row, in: range)
-        }
-
         /// 点击不改表格选中，真相只在 PreviewState。
         func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
             false
@@ -352,7 +354,7 @@ struct GroupListTableView: NSViewRepresentable {
             }
         }
 
-        /// 编号出现/消失或随滚动重排时，只刷新涉及到的行。
+        /// 编号变化时只刷新涉及的行。
         func syncQuickPasteHints(in tableView: NSTableView) {
             guard quickPasteRange != renderedQuickPasteRange else { return }
             let previous = renderedQuickPasteRange
@@ -426,7 +428,7 @@ struct GroupListTableView: NSViewRepresentable {
 
         func publishVisibleRowRange() {
             guard let publish = onVisibleRowRangeChanged, let tableView else { return }
-            guard let range = fullyVisibleRowRange(in: tableView) else { return }
+            guard let range = ListRowVisibility.fullyVisibleRowRange(in: tableView) else { return }
             guard range != lastPublishedVisibleRowRange else { return }
             lastPublishedVisibleRowRange = range
             if isInViewUpdate {
@@ -434,10 +436,6 @@ struct GroupListTableView: NSViewRepresentable {
             } else {
                 publish(range)
             }
-        }
-
-        func fullyVisibleRowRange(in tableView: NSTableView) -> ClosedRange<Int>? {
-            ListRowVisibility.fullyVisibleRowRange(in: tableView)
         }
 
         // MARK: - 观察

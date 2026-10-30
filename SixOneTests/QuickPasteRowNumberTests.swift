@@ -13,24 +13,15 @@ struct QuickPasteRowNumberTests {
     @Test("编号随范围首行起算，范围外与超出上限不显示")
     func numberingWithinRange() {
         let range = 3...10
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 3, in: range) == 1)
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 10, in: range) == 8)
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 2, in: range) == nil)
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 11, in: range) == nil)
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 0, in: nil) == nil)
+        #expect(QuickPaste.shortcutNumber(forRow: 3, in: range) == 1)
+        #expect(QuickPaste.shortcutNumber(forRow: 10, in: range) == 8)
+        #expect(QuickPaste.shortcutNumber(forRow: 2, in: range) == nil)
+        #expect(QuickPaste.shortcutNumber(forRow: 11, in: range) == nil)
+        #expect(QuickPaste.shortcutNumber(forRow: 0, in: nil) == nil)
 
         let long = 0...20
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 8, in: long) == 9)
-        #expect(HistoryListTableView.Coordinator.shortcutNumber(forRow: 9, in: long) == nil)
+        #expect(QuickPaste.shortcutNumber(forRow: 8, in: long) == 9)
+        #expect(QuickPaste.shortcutNumber(forRow: 9, in: long) == nil)
     }
 
-    @Test("组内列表与历史列表共用同一套编号规则")
-    func groupListUsesSameNumbering() {
-        let range = 2...6
-        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 2, in: range) == 1)
-        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 6, in: range) == 5)
-        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 1, in: range) == nil)
-        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 7, in: range) == nil)
-        #expect(GroupListTableView.Coordinator.shortcutNumber(forRow: 0, in: nil) == nil)
-    }
 }

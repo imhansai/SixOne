@@ -2,7 +2,7 @@
 //  PreviewHeaderActionButton.swift
 //  SixOne
 //
-//  预览顶栏的图标按钮：1px 轮廓，悬停 8%、按下 16%；菜单标签也复用同一外观。
+//  预览顶栏图标按钮：1px 轮廓，悬停/按下反馈；菜单标签共用外观。
 //
 
 import SwiftUI
@@ -26,7 +26,7 @@ struct PreviewHeaderActionButton: View {
     }
 }
 
-/// 顶栏图标本体；Menu 这类不是 Button 的控件直接复用它。
+/// 顶栏图标本体，菜单标签复用。
 private struct PreviewHeaderIcon: View {
     let systemImage: String
 

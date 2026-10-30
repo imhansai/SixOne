@@ -129,7 +129,7 @@ struct ClipboardVisibleRangeTests {
 
         coordinator.publishVisibleRowRange()
         let published = try #require(VisibleRangeProbe.published[id]?.first)
-        let expected = try #require(coordinator.fullyVisibleRowRange(in: tableView))
+        let expected = try #require(ListRowVisibility.fullyVisibleRowRange(in: tableView))
         #expect(published == expected)
         #expect(published.lowerBound == 0)
     }

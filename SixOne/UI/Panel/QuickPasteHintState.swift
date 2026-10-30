@@ -12,7 +12,7 @@ enum QuickPaste {
     /// 一屏完整可见行最多放 8 行，9 是给布局变化留的余量。
     static let rowLimit = 9
 
-    /// 编号从完整可见范围的首行起算；范围外与超出上限返回 nil。
+    /// 从完整可见区首行起算，超出上限返回 nil。
     static func shortcutNumber(forRow row: Int, in range: ClosedRange<Int>?) -> Int? {
         guard let range, range.contains(row) else { return nil }
         let number = row - range.lowerBound + 1

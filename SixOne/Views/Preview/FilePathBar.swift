@@ -2,16 +2,15 @@
 //  FilePathBar.swift
 //  SixOne
 //
-//  预览底部路径行：可选择、可横向滚动的绝对路径 + 整段复制按钮。
+//  预览底部路径行：可选择的绝对路径 + 整段复制按钮。
 //
 
 import AppKit
 import SwiftUI
 
-/// 文件预览底部的路径行；非文件条目由调用方决定不渲染。
 struct FilePathBar: View {
     let location: FileLocation
-    /// 源文件当前是否仍在原位置；不在时前置警告图标。
+    /// 源文件是否仍可访问；false 时显示警告图标。
     var isReachable = true
     /// 整段复制；只写剪贴板，不写历史。
     let onCopy: (String) -> Void
@@ -48,7 +47,7 @@ struct FilePathBar: View {
     }
 }
 
-/// 只读、可选择、可横向滚动的单行路径文本。
+/// 可选择、可横向滚动的单行路径。
 struct SelectablePathText: NSViewRepresentable {
     let text: String
     let onCopyWhole: () -> Void
@@ -90,7 +89,6 @@ struct SelectablePathText: NSViewRepresentable {
     }
 
     private func configure(_ textView: SelectablePathTextView) {
-        textView.identifier = SelectablePathTextView.viewIdentifier
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
@@ -126,7 +124,7 @@ struct SelectablePathText: NSViewRepresentable {
     }
 }
 
-/// 文档宽度跟随文本：短路径铺满可视区，长路径可横向滚动。
+/// 短路径铺满，长路径横向滚动。
 final class PathScrollView: NSScrollView {
     override func layout() {
         super.layout()
@@ -146,10 +144,8 @@ final class PathScrollView: NSScrollView {
     }
 }
 
-/// 只读路径文本：无选区时 ⌘C 复制整段路径，⌘V 交回面板。
+/// 无选区时 ⌘C 复制整段路径。
 final class SelectablePathTextView: NSTextView {
-    static let viewIdentifier = NSUserInterfaceItemIdentifier("SixOne.PreviewPathText")
-
     var onCopyWhole: (() -> Void)?
     var onPasteFallback: (() -> Void)?
 

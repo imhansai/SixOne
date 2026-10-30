@@ -365,7 +365,7 @@ struct ClipboardRowView: View {
         }
     }
 
-    /// 链接没有真实缩略图，用纸片卡片补上与其他文档图标一致的体积和轮廓。
+    /// 链接没有缩略图，用纸片卡片对齐其他文档图标的体积。
     private var linkIcon: some View {
         Image(systemName: "link")
             .font(.system(size: 18, weight: .semibold))

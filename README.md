@@ -8,7 +8,7 @@ What it does:
 
 - Click the menu-bar icon to toggle the panel, or right-click it for a menu (Open Clipboard / Settings / Quit SixOne). The panel is anchored to wherever the summon came from — under the status item, under the pointer, or centred on the screen.
 - Native search field: filters across body text, titles, and file paths, debounced 200 ms before the query reaches the database.
-- Previews: text (rich text, editable in place, `⌘F` find), image (zoom / pan), file (image / video / web page / PDF / text / Quick Look), multi-file list (filter by file name / path), link, colour. File and on-disk image previews show the source path at the bottom, and both the file name and the full path can be copied in one click.
+- Previews: text (rich text, editable in place, `⌘F` find), image (zoom / pan), file (image / video / web page / PDF / text / Quick Look), multi-file list (filter by file name / path), link, colour. File and on-disk image previews show the source path at the bottom; drag to select part of it or copy the full path in one click, and the file name is copyable too.
 - Item actions: copy back to the clipboard, paste into the previous app (synthesizes `⌘V`), share, open with the default app / reveal in Finder, delete, and copy or paste as plain text (`⇧⌘C` / `⇧⌘V`). If the previous app has quit or does not come forward, SixOne beeps and leaves the item on the clipboard rather than pasting into whatever is frontmost.
 - Settings: privacy ignore-list, history retention, global hotkey, language (Follow System / English / Chinese (Simplified)), launch at login, and clear-history. A language change takes effect after a restart.
 
@@ -53,6 +53,7 @@ Clipboard history is among the most sensitive data on a Mac, so the rules are st
 | Move selection | `↑` / `↓` (with nothing selected, `↓` lands on the first row and `↑` does nothing); `⌘↑` / `⌘↓` jump to the newest / oldest in the window |
 | Back to the search field | `↑` from the first row |
 | Paste into the previous app | `Return` (or `⌘V`) |
+| Quick-paste a visible row | Hold `⌘` to show numbers, then press `⌘1`…`⌘9` to paste a fully visible row (in a file-group overview it pastes the group file; `⇧` makes it plain text in the outer list) |
 | Copy back to the clipboard | `⌘C` |
 | Save edits | `⌘S` (editing only; stays in edit mode; `Return` still inserts a newline) |
 | Copy / paste as plain text | `⇧⌘C` / `⇧⌘V` |
@@ -61,7 +62,7 @@ Clipboard history is among the most sensitive data on a Mac, so the rules are st
 | Group list | `↑` / `↓` move only inside the group (with nothing selected `↓` lands on the first row and `↑` does nothing; `↑` from the first row returns to the filter field, `↓` at the last row stops); `⌘↑` / `⌘↓` jump to the first / last file; `Space` previews the selected file (or closes the group preview when nothing is selected); `Esc` closes the group preview |
 | Group file preview | `↑` / `↓` switch to the previous / next file; `⌘↑` / `⌘↓` jump to the first / last file; `Space` / `Esc` / `×` return to the group list |
 | Filter files in a group | The filter field in the group list header (`⌘F` focuses it; `Esc` clears, then exits the field) |
-| Delete the selected item | `⌫` / `⌘⌫` (asks for confirmation) |
+| Delete the selected item | `⌫` / `⌘⌫` / `⌦` (asks for confirmation) |
 | Open / reveal in Finder | `⌘O` / `⇧⌘R` |
 | Cancel editing, close preview, then the panel | `Esc` (layered — it closes the find bar, cancels editing and restores the original text, asks first if there are changes, then closes the preview) |
 | Cycle search field → more actions → list | `Tab` / `⇧Tab` (also `Control+Tab` / `Control+Shift+Tab`) |
@@ -136,7 +137,7 @@ Data flows one way, over one bus: an `NSPasteboard` change is parsed off the mai
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 519 tests in 86 suites, about 10 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 568 tests in 91 suites, about 11 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 Modules that touch system resources are driven by doubles, all under `SixOneTests/Support/`: the clipboard goes through `FakePasteboard` (so capture → dedup → touch-to-top is testable without overwriting your clipboard), settings and the hotkey through `InMemorySettingsStorage`, the hotkey event handler through `FakeHotKeyEventMonitor`, history reads through `FakeHistoryRepository`, offscreen windows and view-tree probes through `OffscreenHost` and `TestPanel`, temporary files through `TemporaryFiles`, and waiting through `Wait`. Preview, positioning, keyboard decisions, and focus policy are pure functions or pure value inputs. The performance benchmark in `HistoryBenchmarkTests` is skipped unless a switch file exists (`.benchmark-history` at the repo root, or `/tmp/sixone-benchmark`); do not leave either behind, as it slows the full suite down.
 

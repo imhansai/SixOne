@@ -1,7 +1,7 @@
 //
 //  FilePathBarTests.swift
 //  SixOneTests
-//  预览路径行：长路径横向滚动、短路径铺满、文本可选择、无选区 ⌘C 复制整段。
+//  预览路径行：布局、选择与整段复制。
 //
 
 import AppKit
@@ -72,7 +72,7 @@ struct FilePathBarTests {
         #expect(textView.validateUserInterfaceItem(item))
     }
 
-        // MARK: - 预览接入
+    // MARK: - 预览接入
 
     @Test("单文件预览显示源文件路径")
     func previewShowsPathForSingleFile() async throws {

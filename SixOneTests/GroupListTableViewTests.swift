@@ -257,6 +257,28 @@ struct GroupListTableViewTests {
         #expect(scrolled, "滚动后没有按新的完整可见范围重发编号依据")
     }
 
+    @Test("重建列表后即使可见范围相同也重新发布")
+    func republishesSameRangeAfterReload() async throws {
+        let context = try TestPanel.context()
+        let files = makeFiles(6)
+        let probeID = UUID()
+        func view(_ files: [GroupFileEntry]) -> AnyView {
+            makeView(context: context, files: files, onVisibleRowRangeChanged: {
+                GroupVisibleRangeProbe.record(probeID, range: $0)
+            })
+        }
+
+        let (host, window) = OffscreenHost.make(view(files), size: Self.viewportSize)
+        defer { window.orderOut(nil) }
+        #expect(await Wait.until { !GroupVisibleRangeProbe.ranges(probeID).isEmpty })
+        let count = GroupVisibleRangeProbe.ranges(probeID).count
+
+        // 行 id 变化触发重建，可见范围仍是 0...5。
+        host.rootView = view(Array(files.reversed()))
+        #expect(await Wait.until { GroupVisibleRangeProbe.ranges(probeID).count > count },
+                "重建后没有重发同一可见范围")
+    }
+
     @Test("编号占位时组内行不再保留行尾复制热区")
     func quickPasteRangeRemovesCopyHitTargets() async throws {
         let context = try TestPanel.context()
@@ -400,7 +422,7 @@ private final class SelectionProbe {
     var values: [Int?] = []
 }
 
-/// 按用例 id 记录组列表发布的完整可见范围，避免并行用例互相清计数。
+/// 按用例 id 记录可见范围，避免并行用例互相清计数。
 private enum GroupVisibleRangeProbe {
     nonisolated(unsafe) static var published: [UUID: [ClosedRange<Int>]] = [:]
 

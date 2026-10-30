@@ -1,7 +1,7 @@
 //
 //  PreviewHeaderTitleTests.swift
 //  SixOneTests
-//  预览主标题尽量给出内容身份：文本取首行、颜色取十六进制、无 host 链接取地址。
+//  预览主标题：各类型取内容身份。
 //
 
 import AppKit

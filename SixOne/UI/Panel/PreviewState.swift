@@ -35,9 +35,9 @@ final class PreviewState {
     private(set) var groupFilterBlurRequestID = 0
     private(set) var groupScrollRequest: GroupScrollRequest?
     private(set) var groupScrollRequestID = 0
-    /// 组内列表完整可见的行范围；编号与直粘都据此定位。
+    /// 组列表完整可见行范围。
     var groupVisibleRowRange: ClosedRange<Int>?
-    /// 组内复制反馈：按下标闪对勾，代际用于重复触发。
+    /// 复制反馈：下标 + 代际。
     private(set) var groupCopyFeedbackIndex: Int?
     private(set) var groupCopyFeedbackRevision = 0
 
@@ -48,7 +48,7 @@ final class PreviewState {
         !groupFilterText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 文件组总览：预览已打开但停在组内列表；⌘+数字据此粘组内文件。
+    /// 预览停在组内列表。
     var isGroupOverview: Bool {
         guard let item, item.kind == .file, item.fileCount > 1 else { return false }
         return groupFileIndex == nil
@@ -81,9 +81,12 @@ final class PreviewState {
 
     /// 更新筛选词；选中行被筛掉时清空选中，并重新定位滚动。
     func setGroupFilterText(_ text: String) {
+        let previousVisible = visibleGroupFileIndices
         groupFilterText = text
-        // 列表重排落定前，旧范围不能用来定编号。
-        groupVisibleRowRange = nil
+        // 可见集变化后，旧范围不能再用。
+        if visibleGroupFileIndices != previousVisible {
+            groupVisibleRowRange = nil
+        }
         if let selected = groupSelectedIndex, !visibleGroupFileIndices.contains(selected) {
             groupSelectedIndex = nil
         }
@@ -189,13 +192,13 @@ final class PreviewState {
         }
     }
 
-    /// 标记组内文件已复制，对应行据此闪对勾。
+    /// 触发某项的复制反馈。
     func markGroupFileCopied(at index: Int) {
         groupCopyFeedbackIndex = index
         groupCopyFeedbackRevision &+= 1
     }
 
-    /// 组内列表第 position 行对应的原始文件下标。
+    /// 可见位置映射回组内原始下标。
     func groupFileIndex(atVisiblePosition position: Int) -> Int? {
         let visible = visibleGroupFileIndices
         guard visible.indices.contains(position) else { return nil }
