@@ -256,6 +256,12 @@ final class ClipboardManager {
         await thumbnails.waitForPendingThumbnails()
     }
 
+    /// 旧尺寸缩略图按当前尺寸重算；由列表在显示旧版本时触发。
+    func refreshThumbnail(id: UUID) {
+        guard let item = writer.fetchFullItem(id: id) else { return }
+        thumbnails.refresh(for: item)
+    }
+
     /// 缩略图来源：图片用剪贴板位图（源文件可能在他应用沙盒里，读不到），文件按路径取图。
     nonisolated static func thumbnailSource(
         for entry: PasteboardEntryParser.Entry,

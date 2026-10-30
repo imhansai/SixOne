@@ -100,7 +100,7 @@ struct HistoryBenchmarkTests {
         }
         let docBytes = Self.documentThumbnail?.count ?? 0
         let photoBytes = Self.photoThumbnail?.count ?? 0
-        print("BENCH 样本缩略图：文档图标 \(docBytes) B，照片 \(photoBytes) B（HEIC 256px q0.8）")
+        print("BENCH 样本缩略图：文档图标 \(docBytes) B，照片 \(photoBytes) B（HEIC \(Int(ClipboardThumbnailService.listThumbnailPixelSize))px q0.8）")
         print("BENCH 最坏情况（每行都带照片缩略图）：500 条 ≈ \(Self.megabytes(500 * photoBytes)) MB，1000 条 ≈ \(Self.megabytes(1000 * photoBytes)) MB")
 
         for (label, query) in [("无命中", "绝对不存在的关键词"), ("常见词（约半数命中）", "常见词"), ("罕见词（约 0.1% 命中）", "罕见标记")] {
@@ -207,7 +207,7 @@ struct HistoryBenchmarkTests {
     private static let documentThumbnail = makeSampleThumbnail(noisy: false)
 
     private static func makeSampleThumbnail(noisy: Bool) -> Data? {
-        let side = 256
+        let side = Int(ClipboardThumbnailService.listThumbnailPixelSize)
         guard let context = CGContext(
             data: nil, width: side, height: side,
             bitsPerComponent: 8, bytesPerRow: 0,

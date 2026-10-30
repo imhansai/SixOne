@@ -180,6 +180,10 @@ final class PanelItemActions {
         manager.updateEditedText(id: id, text: text, richText: richText)
     }
 
+    func refreshThumbnail(id: UUID) {
+        manager.refreshThumbnail(id: id)
+    }
+
     func pasteAsPlainTextForCurrentItem() {
         guard let item = currentItem, item.kind.hasPlainText,
               let full = fullItem(id: item.id) else { return }

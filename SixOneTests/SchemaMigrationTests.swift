@@ -60,7 +60,7 @@ struct SchemaMigrationTests {
         #expect(items.count == 3)
     }
 
-    @Test("V2 库升级到 V3：旧缩略图打上当前版本，无缩略图保持 nil")
+    @Test("V2 库升级到 V3：旧缩略图标记为旧版本，无缩略图保持 nil")
     func migratesV2Thumbnails() throws {
         let fixture = try MigrationFixture()
         defer { fixture.cleanUp() }
@@ -75,7 +75,7 @@ struct SchemaMigrationTests {
 
         let withThumbnail = try #require(items.first { $0.id == seeded.thumbnailID })
         #expect(withThumbnail.thumbnailData == Data([1, 2, 3]))
-        #expect(withThumbnail.thumbnailVersion == ClipboardItem.currentThumbnailVersion)
+        #expect(withThumbnail.thumbnailVersion == ClipboardItem.legacyThumbnailVersion)
 
         let withoutThumbnail = try #require(items.first { $0.id == seeded.plainID })
         #expect(withoutThumbnail.thumbnailVersion == nil)

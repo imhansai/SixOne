@@ -17,6 +17,8 @@ nonisolated struct HistoryRow: Identifiable, Sendable, Equatable {
     let fileCount: Int
     let contentType: String?
     let thumbnailData: Data?
+    /// 缩略图生成版本；nil 或旧版本会触发一次性重算。
+    let thumbnailVersion: Int?
     let sourceAppBundleIdentifier: String?
     let lastActivityAt: Date
 }
@@ -25,7 +27,7 @@ nonisolated extension HistoryRow {
     /// 取窗与单行刷新共用的取列清单，避免一处加列、另一处漏加。
     static var readProperties: [PartialKeyPath<ClipboardItem>] {
         [
-            \.id, \.kindRaw, \.titleSnapshot, \.thumbnailData,
+            \.id, \.kindRaw, \.titleSnapshot, \.thumbnailData, \.thumbnailVersion,
             \.filePath, \.filePaths, \.contentType, \.sourceAppBundleIdentifier, \.lastActivityAt,
         ]
     }
@@ -40,6 +42,7 @@ nonisolated extension HistoryRow {
             fileCount: item.allFilePaths.count,
             contentType: item.contentType,
             thumbnailData: item.thumbnailData,
+            thumbnailVersion: item.thumbnailVersion,
             sourceAppBundleIdentifier: item.sourceAppBundleIdentifier,
             lastActivityAt: item.lastActivityAt
         )

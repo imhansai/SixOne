@@ -36,6 +36,8 @@ protocol PanelActionHandler: AnyObject {
     func panelDidRequestCopyText(_ text: String)
     /// 保存预览里的编辑结果并写回剪贴板。
     func panelDidRequestSaveEditedText(id: UUID, text: String, richText: Data?)
+    /// 旧尺寸缩略图按当前尺寸重算。
+    func panelDidRequestThumbnailRefresh(id: UUID)
     func panelDidRequestSearchCancel()
     /// 先把防抖期未落库的词应用掉，再进列表。
     func panelDidRequestSearchMoveDown()

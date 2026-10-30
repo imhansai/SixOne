@@ -30,6 +30,26 @@ final class ClipboardThumbnailScheduler {
         schedule(for: item.id, source: source)
     }
 
+    /// 列表看到旧版本缩略图时按新尺寸重算；只处理已有缩略图的条目。
+    func refresh(for item: ClipboardItem) {
+        guard item.thumbnailData != nil,
+              item.thumbnailVersion != ClipboardItem.currentThumbnailVersion else { return }
+
+        let source: ClipboardThumbnailService.Source?
+        if let imageData = item.imageData {
+            source = .bitmap(imageData)
+        } else if let path = item.filePath,
+                  item.securityScopeBookmark != nil || FileManager.default.isReadableFile(atPath: path) {
+            source = .file(path: path, bookmark: item.securityScopeBookmark)
+        } else if let colorData = item.colorData {
+            source = .color(colorData)
+        } else {
+            source = nil
+        }
+        guard let source else { return }
+        schedule(for: item.id, source: source)
+    }
+
     func schedule(for id: UUID, source: ClipboardThumbnailService.Source) {
         let task = Task.detached(priority: .utility) { [weak self] in
             guard let thumb = await ClipboardThumbnailService.makeThumbnail(from: source) else { return }

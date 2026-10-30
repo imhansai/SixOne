@@ -119,6 +119,12 @@ struct ClipboardRowView: View {
                     )
             }
         }
+        // 旧尺寸缩略图在行第一次出现时按当前尺寸重算；只处理已有缩略图的条目。
+        .task(id: row.id) {
+            guard row.thumbnailData != nil,
+                  row.thumbnailVersion != ClipboardItem.currentThumbnailVersion else { return }
+            context.actions?.panelDidRequestThumbnailRefresh(id: row.id)
+        }
     }
 
     private var bodyColumn: some View {

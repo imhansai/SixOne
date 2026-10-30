@@ -138,7 +138,9 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
         /// 当前去重算法版本（与 schema 版本独立）；改算法时递增，迁移会按版本补算旧条目。
         static let currentContentKeyVersion = 1
         /// 当前缩略图生成版本；改尺寸/编码时递增，旧缩略图可据此识别并重算。
-        static let currentThumbnailVersion = 1
+        static let currentThumbnailVersion = 2
+        /// V2 时代的缩略图版本（256px），迁移时标记；列表看到旧版本会惰性重算。
+        static let legacyThumbnailVersion = 1
 
         /// 去重稳定标识；文本用 SHA256，避免超大文本驻留内存。
         var contentKey: String {

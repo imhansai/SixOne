@@ -91,12 +91,12 @@ nonisolated enum SixOneMigrationPlan: SchemaMigrationPlan {
         )
         descriptor.propertiesToFetch = [\.id, \.thumbnailVersion]
         guard let legacy = try? context.fetch(descriptor) else {
-            logger.error("迁移后读取旧缩略图失败，跳过硬编码版本")
+            logger.error("迁移后读取旧缩略图失败，跳过缩略图版本")
             return
         }
         guard !legacy.isEmpty else { return }
         for item in legacy {
-            item.thumbnailVersion = ClipboardItem.currentThumbnailVersion
+            item.thumbnailVersion = ClipboardItem.legacyThumbnailVersion
         }
         do {
             try context.save()

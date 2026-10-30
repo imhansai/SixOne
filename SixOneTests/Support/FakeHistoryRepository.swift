@@ -87,6 +87,7 @@ extension HistoryRow {
             fileCount: 0,
             contentType: nil,
             thumbnailData: nil,
+            thumbnailVersion: nil,
             sourceAppBundleIdentifier: nil,
             lastActivityAt: Date()
         )

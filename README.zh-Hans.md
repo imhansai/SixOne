@@ -140,7 +140,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 586 项用例、94 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 589 项用例、95 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
 
 不碰系统资源的模块都靠替身驱动，替身集中在 `SixOneTests/Support/`：剪贴板走 `FakePasteboard`（因此「捕获 → 去重 → 触达置顶」可测而不会覆写你的剪贴板），设置与快捷键走 `InMemorySettingsStorage`，按键事件处理器走 `FakeHotKeyEventMonitor`，历史读取走 `FakeHistoryRepository`，离屏窗口与视图树探针走 `OffscreenHost` 与 `TestPanel`，临时文件走 `TemporaryFiles`，等待走 `Wait`。预览、定位、键盘决策、焦点策略都是纯函数或纯值输入。`HistoryBenchmarkTests` 里的性能基准只有在开关文件存在时才跑（仓库根的 `.benchmark-history`，或 `/tmp/sixone-benchmark`）；跑完别把开关文件留下，它会让全量测试变慢。
 

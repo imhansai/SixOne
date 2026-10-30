@@ -17,6 +17,9 @@ nonisolated enum ClipboardThumbnailService {
     /// sRGB 颜色空间（构造不应失败，只解包一次）。
     private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
 
+    /// 列表行缩略图的目标边长（像素）；列表显示 40pt，128 覆盖 2×/3× 屏。
+    static let listThumbnailPixelSize: CGFloat = 128
+
     /// 缩略图来源。Quick Look 只能按 URL 取图，所以剪贴板位图会先落一份临时文件；
     /// 颜色没有文件、没有位图，直接画一个纯色块。
     enum Source {
@@ -26,15 +29,18 @@ nonisolated enum ClipboardThumbnailService {
     }
 
     /// 取图并编码：`thumbnailData` 是持久化列，只能存 Data。
-    static func makeThumbnail(from source: Source) async -> Data? {
+    static func makeThumbnail(
+        from source: Source,
+        pixelSize: CGFloat = listThumbnailPixelSize
+    ) async -> Data? {
         let image: CGImage?
         switch source {
         case let .file(path, bookmark):
-            image = await quickLookImage(at: URL(fileURLWithPath: path), bookmark: bookmark)
+            image = await quickLookImage(at: URL(fileURLWithPath: path), bookmark: bookmark, size: pixelSize)
         case let .bitmap(data):
-            image = await quickLookImage(atTemporaryCopyOf: data)
+            image = await quickLookImage(atTemporaryCopyOf: data, pixelSize: pixelSize)
         case let .color(data):
-            image = swatchImage(ofColorData: data)
+            image = swatchImage(ofColorData: data, size: pixelSize)
         }
         guard let image else { return nil }
         // HEIC 优先：体积远小于 PNG，且保留 iconMode 装饰的透明留白与投影
@@ -43,8 +49,12 @@ nonisolated enum ClipboardThumbnailService {
     }
 
     /// 颜色条目的纯色缩略图：解出 sRGB 颜色后填满一个方块，透明底交由上层自行合成。
-    /// 与其它缩略图同尺寸（256 × scale），走同一条 HEIC/PNG 编码。
-    private static func swatchImage(ofColorData data: Data, size: CGFloat = 256, scale: CGFloat = 1) -> CGImage? {
+    /// 与其它缩略图同尺寸，走同一条 HEIC/PNG 编码。
+    private static func swatchImage(
+        ofColorData data: Data,
+        size: CGFloat = listThumbnailPixelSize,
+        scale: CGFloat = 1
+    ) -> CGImage? {
         guard let rgb = PasteboardFormat.color(from: data)?.usingColorSpace(.sRGB) else { return nil }
         let pixels = Int(size * scale)
         guard let context = CGContext(
@@ -100,12 +110,12 @@ nonisolated enum ClipboardThumbnailService {
 
     /// 剪贴板位图落成临时文件（扩展名取数据自身类型，粘贴板里是 PNG 或 TIFF），
     /// 交给同一个 Quick Look 请求，用完即删。
-    private static func quickLookImage(atTemporaryCopyOf data: Data) async -> CGImage? {
+    private static func quickLookImage(atTemporaryCopyOf data: Data, pixelSize: CGFloat) async -> CGImage? {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("sixone-thumbnail-\(UUID().uuidString).\(PasteboardFormat.fileExtension(ofBitmap: data))")
         guard (try? data.write(to: url)) != nil else { return nil }
         defer { try? FileManager.default.removeItem(at: url) }
-        return await quickLookImage(at: url)
+        return await quickLookImage(at: url, size: pixelSize)
     }
 
     /// ImageIO 编码：不缩放（尺寸由取图环节决定），`quality` 仅对有损格式生效。
