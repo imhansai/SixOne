@@ -28,6 +28,14 @@ protocol PanelActionHandler: AnyObject {
     func panelDidRequestCopyItem()
     /// 只读文本预览里的 ⌘V：整条粘贴到上一个应用。
     func panelDidRequestPasteItem()
+    /// 复制指定条目回剪贴板；反馈由调用方负责。
+    func panelDidRequestCopy(id: UUID)
+    /// 只复制指定条目的纯文本形态。
+    func panelDidRequestCopyAsPlainText(id: UUID)
+    /// 复制一段不属于历史条目的文字（路径、标题、色值）。
+    func panelDidRequestCopyText(_ text: String)
+    /// 保存预览里的编辑结果并写回剪贴板。
+    func panelDidRequestSaveEditedText(id: UUID, text: String, richText: Data?)
     func panelDidRequestSearchCancel()
     /// 先把防抖期未落库的词应用掉，再进列表。
     func panelDidRequestSearchMoveDown()
@@ -68,5 +76,40 @@ final class PanelContext {
             searchState: searchState,
             navigationState: navigationState
         )
+    }
+}
+
+/// 视图侧的统一意图入口：有控制器时交给它，独立预览/测试没有接线时直接落回 manager。
+extension PanelContext {
+    func copyItem(id: UUID) {
+        if let actions {
+            actions.panelDidRequestCopy(id: id)
+        } else {
+            manager.copy(id: id)
+        }
+    }
+
+    func copyItemAsPlainText(id: UUID) {
+        if let actions {
+            actions.panelDidRequestCopyAsPlainText(id: id)
+        } else {
+            manager.copyAsPlainText(id: id)
+        }
+    }
+
+    func copyText(_ text: String) {
+        if let actions {
+            actions.panelDidRequestCopyText(text)
+        } else {
+            manager.copyPlainText(text)
+        }
+    }
+
+    func saveEditedText(id: UUID, text: String, richText: Data?) {
+        if let actions {
+            actions.panelDidRequestSaveEditedText(id: id, text: text, richText: richText)
+        } else {
+            manager.updateEditedText(id: id, text: text, richText: richText)
+        }
     }
 }

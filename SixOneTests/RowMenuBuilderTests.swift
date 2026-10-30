@@ -48,6 +48,8 @@ struct RowMenuBuilderTests {
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: { _ in },
+            copyItem: { harness.manager.copy(id: $0) },
+            copyItemAsPlainText: { harness.manager.copyAsPlainText(id: $0) },
             deleteRow: { deleted.append($0) }
         )
 
@@ -68,6 +70,8 @@ struct RowMenuBuilderTests {
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: { _ in },
+            copyItem: { harness.manager.copy(id: $0) },
+            copyItemAsPlainText: { harness.manager.copyAsPlainText(id: $0) },
             deleteRow: { _ in }
         )
         let anchor = RowInteractionHost.HostView()
@@ -95,6 +99,8 @@ struct RowMenuBuilderTests {
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: onCopyFeedback,
+            copyItem: { harness.manager.copy(id: $0) },
+            copyItemAsPlainText: { harness.manager.copyAsPlainText(id: $0) },
             deleteRow: { _ in }
         )
         return builder.makeMenu(for: HistoryRow(item), anchor: RowInteractionHost.HostView())

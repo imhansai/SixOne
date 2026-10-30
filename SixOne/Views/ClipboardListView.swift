@@ -212,7 +212,7 @@ struct ClipboardListView: View {
     }
 
     private func flashCopied(id: UUID) {
-        manager.copy(id: id)
+        context.copyItem(id: id)
         setCopiedFeedback(for: id)
     }
 
@@ -250,6 +250,8 @@ struct ClipboardListView: View {
             panelActions: { actions },
             selectRow: { select(id: $0) },
             copyFeedback: { setCopiedFeedback(for: $0) },
+            copyItem: { context.copyItem(id: $0) },
+            copyItemAsPlainText: { context.copyItemAsPlainText(id: $0) },
             deleteRow: { delete(id: $0) }
         )
     }

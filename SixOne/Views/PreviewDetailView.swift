@@ -125,7 +125,7 @@ struct PreviewDetailView: View {
                     FilePathBar(
                         location: pathBarLocation,
                         isReachable: pathBarReachable,
-                        onCopy: { manager.copyPlainText($0) },
+                        onCopy: { context.copyText($0) },
                         onPaste: { actions?.panelDidRequestPasteItem() }
                     )
                 }
@@ -287,7 +287,7 @@ struct PreviewDetailView: View {
                                 text: titleCopy.text,
                                 help: titleCopy.help
                             ) { text in
-                                manager.copyPlainText(text)
+                                context.copyText(text)
                             }
                         }
                     }
@@ -794,7 +794,7 @@ struct PreviewDetailView: View {
 
     /// 编辑完成：经 ClipboardManager 写回条目与剪贴板；视图不直接改模型。
     private func finishEditing(_ content: NSAttributedString) {
-        manager.updateEditedText(
+        context.saveEditedText(
             id: item.id,
             text: content.string,
             richText: TextPreviewView.rtfData(from: content)

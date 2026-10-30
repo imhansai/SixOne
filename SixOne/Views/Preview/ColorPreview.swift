@@ -141,7 +141,7 @@ struct ColorPreview: View {
 
     private func copy(_ value: String, label: String?) {
         // 只写剪贴板、不动历史：复制的是其中一个色值。
-        context.manager.copyPlainText(value)
+        context.copyText(value)
         let shown = [label, value].compactMap { $0 }.joined(separator: " ")
         copiedNotice = String(format: Localizer.string("%@ copied"), shown)
 

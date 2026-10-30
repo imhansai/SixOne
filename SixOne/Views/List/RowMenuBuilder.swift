@@ -13,6 +13,8 @@ struct RowMenuBuilder {
     let panelActions: () -> PanelActionHandler?
     let selectRow: (UUID) -> Void
     let copyFeedback: (UUID) -> Void
+    let copyItem: (UUID) -> Void
+    let copyItemAsPlainText: (UUID) -> Void
     let deleteRow: (UUID) -> Void
 
     func makeMenu(for row: HistoryRow, anchor: RowInteractionHost.HostView) -> NSMenu {
@@ -88,10 +90,10 @@ struct RowMenuBuilder {
         case .pasteAsPlainText:
             actions?.panelDidPasteAsPlainText(id: row.id)
         case .copy:
-            manager.copy(id: row.id)
+            copyItem(row.id)
             copyFeedback(row.id)
         case .copyAsPlainText:
-            manager.copyAsPlainText(id: row.id)
+            copyItemAsPlainText(row.id)
             copyFeedback(row.id)
         case .share:
             actions?.panelDidRequestShare(id: row.id, anchorView: anchor)
