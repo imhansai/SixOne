@@ -60,9 +60,11 @@ struct PanelWindowKeyHandlingTests {
     private final class FakeActionDelegate: NSObject, NSWindowDelegate {
         var moveUpCount = 0
         var insertNewlineCount = 0
+        var deleteForwardCount = 0
 
         @objc func moveUp(_ sender: Any?) { moveUpCount += 1 }
         @objc func insertNewline(_ sender: Any?) { insertNewlineCount += 1 }
+        @objc func deleteForward(_ sender: Any?) { deleteForwardCount += 1 }
     }
 
     private func makePanel() -> (ClipboardPanel, FakeKeyHandler, FakeActionDelegate) {
@@ -212,6 +214,18 @@ struct PanelWindowKeyHandlingTests {
         ))
         #expect(delegate.moveUpCount == 1)
         #expect(delegate.insertNewlineCount == 1)
+    }
+
+    @Test("全尺寸键盘的 Delete 键映射到 deleteForward:")
+    func forwardDeleteStandardAction() {
+        let (panel, handler, delegate) = makePanel()
+        handler.preDispatchResult = false
+        panel.sendEvent(keyEvent(
+            UInt16(kVK_ForwardDelete),
+            characters: String(UnicodeScalar(NSDeleteFunctionKey)!),
+            windowNumber: panel.windowNumber
+        ))
+        #expect(delegate.deleteForwardCount == 1)
     }
 
     @Test("Esc 走窗口的 cancelOperation → handler.handleEscape")

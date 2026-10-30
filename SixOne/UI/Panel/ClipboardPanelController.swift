@@ -1089,6 +1089,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         deleteSelectedItem()
     }
 
+    /// 全尺寸键盘的 Delete（⌦）走标准 deleteForward:，与外接键盘对齐。
+    @objc func deleteForward(_ sender: Any?) {
+        deleteSelectedItem()
+    }
+
     /// 执行判定出的动作。返回 false 表示这一步没做成，事件继续交给 AppKit。
     private func apply(_ action: PanelKeyAction) -> Bool {
         switch action {
