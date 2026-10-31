@@ -116,6 +116,7 @@ open build/Build/Products/Debug/SixOne.app
 | 要改什么 | 落点 |
 | --- | --- |
 | 加 / 改一个按键分支 | `PanelKeyRouter`（窗口 pre-dispatch）+ `PanelKeyActionExecutor` 执行判定结果；条目动作在 `PanelItemActions`，编辑与 Esc 在 `PanelEditingSession`；命令键从 `MenuKeyEquivalentIndex` 取菜单项。测试：`PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
+| 加 / 改一个带菜单或快捷键的面板命令 | `PanelMenuCommand`（可用性）+ `PanelMenuCommandTable`（selector/标题/键位）+ `MainMenuBuilder` 的显式菜单树；`validateMenuItem` 与命令键检查读表。测试：`PanelMenuCommandTableTests` / `MainMenuBuilderTests` / `MenuKeyEquivalentIndexTests` |
 | 加一条「该不该收起面板」的规则 | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
 | 动面板的激活 / 图片预览的捏合手势 / 状态栏点击行为 | 手势只投递给**激活的**应用，所以唤出面板要让它成为 key 与 main，收起时要把设置窗口摘出 key/main 候选。key/main 交接规则见 `PanelWindowLifecycle` 与 `SettingsWindowPresentationTests` |
 | 改搜索词管道（防抖 / 清空 / 唤出对齐） | `PanelSearchSession` + `PanelSearchSessionTests`；顶栏只把「输入变了」交进去 |
@@ -145,7 +146,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 623 项用例、104 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 625 项用例、105 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
 
 不碰系统资源的模块都靠替身驱动，替身集中在 `SixOneTests/Support/`：剪贴板走 `FakePasteboard`（因此「捕获 → 去重 → 触达置顶」可测而不会覆写你的剪贴板），设置与快捷键走 `InMemorySettingsStorage`，按键事件处理器走 `FakeHotKeyEventMonitor`，历史读取走 `FakeHistoryRepository`，离屏窗口与视图树探针走 `OffscreenHost` 与 `TestPanel`，临时文件走 `TemporaryFiles`，等待走 `Wait`。预览、定位、键盘决策、焦点策略都是纯函数或纯值输入。`HistoryBenchmarkTests` 与 `MigrationBenchmarkTests`（V1/V2 大库升级到 V3）里的性能基准只有在开关文件存在时才跑（仓库根的 `.benchmark-history`，或 `/tmp/sixone-benchmark`）；跑完别把开关文件留下，它会让全量测试变慢。
 

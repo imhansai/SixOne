@@ -437,34 +437,15 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         let availability = commandAvailability
+        if let command = PanelMenuCommandTable.command(for: menuItem.action) {
+            if command == .preview {
+                menuItem.title = availability.isPreviewing
+                    ? Localizer.string("Close Preview")
+                    : Localizer.string("Preview")
+            }
+            return availability.isEnabled(command)
+        }
         switch menuItem.action {
-        case #selector(ClipboardPanelController.copy(_:)):
-            return availability.isEnabled(.copy)
-        case #selector(ClipboardPanelController.paste(_:)):
-            return availability.isEnabled(.paste)
-        case #selector(ClipboardPanelController.copyAsPlainText(_:)):
-            return availability.isEnabled(.copyAsPlainText)
-        case #selector(ClipboardPanelController.pasteAsPlainText(_:)):
-            return availability.isEnabled(.pasteAsPlainText)
-        case #selector(ClipboardPanelController.delete(_:)):
-            return availability.isEnabled(.delete)
-        case #selector(ClipboardPanelController.previewSelectedItem(_:)):
-            menuItem.title = availability.isPreviewing
-                ? Localizer.string("Close Preview")
-                : Localizer.string("Preview")
-            return availability.isEnabled(.preview)
-        case #selector(ClipboardPanelController.saveEditing(_:)):
-            return availability.isEnabled(.saveEditing)
-        case #selector(ClipboardPanelController.openSelectedItem(_:)):
-            return availability.isEnabled(.open)
-        case #selector(ClipboardPanelController.revealSelectedItem(_:)):
-            return availability.isEnabled(.reveal)
-        case #selector(ClipboardPanelController.shareSelectedItem(_:)):
-            return availability.isEnabled(.share)
-        case #selector(ClipboardPanelController.clearHistory(_:)):
-            return availability.isEnabled(.clearHistory)
-        case #selector(ClipboardPanelController.focusSearch(_:)):
-            return availability.isEnabled(.focusSearch)
         case #selector(ClipboardPanelController.performTextFinderAction(_:)):
             if menuItem.tag == NSTextFinder.Action.showFindInterface.rawValue {
                 return panel.isKeyWindow
@@ -515,7 +496,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
         // 预览或文本输入中，⌥⌘F 不该把焦点塞给被盖住的搜索框。
         if let command,
-           command.action == #selector(ClipboardPanelController.focusSearch(_:)),
+           PanelMenuCommandTable.command(for: command.action) == .focusSearch,
            previewState.item != nil || isTextEditing {
             return false
         }

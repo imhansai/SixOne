@@ -44,11 +44,7 @@ enum MainMenuBuilder {
 
     private static func fileMenu() -> NSMenuItem {
         submenu(Localizer.string("File")) { menu in
-            menu.addItem(item(
-                title: Localizer.string("Save"),
-                action: #selector(ClipboardPanelController.saveEditing(_:)),
-                key: "s"
-            ))
+            menu.addItem(commandItem(.saveEditing))
             menu.addItem(.separator())
             menu.addItem(item(
                 title: Localizer.string("Close Window"),
@@ -80,33 +76,11 @@ enum MainMenuBuilder {
                 action: #selector(NSText.cut(_:)),
                 key: "x"
             ))
-            menu.addItem(item(
-                title: Localizer.string("Copy"),
-                action: #selector(NSText.copy(_:)),
-                key: "c"
-            ))
-            menu.addItem(item(
-                title: Localizer.string("Copy as Plain Text"),
-                action: #selector(ClipboardPanelController.copyAsPlainText(_:)),
-                key: "c",
-                modifiers: [.command, .shift]
-            ))
-            menu.addItem(item(
-                title: Localizer.string("Paste"),
-                action: #selector(NSText.paste(_:)),
-                key: "v"
-            ))
-            menu.addItem(item(
-                title: Localizer.string("Paste as Plain Text"),
-                action: #selector(ClipboardPanelController.pasteAsPlainText(_:)),
-                key: "v",
-                modifiers: [.command, .shift]
-            ))
-            menu.addItem(item(
-                title: Localizer.string("Delete"),
-                action: #selector(NSText.delete(_:)),
-                key: "\u{7f}"
-            ))
+            menu.addItem(commandItem(.copy))
+            menu.addItem(commandItem(.copyAsPlainText))
+            menu.addItem(commandItem(.paste))
+            menu.addItem(commandItem(.pasteAsPlainText))
+            menu.addItem(commandItem(.delete))
             menu.addItem(item(
                 title: Localizer.string("Select All"),
                 action: #selector(NSText.selectAll(_:)),
@@ -120,12 +94,7 @@ enum MainMenuBuilder {
     /// 查找子菜单：首项面板搜索，其余交给 NSTextFinder。
     private static func findMenu() -> NSMenuItem {
         submenu(Localizer.string("Find")) { menu in
-            menu.addItem(item(
-                title: Localizer.string("Search Clipboard"),
-                action: #selector(ClipboardPanelController.focusSearch(_:)),
-                key: "f",
-                modifiers: [.command, .option]
-            ))
+            menu.addItem(commandItem(.focusSearch))
             menu.addItem(.separator())
 
             menu.addItem(finderItem(
@@ -189,38 +158,28 @@ enum MainMenuBuilder {
 
     private static func itemMenu() -> NSMenuItem {
         submenu(Localizer.string("Item")) { menu in
-            menu.addItem(item(
-                title: Localizer.string("Preview"),
-                action: #selector(ClipboardPanelController.previewSelectedItem(_:)),
-                key: ""
-            ))
+            menu.addItem(commandItem(.preview))
             menu.addItem(.separator())
-            menu.addItem(item(
-                title: Localizer.string("Share…"),
-                action: #selector(ClipboardPanelController.shareSelectedItem(_:)),
-                key: ""
-            ))
-            menu.addItem(item(
-                title: Localizer.string("Open"),
-                action: #selector(ClipboardPanelController.openSelectedItem(_:)),
-                key: "o"
-            ))
-            menu.addItem(item(
-                title: Localizer.string("Reveal in Finder"),
-                action: #selector(ClipboardPanelController.revealSelectedItem(_:)),
-                key: "r",
-                modifiers: [.command, .shift]
-            ))
+            menu.addItem(commandItem(.share))
+            menu.addItem(commandItem(.open))
+            menu.addItem(commandItem(.reveal))
             menu.addItem(.separator())
-            menu.addItem(item(
-                title: Localizer.string("Clear History…"),
-                action: #selector(ClipboardPanelController.clearHistory(_:)),
-                key: ""
-            ))
+            menu.addItem(commandItem(.clearHistory))
         }
     }
 
     // MARK: - 工具
+
+    /// 命令项元数据来自 `PanelMenuCommandTable`；菜单树本身仍显式搭建。
+    private static func commandItem(_ command: PanelMenuCommand) -> NSMenuItem {
+        let entry = PanelMenuCommandTable.entry(for: command)
+        return item(
+            title: entry.title,
+            action: entry.selector,
+            key: entry.key,
+            modifiers: entry.modifiers
+        )
+    }
 
     /// 顶层菜单项 + 子菜单；根项标题由子菜单标题显示。
     private static func submenu(_ title: String, build: (NSMenu) -> Void) -> NSMenuItem {
