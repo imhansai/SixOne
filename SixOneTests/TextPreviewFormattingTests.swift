@@ -188,7 +188,7 @@ private func makeHost(_ context: PanelContext, item: ClipboardItem) -> (NSHostin
     let size = NSSize(width: ClipboardLayout.panelWidth, height: ClipboardLayout.panelHeight)
     return OffscreenHost.make(
         AnyView(
-            PreviewDetailView(item: item)
+            PreviewDetailView(item: item, context: context)
                 .frame(width: size.width, height: size.height)
                 .environment(context)
         ),

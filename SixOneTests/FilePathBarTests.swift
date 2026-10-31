@@ -176,7 +176,7 @@ struct FilePathBarTests {
         let context = try context ?? TestPanel.context()
         let size = ClipboardLayout.panelSize
         let hosting = NSHostingView(rootView: AnyView(
-            PreviewDetailView(item: item)
+            PreviewDetailView(item: item, context: context)
                 .frame(width: size.width, height: size.height)
                 .environment(context)
         ))

@@ -46,6 +46,7 @@ struct ClipboardListView: View {
             if let item = previewState.item {
                 PreviewDetailView(
                     item: item,
+                    context: context,
                     // 编辑落盘后条目已置顶，关闭预览时滚回顶部展示。
                     onItemEdited: { coordinator.markPreviewEdited() },
                 )

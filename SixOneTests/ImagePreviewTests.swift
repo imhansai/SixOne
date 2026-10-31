@@ -392,7 +392,7 @@ struct ImagePreviewTests {
     ) -> (NSHostingView<AnyView>, NSWindow) {
         let size = NSSize(width: ClipboardLayout.panelWidth, height: ClipboardLayout.panelHeight)
         let hosting = NSHostingView(rootView: AnyView(
-            PreviewDetailView(item: item)
+            PreviewDetailView(item: item, context: context)
                 .frame(width: size.width, height: size.height)
                 .environment(context)
         ))

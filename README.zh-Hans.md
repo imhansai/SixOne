@@ -107,7 +107,7 @@ open build/Build/Products/Debug/SixOne.app
 
 数据单向流动、只走一条总线：`NSPasteboard` 变化在后台解析、去重、入库，然后经 `ClipboardHistoryEventBus` 广播；`HistoryListStore` 按发布顺序串行处理并增量刷新。新增条目只按 id 取单行插到窗口头部，不重取整窗；保留期裁剪分批保存并让出主线程；图片去重 key 修复用持久化版本标记跳过健康库。读历史走后台 actor 上的 `ClipboardHistoryRepository`，只回传轻量的 `HistoryRow` 值，大字段因此不进列表内存；写走主 context，且必须立刻对读可见。界面动作 —— 拷贝、粘贴、保存编辑、删除、清空 —— 都经同一条总线回灌，列表数据源因此不必知道是谁改的。
 
-原先的两个巨型类型按职责拆开：`ClipboardManager` 是捕获、历史写入、粘贴板回写、文件访问与缩略图的统一门面；`ClipboardPanelController` 把窗口生命周期、条目动作、编辑会话与按键执行分别交给 `PanelWindowLifecycle`、`PanelItemActions`、`PanelEditingSession` 与 `PanelKeyActionExecutor`。两个 NSTableView 列表共用 `ListTableCoordinator` 与 `ListTableScaffold`，各自只提供行数据、行内容、选中与滚动策略。列表会话的选中、预览关闭收尾、置顶揭示与复制反馈集中在 `HistoryListCoordinator`，视图只保留渲染与回调。视图只发复制/保存意图，经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 交给 `PanelActionHandler`；视图层把 manager 当作只读。`Preferences` 是唯一的设置/存储门面，标题、去重指纹与搜索快照则放在纯工具 `ItemTitleFormatter`、`ContentFingerprint`、`SearchSnapshotter` 里。
+原先的两个巨型类型按职责拆开：`ClipboardManager` 是捕获、历史写入、粘贴板回写、文件访问与缩略图的统一门面；`ClipboardPanelController` 把窗口生命周期、条目动作、编辑会话与按键执行分别交给 `PanelWindowLifecycle`、`PanelItemActions`、`PanelEditingSession` 与 `PanelKeyActionExecutor`。两个 NSTableView 列表共用 `ListTableCoordinator` 与 `ListTableScaffold`，各自只提供行数据、行内容、选中与滚动策略。列表会话的选中、预览关闭收尾、置顶揭示与复制反馈集中在 `HistoryListCoordinator`，视图只保留渲染与回调。预览详情按顶栏、元数据与副标题拆到 `PreviewHeaderView`、`PreviewMetadataModel`、`PreviewSubtitle`；`PreviewDetailView` 只留布局、路径条与内容分发。视图只发复制/保存意图，经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 交给 `PanelActionHandler`；视图层把 manager 当作只读。`Preferences` 是唯一的设置/存储门面，标题、去重指纹与搜索快照则放在纯工具 `ItemTitleFormatter`、`ContentFingerprint`、`SearchSnapshotter` 里。
 
 **注释刻意写得短**：只记录仍然成立的约束，不写历史。测试是可执行的契约 —— 下表的每一项都指向钉住它的测试 —— 改一条非显然的规则前，先读对应类型和它的测试。
 
@@ -127,7 +127,8 @@ open build/Build/Products/Debug/SixOne.app
 | 动取数路径 | 先分清「要整条」还是「只要身份/路径」：分别走 `ClipboardManager.fetchFullItem` / `ClipboardManager.fetchLightItem`；列表取窗是另一条路径，走后台 actor 上的 `ClipboardHistoryRepository.latest` |
 | 改库文件位置，或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名：兜底只允许动本应用自己的那个文件 |
 | 改「事后怎么找回那个文件」（被移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark。用例见 `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
-| 改预览顶栏 / 打开方式菜单 | `PreviewHeaderModel`（标题与复制入口）、`PreviewOpenWithMenu`（应用选择 + 链接打开）、`PreviewDetailView`（布局与内容） |
+| 改预览顶栏 / 打开方式菜单 | `PreviewHeaderModel`（标题与复制入口）、`PreviewHeaderView` / `PreviewGroupHeaderView`（顶栏布局与按钮）、`PreviewOpenWithMenu`（应用选择 + 链接打开）、`PreviewDetailView`（布局、内容与路径条） |
+| 改预览元数据 / 副标题 | `PreviewMetadataModel`（图片解码、文件/组 stat、文本统计）、`PreviewSubtitle`（纯格式化） |
 | 改「什么算不要记录」 | `PasteboardSnapshot.doNotRecordTypes` + `ClipboardCaptureTests`；判定必须留在读内容**之前**，且与快照共用 `PasteboardAccessing.readRecordableSnapshot` 的同一次读取 |
 | 动「粘贴进别的应用」 | `PanelPasteFlow` + `PanelPasteEnvironment`（事件投递、应用控制、权限、调度、时钟、提示音）。`⌘V` 事件必须在碰剪贴板**之前**就确认建得出来 —— 面板一收起，提示就没人看得见了。测试：`PanelPasteFlowTests` |
 | 动排序键 / 触碰 `recencyID` | `OrderedUUID`（时间有序性）+ `OrderedUUIDTests`；排序按它倒序，生成顺序必须与比较顺序一致 |

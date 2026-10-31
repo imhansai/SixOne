@@ -5,35 +5,54 @@
 import AppKit
 import SwiftUI
 
-/// 预览内容视图：顶栏标题 + 内容区；文本可内联编辑，文件按类型选渲染器，自身不带玻璃材质。
+/// 预览内容视图：顶栏 + 内容区；文本可内联编辑，文件按类型选渲染器，自身不带玻璃材质。
 struct PreviewDetailView: View {
     let item: ClipboardItem
+    let context: PanelContext
     var onItemEdited: (() -> Void)? = nil
-
-    @Environment(PanelContext.self) private var context
 
     private var previewState: PreviewState { context.previewState }
     private var actions: PanelActionHandler? { context.actions }
 
     private let cornerRadius: CGFloat = 24
 
-    @State private var previewImage: PreviewImage?
-    @State private var previewImageData: Data?
-    @State private var imageLoadFailed = false
-    @State private var fileMeta: (size: Int64?, modDate: Date?, isDirectory: Bool)?
-    @State private var groupMeta: GroupMeta?
+    @State private var metadata: PreviewMetadataModel
     @State private var shareAnchor = ViewAnchorBox()
-    @State private var textStats: TextStats?
-    @State private var statsRevision = 0
     @State private var showsGroupFilePosition = false
     @State private var groupPositionRevealID = 0
     @State private var pathBarReachable = true
+
+    init(item: ClipboardItem, context: PanelContext, onItemEdited: (() -> Void)? = nil) {
+        self.item = item
+        self.context = context
+        self.onItemEdited = onItemEdited
+        _metadata = State(initialValue: PreviewMetadataModel(
+            item: item,
+            previewState: context.previewState,
+            manager: context.manager,
+            textStatsCache: context.caches.textStats
+        ))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if isGroupListMode {
-                groupListHeader
+                PreviewGroupHeaderView(
+                    item: item,
+                    groupMeta: metadata.groupMeta,
+                    shareAnchor: shareAnchor,
+                    onRevealGroup: revealGroup
+                )
             } else {
-                previewHeader
+                PreviewHeaderView(
+                    item: item,
+                    subtitle: subtitle,
+                    fileNameTitle: fileNameTitle,
+                    linkOrigin: linkOrigin,
+                    fileURL: fileURL,
+                    linkURL: linkURL,
+                    isGroupFileView: isGroupFileView
+                )
             }
 
             VStack(spacing: ClipboardLayout.pathBarSpacing) {
@@ -71,26 +90,20 @@ struct PreviewDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(.rect(cornerRadius: cornerRadius))
-        .onAppear {
-            ensureMetadata()
-            refreshPathBarReachability()
-            revealGroupFilePosition()
-        }
-        .onChange(of: previewState.groupFileIndex) { _, _ in
-            ensureMetadata()
+        .task(id: metadataTaskID) {
+            metadata.refreshFileMetadata(fileURL: fileURL, groupURLs: groupURLs)
             refreshPathBarReachability()
             revealGroupFilePosition()
         }
         .task(id: item.id) {
-            await loadPreviewImage()
+            await metadata.loadImageIfNeeded()
         }
-        .task(id: textStatsTaskID) {
-            guard item.kind == .text || item.kind == .link, let text = item.text else { return }
-            textStats = await context.caches.textStats.stats(for: item.id, text: text)
+        .task(id: metadata.textStatsTaskID) {
+            await metadata.loadTextStats()
         }
     }
 
-    // MARK: - 顶栏
+    // MARK: - 状态
 
     private var isGroupListMode: Bool {
         item.kind == .file && item.fileCount > 1 && !isGroupFileView
@@ -102,304 +115,12 @@ struct PreviewDetailView: View {
         return groupURLs.indices.contains(index)
     }
 
-    private var groupListHeader: some View {
-        PanelHeaderChrome {
-            HStack(spacing: 12) {
-                ZStack {
-                    Image(systemName: "square.3.layers.3d.down.left")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-                .frame(width: 44, height: 44)
-                .allowsHitTesting(false)
-
-                groupFilterField
-                    .frame(maxWidth: .infinity)
-
-                groupInfoStack
-
-                groupActions
-            }
-        }
-    }
-
-    private var groupActions: some View {
-        HStack(spacing: ClipboardLayout.headerActionSpacing) {
-            PreviewHeaderActionButton(
-                systemImage: "square.and.arrow.up",
-                help: Localizer.string("Share")
-            ) {
-                actions?.panelDidRequestShareGroup(anchorView: shareAnchor.view)
-            }
-            .background(ViewAnchor(box: shareAnchor))
-
-            PreviewHeaderActionButton(
-                systemImage: "folder",
-                help: Localizer.string("Reveal in Finder")
-            ) {
-                revealGroup()
-            }
-
-            PreviewHeaderActionButton(
-                systemImage: "xmark",
-                help: Localizer.string("Close Preview")
-            ) {
-                previewState.close()
-            }
-        }
-    }
-
-    private var groupFilterField: some View {
-        SearchField(
-            text: previewState.groupFilterText,
-            placeholder: Localizer.string("Search Files in Group"),
-            focusRequestID: previewState.groupFilterFocusRequestID,
-            blurRequestID: previewState.groupFilterBlurRequestID,
-            identifier: .groupFilterField,
-            focusOnAppear: previewState.groupFilterNeedsFocus,
-            onTextChange: { previewState.setGroupFilterText($0) },
-            onFocusChange: { previewState.groupFilterFocusDidChange($0) },
-            onCancel: {
-                // 有词时清空并保持焦点，无词才退出到列表。
-                let wasEmpty = previewState.groupFilterText.isEmpty
-                previewState.cancelGroupFilter()
-                if wasEmpty { actions?.panelDidRequestFocusContent() }
-            },
-            onMoveDown: {
-                previewState.moveFromGroupFilterToList()
-                actions?.panelDidRequestFocusContent()
-            },
-            onTab: { _ in
-                previewState.moveFromGroupFilterToList()
-                actions?.panelDidRequestFocusContent()
-            }
-        )
-    }
-
-    private var groupInfoStack: some View {
-        VStack(alignment: .center, spacing: 1) {
-            Text(groupCountText)
-                .font(.system(size: 12, weight: .medium))
-                .monospacedDigit()
-            Text(groupSizeText ?? " ")
-                .font(.system(size: 11))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .opacity(groupSizeText == nil ? 0 : 1)
-        }
-        .fixedSize()
-        .allowsHitTesting(false)
-    }
-
-    private var groupCountText: String {
-        let count = String(format: Localizer.string("%@ items"), String(item.fileCount))
-        guard let groupMeta, groupMeta.missingCount > 0 else { return count }
-        return "\(count) · \(String(format: Localizer.string("%@ missing"), String(groupMeta.missingCount)))"
-    }
-
-    private var groupSizeText: String? {
-        guard let groupMeta, groupMeta.totalSize > 0 else { return nil }
-        return ByteCountFormatting.string(fromByteCount: groupMeta.totalSize)
-    }
-
-    private var previewHeader: some View {
-        let subtitleText = subtitle
-        return PanelHeaderChrome {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(mainTitle)
-                            .font(.system(size: 20, weight: .semibold))
-                            .lineLimit(1)
-                            .truncationMode(titleTruncationMode)
-                            // 文字不参与命中，留出拖动面板的区域。
-                            .allowsHitTesting(false)
-                            .appTooltipIf(item.kind == .link, text: linkOrigin ?? mainTitle)
-                        if let titleCopy {
-                            CopyTextButton(
-                                text: titleCopy.text,
-                                help: titleCopy.help
-                            ) { text in
-                                context.copyText(text)
-                            }
-                        }
-                    }
-                    // 副标题始终占位，避免撤行时主标题跳位；编辑态用 opacity 隐去，VoiceOver 一并忽略。
-                    Text(subtitleText ?? " ")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .opacity(previewState.isEditing || subtitleText == nil ? 0 : 1)
-                        .accessibilityHidden(previewState.isEditing || subtitleText == nil)
-                        .allowsHitTesting(false)
-                }
-                .padding(.leading, ClipboardLayout.previewTitleInset)
-                Spacer()
-
-                HStack(spacing: ClipboardLayout.headerActionSpacing) {
-                    // 显示格式开关仅只读态出现，编辑态隐去但占位。
-                    if item.kind == .text, item.attributedTextData != nil {
-                        formattingToggleButton
-                            .opacity(previewState.isEditing ? 0 : 1)
-                            .allowsHitTesting(!previewState.isEditing)
-                    }
-                    if item.kind == .link, linkURL != nil {
-                        openLinkButton
-                    } else if item.kind == .file, fileURL != nil {
-                        openWithMenu
-                    }
-                    if item.kind == .text || item.kind == .link {
-                        editToggleButton
-                    }
-
-                    closePreviewButton
-                }
-            }
-        }
-    }
-
-    /// 只读态关闭预览；编辑态取消编辑；组内单文件态退回组列表。
-    private var closePreviewButton: some View {
-        PreviewHeaderActionButton(systemImage: "xmark", help: closeButtonHelp) {
-            if previewState.isEditing {
-                // 有改动时由面板先弹确认，不能直接丢弃。
-                if let actions {
-                    actions.panelDidRequestCancelEditing()
-                } else {
-                    previewState.cancelEditing()
-                }
-            } else if isGroupFileView {
-                previewState.showGroupOverview()
-            } else {
-                previewState.close()
-            }
-        }
-    }
-
-    private var closeButtonHelp: String {
-        if previewState.isEditing { return Localizer.string("Cancel Editing") }
-        if isGroupFileView { return Localizer.string("All Files") }
-        return Localizer.string("Close Preview")
-    }
-
-    // MARK: - 数据补齐
-
-    private var textStatsTaskID: String {
-        "\(item.id.uuidString)-\(statsRevision)"
-    }
-
-    /// 图片条目按 id 补齐 imageData 并解码（列表查询不含大字段）。
-    private func loadPreviewImage() async {
-        guard item.kind == .image, previewImage == nil else { return }
-        let data: Data?
-        if let imageData = item.imageData {
-            data = imageData
-        } else {
-            data = await context.manager.loadImageData(id: item.id)
-        }
-        guard let data else {
-            imageLoadFailed = true
-            return
-        }
-        let tier = await PreviewImageDecoder.decode(data, maxPixelSize: ClipboardLayout.previewImageBasePixelSize)
-        // 可能已切走/关闭预览，迟到结果丢弃。
-        guard !Task.isCancelled, previewImage == nil else { return }
-        guard let tier else {
-            imageLoadFailed = true
-            return
-        }
-        previewImageData = data
-        previewImage = PreviewImage(tier: tier, byteCount: data.count)
-    }
-
-    private func loadFinerPreviewImage(maxPixelSize: Int) async -> PreviewImageDecoder.Tier? {
-        guard let previewImageData else { return nil }
-        return await PreviewImageDecoder.decode(previewImageData, maxPixelSize: maxPixelSize)
-    }
-
-    /// 读取并缓存文件元数据；组元数据后台计算，避免上百文件 stat 卡主线程。
-    private func ensureMetadata() {
-        guard item.kind == .file else { return }
-        if item.fileCount > 1 {
-            if groupMeta == nil {
-                let itemID = item.id
-                let urls = groupURLs
-                Task {
-                    let meta = await Self.groupMeta(for: urls)
-                    guard previewState.item?.id == itemID else { return }
-                    groupMeta = meta
-                }
-            }
-            refreshGroupFileMeta()
-            return
-        }
-        guard let fileURL, fileMeta == nil else { return }
-        let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey])
-        fileMeta = (
-            values?.fileSize.map(Int64.init),
-            values?.contentModificationDate,
-            values?.isDirectory ?? false
-        )
-    }
-
-    private func refreshGroupFileMeta() {
-        guard let index = previewState.groupFileIndex,
-              groupURLs.indices.contains(index),
-              let url = groupURLs[index] else {
-            fileMeta = nil
-            return
-        }
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey])
-        fileMeta = (
-            values?.fileSize.map(Int64.init),
-            values?.contentModificationDate,
-            values?.isDirectory ?? false
-        )
-    }
-
-    /// 组元数据：按解析后 URL 统计非目录文件大小，避免移动后少算。
-    private nonisolated static func groupMeta(for urls: [URL?]) async -> GroupMeta {
-        var totalSize: Int64 = 0
-        var missingCount = 0
-        for url in urls {
-            guard let url else {
-                missingCount += 1
-                continue
-            }
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
-            guard let size = values?.fileSize, values?.isDirectory != true else { continue }
-            totalSize += Int64(size)
-        }
-        return GroupMeta(totalSize: totalSize, missingCount: missingCount)
+    /// 条目或组内下标变化时重新补齐元数据；替代原来的 onAppear + onChange 双份。
+    private var metadataTaskID: String {
+        "\(item.id.uuidString)-\(previewState.groupFileIndex.map(String.init) ?? "overview")"
     }
 
     // MARK: - 标题与副标题
-
-    private var mainTitle: String {
-        PreviewHeaderTitle.mainTitle(
-            for: item,
-            isEditing: previewState.isEditing,
-            fileNameTitle: fileNameTitle,
-            linkOrigin: linkOrigin
-        )
-    }
-
-    /// 主标题旁的复制按钮。
-    private var titleCopy: PreviewHeaderCopy? {
-        PreviewHeaderCopyAction.make(
-            for: item,
-            isEditing: previewState.isEditing,
-            fileNameTitle: fileNameTitle,
-            linkOrigin: linkOrigin
-        )
-    }
-
-    /// 文本尾部截断；文件名与链接中间截断。
-    private var titleTruncationMode: Text.TruncationMode {
-        item.kind == .text ? .tail : .middle
-    }
 
     private var linkOrigin: String? {
         guard item.kind == .link else { return nil }
@@ -435,98 +156,21 @@ struct PreviewDetailView: View {
         switch item.kind {
         case .text, .link:
             // 统计在后台缓存，未就绪先不显示，避免 body 内 O(n) 扫描。
-            guard let textStats else { return nil }
-            return String(
-                format: Localizer.string("%@ characters · %@ words · %@ lines"),
-                Self.groupedCount(textStats.characters),
-                Self.groupedCount(textStats.words),
-                Self.groupedCount(textStats.lines)
-            )
+            return PreviewSubtitle.text(metadata.textStats)
         case .image:
-            guard let previewImage else { return nil }
-            let size = previewImage.tier.displaySize
-            let sizeText = "\(Int(size.width.rounded())) × \(Int(size.height.rounded()))"
-            return "\(sizeText) · \(ByteCountFormatting.string(fromByteCount: Int64(previewImage.byteCount)))"
+            return PreviewSubtitle.image(metadata.image)
         case .file:
             if item.fileCount > 1 {
-                if isGroupFileView { return fileSubtitle }
-                var parts = [String(format: Localizer.string("%@ items"), String(item.fileCount))]
-                if let groupMeta {
-                    if groupMeta.totalSize > 0 {
-                        parts.append(ByteCountFormatting.string(fromByteCount: groupMeta.totalSize))
-                    }
-                    if groupMeta.missingCount > 0 {
-                        parts.append(String(format: Localizer.string("%@ missing"), String(groupMeta.missingCount)))
-                    }
-                }
-                return parts.joined(separator: " · ")
+                if isGroupFileView { return PreviewSubtitle.file(metadata.fileMeta) }
+                return PreviewSubtitle.group(count: item.fileCount, meta: metadata.groupMeta)
             }
-            return fileSubtitle
+            return PreviewSubtitle.file(metadata.fileMeta)
         case .color:
             return ColorPreview.subtitle(forColorData: item.colorData)
         }
     }
 
-    private var fileSubtitle: String? {
-        guard let fileMeta else { return nil }
-        let dateText = fileMeta.modDate?.formattedAbsolute
-        if fileMeta.isDirectory {
-            guard let dateText else { return nil }
-            return "\(Localizer.string("Folder")) · \(dateText)"
-        }
-        let sizeText = ByteCountFormatting.string(fromByteCount: fileMeta.size ?? 0)
-        guard let dateText else { return sizeText }
-        return "\(sizeText) · \(dateText)"
-    }
-
-    // MARK: - 顶栏按钮
-
-    private var editToggleButton: some View {
-        PreviewHeaderActionButton(
-            systemImage: previewState.isEditing ? "checkmark" : "pencil",
-            help: previewState.isEditing
-                ? Localizer.string("Finish editing and save")
-                : Localizer.string("Edit text")
-        ) {
-            if previewState.isEditing {
-                // 置位「退出即落盘」再退出编辑态。
-                previewState.finishEditing()
-            } else {
-                previewState.startEditing()
-            }
-        }
-    }
-
-    private var formattingToggleButton: some View {
-        let titleKey: String.LocalizationValue = previewState.showsFormatting
-            ? "Show Plain Text"
-            : "Show Formatting"
-        return PreviewHeaderActionButton(
-            systemImage: previewState.showsFormatting ? "doc.plaintext" : "paintpalette",
-            help: Localizer.string(titleKey)
-        ) {
-            previewState.showsFormatting.toggle()
-        }
-    }
-
-    /// 按运行时语言给数字加千分位；模板用 %@ 而非 %d，才能跟随语言的分隔符。
-    private static func groupedCount(_ value: Int) -> String {
-        value.formatted(.number.locale(RuntimeLanguage.shared.locale))
-    }
-
     // MARK: - 打开 / 在访达中显示
-
-    @ViewBuilder
-    private var openWithMenu: some View {
-        if let fileURL {
-            PreviewOpenWithMenu(
-                fileURL: fileURL,
-                onHandOff: { actions?.panelDidHandOffToExternalApp() }
-            )
-            // 组内切换文件时重建，重新枚举打开方式。
-            .id(fileURL)
-        }
-    }
 
     /// 预览文件 URL：优先 bookmark 解析结果，组内单文件取当前项。
     private var fileURL: URL? {
@@ -586,17 +230,6 @@ struct PreviewDetailView: View {
         return url?.scheme != nil ? url : nil
     }
 
-    @ViewBuilder
-    private var openLinkButton: some View {
-        if let linkURL {
-            PreviewLinkOpenButton(
-                url: linkURL,
-                onHandOff: { actions?.panelDidHandOffToExternalApp() },
-                onError: { message in context.noticeState.message = message }
-            )
-        }
-    }
-
     nonisolated static func isWebScheme(_ scheme: String?) -> Bool {
         PreviewLinkOpenButton.isWebScheme(scheme)
     }
@@ -623,11 +256,11 @@ struct PreviewDetailView: View {
                 onEscape: { [weak actions] in actions?.panelDidRequestEscape() }
             )
         case .image:
-            if let previewImage {
+            if let previewImage = metadata.image {
                 InteractiveImagePreview(identity: item.id.uuidString, tier: previewImage.tier) { maxPixelSize in
-                    await loadFinerPreviewImage(maxPixelSize: maxPixelSize)
+                    await metadata.finerImage(maxPixelSize: maxPixelSize)
                 }
-            } else if imageLoadFailed {
+            } else if metadata.imageLoadFailed {
                 PreviewUnavailable()
             } else {
                 ProgressView()
@@ -667,19 +300,7 @@ struct PreviewDetailView: View {
             text: content.string,
             richText: TextPreviewView.rtfData(from: content)
         )
-        context.caches.textStats.invalidate(for: item.id)
-        statsRevision += 1
+        metadata.invalidateTextStats()
         onItemEdited?()
     }
-
-    private struct PreviewImage {
-        let tier: PreviewImageDecoder.Tier
-        let byteCount: Int
-    }
-
-    private struct GroupMeta {
-        let totalSize: Int64
-        let missingCount: Int
-    }
 }
-

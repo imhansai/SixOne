@@ -77,7 +77,7 @@ private func makeContext(_ harness: ClipboardHarness) -> PanelContext {
 private func makeHost(_ context: PanelContext, item: ClipboardItem) -> (NSHostingView<AnyView>, NSWindow) {
     let size = NSSize(width: ClipboardLayout.panelWidth, height: ClipboardLayout.panelHeight)
     let hosting = NSHostingView(rootView: AnyView(
-        PreviewDetailView(item: item)
+        PreviewDetailView(item: item, context: context)
             .frame(width: size.width, height: size.height)
             .environment(context)
     ))
