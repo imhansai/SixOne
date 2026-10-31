@@ -36,17 +36,13 @@ struct SystemHotKeyRegistrar: HotKeyRegistering {
 /// 全局快捷键：注册、修改、清除；失败只反映在 `isRegistered` 上。
 @Observable
 final class HotKeyManager {
-    static let defaultKeyCode = 9
-    static let defaultModifiers = ModifierMasks.cmd | ModifierMasks.control
-
-    private static let configuredKey = "globalHotKeyConfigured"
-    private static let keyCodeKey = "globalHotKeyCode"
-    private static let modifiersKey = "globalHotKeyModifiers"
+    static let defaultKeyCode = HotKeySettings.defaultKeyCode
+    static let defaultModifiers = HotKeySettings.defaultModifiers
 
     private let onTrigger: () -> Void
     private let registrar: HotKeyRegistering
     private let eventMonitor: HotKeyEventMonitoring
-    private let storage: SettingsStorage
+    private let preferences: Preferences
     private let systemHotKeys: () -> [SystemSymbolicHotKey]
     private let logger = AppLog.logger("HotKey")
 
@@ -80,21 +76,14 @@ final class HotKeyManager {
         self.onTrigger = onTrigger
         self.registrar = registrar ?? SystemHotKeyRegistrar()
         self.eventMonitor = eventMonitor ?? CarbonHotKeyEventMonitor()
-        self.storage = storage
+        self.preferences = Preferences(storage: storage)
         self.systemHotKeys = systemHotKeys
-        let hasSavedConfiguration = storage.object(forKey: Self.configuredKey) != nil
-        let savedKeyCode = UInt32(storage.object(forKey: Self.keyCodeKey) as? Int ?? Self.defaultKeyCode)
-        let savedModifiers = UInt32(
-            storage.object(forKey: Self.modifiersKey) as? Int ?? Int(Self.defaultModifiers)
-        )
-        let configured = hasSavedConfiguration
-            ? (storage.object(forKey: Self.configuredKey) as? Bool ?? false)
-            : true
-        keyCode = savedKeyCode
-        modifiers = savedModifiers
-        isConfigured = configured
-        displayString = configured
-            ? Self.displayString(keyCode: savedKeyCode, modifiers: savedModifiers)
+        let saved = self.preferences.hotKey
+        keyCode = saved.keyCode
+        modifiers = saved.modifiers
+        isConfigured = saved.isConfigured
+        displayString = saved.isConfigured
+            ? Self.displayString(keyCode: saved.keyCode, modifiers: saved.modifiers)
              : Localizer.string("Set Shortcut")
         // 快捷键存的是物理 keyCode，显示名要随布局刷新。
         inputSourceObserver = NotificationCenter.default.addObserver(
@@ -173,9 +162,11 @@ final class HotKeyManager {
             return false
         }
         isConfigured = true
-        storage.set(Int(self.keyCode), forKey: Self.keyCodeKey)
-        storage.set(Int(self.modifiers), forKey: Self.modifiersKey)
-        storage.set(true, forKey: Self.configuredKey)
+        preferences.hotKey = HotKeySettings(
+            isConfigured: true,
+            keyCode: self.keyCode,
+            modifiers: self.modifiers
+        )
         notifyChanges()
         return true
     }
@@ -184,7 +175,11 @@ final class HotKeyManager {
         unregister()
         isConfigured = false
         displayString = Localizer.string("Set Shortcut")
-        storage.set(false, forKey: Self.configuredKey)
+        preferences.hotKey = HotKeySettings(
+            isConfigured: false,
+            keyCode: keyCode,
+            modifiers: modifiers
+        )
         notifyChanges()
     }
 

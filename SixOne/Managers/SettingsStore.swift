@@ -77,10 +77,8 @@ struct IgnoredApplication: Codable, Identifiable, Hashable {
 
 @Observable
 final class SettingsStore {
-    private static let retentionKey = "historyRetention"
-    private static let ignoredAppsKey = "privacyIgnoredApps"
     private static let logger = AppLog.logger("Settings")
-    static let defaultRetention = HistoryRetention.threeMonths
+    static let defaultRetention = Preferences.defaultRetention
 
     private static let defaultIgnoredApps: [IgnoredApplication] = [
         IgnoredApplication(
@@ -95,13 +93,13 @@ final class SettingsStore {
         ),
     ]
 
-    private let storage: SettingsStorage
+    private let preferences: Preferences
 
     /// 保留时长；相等赋值不算改动（滑块拖动会连续写入同档位）。
     var historyRetention: HistoryRetention {
         didSet {
             guard historyRetention != oldValue else { return }
-            storage.set(historyRetention.rawValue, forKey: Self.retentionKey)
+            preferences.historyRetention = historyRetention
             notifyRetentionChange()
         }
     }
@@ -117,7 +115,7 @@ final class SettingsStore {
     var language: AppLanguage {
         didSet {
             guard language != oldValue else { return }
-            storage.set(language.rawValue, forKey: AppLanguage.storageKey)
+            preferences.language = language
         }
     }
 
@@ -128,19 +126,19 @@ final class SettingsStore {
         }
     }
 
-    init(storage: SettingsStorage = UserDefaults.standard) {
-        self.storage = storage
-        let stored = storage.object(forKey: Self.retentionKey) as? Int
-        historyRetention = HistoryRetention(rawValue: stored ?? Self.defaultRetention.rawValue)
-            ?? Self.defaultRetention
-        language = AppLanguage(
-            rawValue: storage.object(forKey: AppLanguage.storageKey) as? String ?? ""
-        ) ?? .system
-        ignoredApps = Self.loadIgnoredApps(from: storage)
+    convenience init(storage: SettingsStorage = UserDefaults.standard) {
+        self.init(preferences: Preferences(storage: storage))
     }
 
-    private static func loadIgnoredApps(from storage: SettingsStorage) -> [IgnoredApplication] {
-        guard let data = storage.object(forKey: Self.ignoredAppsKey) as? Data else {
+    init(preferences: Preferences) {
+        self.preferences = preferences
+        historyRetention = preferences.historyRetention
+        language = preferences.language
+        ignoredApps = Self.loadIgnoredApps(from: preferences)
+    }
+
+    private static func loadIgnoredApps(from preferences: Preferences) -> [IgnoredApplication] {
+        guard let data = preferences.ignoredAppsData else {
             // 无数据 = 首次运行，用默认项，不记日志。
             return Self.defaultIgnoredApps
         }
@@ -160,7 +158,7 @@ final class SettingsStore {
     private func persistIgnoredApps() {
         do {
             let data = try JSONEncoder().encode(ignoredApps)
-            storage.set(data, forKey: Self.ignoredAppsKey)
+            preferences.ignoredAppsData = data
         } catch {
             Self.logger.error("忽略列表写入失败：\(error.localizedDescription, privacy: .public)")
         }

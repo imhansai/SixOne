@@ -10,6 +10,7 @@ import Observation
 final class RuntimeLanguage {
     static let shared = RuntimeLanguage()
 
+    private let preferences = Preferences()
     var current: AppLanguage = .system
 
     var locale: Locale {
@@ -26,8 +27,7 @@ final class RuntimeLanguage {
 
     /// 启动时恢复；须在创建 NSApplication 前调用。
     func restoreFromDefaults() {
-        let raw = UserDefaults.standard.string(forKey: AppLanguage.storageKey)
-        current = AppLanguage(rawValue: raw ?? "") ?? .system
+        current = preferences.language
     }
 
     /// 写入 AppleLanguages 使本次启动的系统文案切换；.system 时移除覆盖，须在创建 NSApplication 前调用。
