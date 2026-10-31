@@ -107,7 +107,7 @@ open build/Build/Products/Debug/SixOne.app
 
 数据单向流动、只走一条总线：`NSPasteboard` 变化在后台解析、去重、入库，然后经 `ClipboardHistoryEventBus` 广播；`HistoryListStore` 按发布顺序串行处理并增量刷新。新增条目只按 id 取单行插到窗口头部，不重取整窗；保留期裁剪分批保存并让出主线程；图片去重 key 修复用持久化版本标记跳过健康库。读历史走后台 actor 上的 `ClipboardHistoryRepository`，只回传轻量的 `HistoryRow` 值，大字段因此不进列表内存；写走主 context，且必须立刻对读可见。界面动作 —— 拷贝、粘贴、保存编辑、删除、清空 —— 都经同一条总线回灌，列表数据源因此不必知道是谁改的。
 
-原先的两个巨型类型按职责拆开：`ClipboardManager` 是捕获、历史写入、粘贴板回写、文件访问与缩略图的统一门面；`ClipboardPanelController` 把窗口生命周期、条目动作、编辑会话与按键执行分别交给 `PanelWindowLifecycle`、`PanelItemActions`、`PanelEditingSession` 与 `PanelKeyActionExecutor`。两个 NSTableView 列表共用 `ListTableCoordinator` 与 `ListTableScaffold`，各自只提供行数据、行内容、选中与滚动策略。视图只发复制/保存意图，经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 交给 `PanelActionHandler`；视图层把 manager 当作只读。`Preferences` 是唯一的设置/存储门面，标题、去重指纹与搜索快照则放在纯工具 `ItemTitleFormatter`、`ContentFingerprint`、`SearchSnapshotter` 里。
+原先的两个巨型类型按职责拆开：`ClipboardManager` 是捕获、历史写入、粘贴板回写、文件访问与缩略图的统一门面；`ClipboardPanelController` 把窗口生命周期、条目动作、编辑会话与按键执行分别交给 `PanelWindowLifecycle`、`PanelItemActions`、`PanelEditingSession` 与 `PanelKeyActionExecutor`。两个 NSTableView 列表共用 `ListTableCoordinator` 与 `ListTableScaffold`，各自只提供行数据、行内容、选中与滚动策略。列表会话的选中、预览关闭收尾、置顶揭示与复制反馈集中在 `HistoryListCoordinator`，视图只保留渲染与回调。视图只发复制/保存意图，经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 交给 `PanelActionHandler`；视图层把 manager 当作只读。`Preferences` 是唯一的设置/存储门面，标题、去重指纹与搜索快照则放在纯工具 `ItemTitleFormatter`、`ContentFingerprint`、`SearchSnapshotter` 里。
 
 **注释刻意写得短**：只记录仍然成立的约束，不写历史。测试是可执行的契约 —— 下表的每一项都指向钉住它的测试 —— 改一条非显然的规则前，先读对应类型和它的测试。
 
@@ -133,6 +133,7 @@ open build/Build/Products/Debug/SixOne.app
 | 动排序键 / 触碰 `recencyID` | `OrderedUUID`（时间有序性）+ `OrderedUUIDTests`；排序按它倒序，生成顺序必须与比较顺序一致 |
 | 改文本文件的编码判定 | `TextFileReader`（BOM → UTF-8 → GB18030 → Latin-1）+ `TextFileReaderTests` |
 | 改列表选中移动 / 预览跟随 | `PanelSelectionCursor`（切预览失败要回滚）+ `PanelSelectionCursorTests` |
+| 改列表会话协调（选中 / 预览关闭 / 揭示 / 复制反馈） | `HistoryListCoordinator` + `HistoryListCoordinatorTests`；视图只保留渲染与回调 |
 | 动列表容器 / 滚动手感 / 可见区 | `ListTableCoordinator` / `ListTableScaffold` 承载共用的 NSTableView 机制；`HistoryListTableView` 与 `GroupListTableView` 只提供行数据、行内容与选中。共用积木仍在 `ListRowPrimitives` / `HistoryListScrollGeometry`。测试：`ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
 | 动分享 | `PanelSharing`；面板侧只把锚点与「收起面板」交进去 |
 | 改装配（谁接谁） | `AppComposition` / `PanelAssembly`，并补一条接线用例（`AppCompositionTests`） |
@@ -141,7 +142,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 609 项用例、101 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。当前 620 项用例、102 个 suite，约 11 秒跑完（swift-testing 自报的计数；`xcresulttool` 把参数化用例按 case 分别计数）。测试宿主与真实应用跑在同一进程（`TEST_HOST` = `SixOne.app`），所以 `AppDelegate.isRunningUnitTests` 会把测试进程切到内存库、并跳过监控、快捷键与状态栏；`TestHostTests` 是防止该判定失效的哨兵。
 
 不碰系统资源的模块都靠替身驱动，替身集中在 `SixOneTests/Support/`：剪贴板走 `FakePasteboard`（因此「捕获 → 去重 → 触达置顶」可测而不会覆写你的剪贴板），设置与快捷键走 `InMemorySettingsStorage`，按键事件处理器走 `FakeHotKeyEventMonitor`，历史读取走 `FakeHistoryRepository`，离屏窗口与视图树探针走 `OffscreenHost` 与 `TestPanel`，临时文件走 `TemporaryFiles`，等待走 `Wait`。预览、定位、键盘决策、焦点策略都是纯函数或纯值输入。`HistoryBenchmarkTests` 与 `MigrationBenchmarkTests`（V1/V2 大库升级到 V3）里的性能基准只有在开关文件存在时才跑（仓库根的 `.benchmark-history`，或 `/tmp/sixone-benchmark`）；跑完别把开关文件留下，它会让全量测试变慢。
 

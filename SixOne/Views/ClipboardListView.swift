@@ -12,8 +12,6 @@ struct ClipboardListView: View {
 
     private var store: HistoryListStore { context.store }
     private var manager: ClipboardManager { context.manager }
-    private var searchState: SearchState { context.searchState }
-    private var moreActionsState: MoreActionsState { context.moreActionsState }
     private var confirmationState: ConfirmationState { context.confirmationState }
     private var previewState: PreviewState { context.previewState }
     private var navigationState: NavigationState { context.navigationState }
@@ -23,11 +21,12 @@ struct ClipboardListView: View {
 
     @Environment(\.locale) private var locale
     @State private var noticeWork: DispatchWorkItem?
-    /// 编辑保存后预览仍开：关闭时滚回顶部展示已置顶的条目。
-    @State private var pendingTopFocusAfterEditedPreview = false
-    /// 窗口外预览的存在性探测；同一 id 在途时不重复发。
-    @State private var existenceProbeID: UUID?
-    @State private var existenceProbeTask: Task<Void, Never>?
+    @State private var coordinator: HistoryListCoordinator
+
+    init(context: PanelContext) {
+        self.context = context
+        _coordinator = State(initialValue: HistoryListCoordinator(context: context))
+    }
 
     var body: some View {
         ZStack {
@@ -48,7 +47,7 @@ struct ClipboardListView: View {
                 PreviewDetailView(
                     item: item,
                     // 编辑落盘后条目已置顶，关闭预览时滚回顶部展示。
-                    onItemEdited: { pendingTopFocusAfterEditedPreview = true },
+                    onItemEdited: { coordinator.markPreviewEdited() },
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -92,64 +91,22 @@ struct ClipboardListView: View {
         .onDisappear {
             noticeWork?.cancel()
             noticeWork = nil
-            existenceProbeTask?.cancel()
-            existenceProbeTask = nil
-            existenceProbeID = nil
-            navigationState.clearPendingReveal()
-            pendingTopFocusAfterEditedPreview = false
+            coordinator.stop()
         }
         .onChange(of: copyState.itemID) { _, id in
             guard let id else { return }
-            setCopiedFeedback(for: id)
+            coordinator.setCopiedFeedback(for: id)
         }
         .onChange(of: store.dataRevision) { _, _ in
-            discardOrphanedSelection()
-            discardDeletedPreview()
-            revealTouchedItemIfNeeded()
+            coordinator.handleDataRevisionChange()
         }
         .onChange(of: previewState.item?.id) { oldID, newID in
-            if let newID {
-                // 切换条目后关闭不应回滚到第 0 行。
-                if let oldID, newID != oldID {
-                    pendingTopFocusAfterEditedPreview = false
-                }
-                return
-            }
-            if let oldID {
-                handlePreviewClosed(id: oldID)
-            }
+            coordinator.handlePreviewIDChange(from: oldID, to: newID)
         }
         .onChange(of: store.didFailToLoad) { _, failed in
             // 有旧行时空态不显示，加载失败另发顶部提示。
             guard failed, !store.rows.isEmpty else { return }
             noticeState.message = Localizer.string("Could not load clipboard history.")
-        }
-    }
-
-    /// 选中行已不在窗口内时摘掉选中，避免键盘导航复用失效锚点。
-    private func discardOrphanedSelection() {
-        guard let selected = navigationState.selectedItemID,
-              !store.rows.contains(where: { $0.id == selected }) else { return }
-        clearSelection()
-    }
-
-    /// 预览条目已被删除：关掉预览，正文与文件授权均已失效。
-    private func discardDeletedPreview() {
-        guard let previewed = previewState.item?.id else { return }
-        // 还在窗口内就必然在库里，省一次探测。
-        guard !store.rows.contains(where: { $0.id == previewed }) else { return }
-        // 同一 id 的探测在途时不重复发；缩略图批量更新会连续触发 dataRevision。
-        guard existenceProbeID != previewed else { return }
-        existenceProbeTask?.cancel()
-        existenceProbeID = previewed
-        existenceProbeTask = Task {
-            let exists = await store.itemExists(id: previewed)
-            guard !Task.isCancelled else { return }
-            existenceProbeID = nil
-            guard !exists else { return }
-            // 等待期间用户可能已切到别的预览，只关仍停在已删除条目上的那个。
-            guard previewState.item?.id == previewed else { return }
-            previewState.close()
         }
     }
 
@@ -193,66 +150,16 @@ struct ClipboardListView: View {
             scrollRevision: navigationState.scrollRevision,
             isScrollBlocked: confirmationState.isPresenting,
             quickPasteRange: quickPasteRange,
-            onSelect: { select(id: $0) },
-            onActivate: { activate(id: $0, asPlainText: $1) },
-            onCopy: { flashCopied(id: $0) },
+            onSelect: { coordinator.select(id: $0) },
+            onActivate: { coordinator.activate(id: $0, asPlainText: $1) },
+            onCopy: { coordinator.copyWithFeedback(id: $0) },
             menuProvider: { row, anchor in rowMenuBuilder.makeMenu(for: row, anchor: anchor) },
-            onVisibleRowRangeChanged: { range in
-                navigationState.fullyVisibleRange = range
-                navigationState.fullyVisibleFirstIndex = range.lowerBound
-                store.noteTopVisibleIndex(range.lowerBound)
-            },
+            onVisibleRowRangeChanged: { coordinator.noteVisibleRowRange($0) },
             onScrollerLayoutChanged: { usesOverlayScrollers in
                 // 行尾内缩跟随实际滚动条形态；写入可观察状态以触发行重建。
                 context.scrollerLayout.usesOverlayScrollers = usesOverlayScrollers
             }
         )
-    }
-
-    /// 单击选中并请求带留白滚入视野（幂等）。
-    private func select(id: UUID) {
-        searchState.resignFocus()
-        moreActionsState.resignFocus()
-        navigationState.selectedItemID = id
-        navigationState.isSelectionActive = true
-        navigationState.requestScroll(toRow: id)
-    }
-
-    private func activate(id: UUID, asPlainText: Bool) {
-        searchState.resignFocus()
-        moreActionsState.resignFocus()
-        actions?.panelDidActivate(id: id, asPlainText: asPlainText)
-    }
-
-    private func flashCopied(id: UUID) {
-        context.copyItem(id: id)
-        setCopiedFeedback(for: id)
-    }
-
-    private func setCopiedFeedback(for id: UUID) {
-        // 复制会触达置顶：等 store 落定后再滚进视野。
-        navigationState.requestRevealAfterStoreChange(id: id)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            copyState.feedbackItemID = id
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + PanelTiming.copiedFeedback) {
-            if copyState.feedbackItemID == id {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    copyState.feedbackItemID = nil
-                }
-            }
-        }
-    }
-
-    /// 置顶条目到达第 0 行后再揭示；已离开窗口则放弃。
-    private func revealTouchedItemIfNeeded() {
-        guard let pending = navigationState.pendingRevealItemID else { return }
-        if store.rows.first?.id == pending {
-            navigationState.clearPendingReveal()
-            navigationState.requestScroll(toRow: pending)
-        } else if !store.rows.contains(where: { $0.id == pending }) {
-            navigationState.clearPendingReveal()
-        }
     }
 
     // MARK: - 行右键菜单
@@ -261,37 +168,12 @@ struct ClipboardListView: View {
         RowMenuBuilder(
             manager: manager,
             panelActions: { actions },
-            selectRow: { select(id: $0) },
-            copyFeedback: { setCopiedFeedback(for: $0) },
+            selectRow: { coordinator.select(id: $0) },
+            copyFeedback: { coordinator.setCopiedFeedback(for: $0) },
             copyItem: { context.copyItem(id: $0) },
             copyItemAsPlainText: { context.copyItemAsPlainText(id: $0) },
-            deleteRow: { delete(id: $0) }
+            deleteRow: { coordinator.requestDelete(id: $0) }
         )
-    }
-
-    private func delete(id: UUID) {
-        actions?.panelDidRequestDelete(id: id)
-    }
-
-    /// 预览关闭后收尾：编辑保存过的条目滚回顶部；已不在结果中则清选中并回顶部。
-    private func handlePreviewClosed(id: UUID) {
-        let shouldFocusTop = pendingTopFocusAfterEditedPreview
-        pendingTopFocusAfterEditedPreview = false
-
-        if store.rows.contains(where: { $0.id == id }) {
-            if shouldFocusTop {
-                navigationState.requestScroll(toRow: id)
-            }
-            return
-        }
-
-        clearSelection()
-        navigationState.requestScrollToTop()
-    }
-
-    private func clearSelection() {
-        navigationState.selectedItemID = nil
-        navigationState.isSelectionActive = false
     }
 
     private func emptyState(icon: String, text: LocalizedStringKey) -> some View {

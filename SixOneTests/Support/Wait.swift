@@ -22,6 +22,21 @@ enum Wait {
         return condition()
     }
 
+    /// 条件本身要 await 时的轮询版本。
+    @discardableResult
+    static func untilAsync(
+        timeout: Duration = .seconds(5),
+        interval: Duration = .milliseconds(20),
+        _ condition: @escaping () async -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if await condition() { return true }
+            try? await Task.sleep(for: interval)
+        }
+        return await condition()
+    }
+
     /// 等一段固定时间。用在没有可观察条件的断言前（例如「不该发生的变化没发生」）。
     static func settle(milliseconds: Int) async {
         try? await Task.sleep(for: .milliseconds(milliseconds))

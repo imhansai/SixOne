@@ -25,6 +25,8 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     private(set) var requestedLimits: [Int] = []
     /// 依次返回过结果的条目 id。
     private(set) var returnedRowIDs: [UUID] = []
+    /// `itemExists` 的调用次数，用来验证探测合并没有重复发。
+    private(set) var itemExistsRequests = 0
 
     init(rowsByQuery: [String: [HistoryRow]] = [:], delaysByQuery: [String: Duration] = [:]) {
         self.rowsByQuery = rowsByQuery
@@ -110,7 +112,12 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     }
 
     func itemExists(id: UUID) async throws -> Bool {
-        try await row(id: id) != nil
+        itemExistsRequests += 1
+        return try await row(id: id) != nil
+    }
+
+    func itemExistsRequestCount() -> Int {
+        itemExistsRequests
     }
 }
 
