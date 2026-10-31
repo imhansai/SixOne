@@ -22,7 +22,7 @@ final class HistoryListCoordinator {
     /// 窗口外预览的存在性探测；同一 id 在途时不重复发。
     private var existenceProbeID: UUID?
     private var existenceProbeTask: Task<Void, Never>?
-    private var feedbackTask: Task<Void, Never>?
+    private let feedback = TransientFeedback()
 
     init(context: PanelContext) {
         self.context = context
@@ -74,12 +74,8 @@ final class HistoryListCoordinator {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             copyState.feedbackItemID = id
         }
-        feedbackTask?.cancel()
-        feedbackTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(PanelTiming.copiedFeedback))
-            guard !Task.isCancelled,
-                  let self,
-                  self.copyState.feedbackItemID == id else { return }
+        feedback.schedule(after: PanelTiming.copiedFeedback) { [weak self] in
+            guard let self, self.copyState.feedbackItemID == id else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 self.copyState.feedbackItemID = nil
             }
@@ -179,6 +175,8 @@ final class HistoryListCoordinator {
         existenceProbeTask?.cancel()
         existenceProbeTask = nil
         existenceProbeID = nil
+        feedback.cancel()
+        copyState.feedbackItemID = nil
         navigationState.clearPendingReveal()
         pendingTopFocusAfterEditedPreview = false
     }

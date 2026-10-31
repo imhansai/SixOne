@@ -14,17 +14,14 @@ struct CopyTextButton: View {
 
     @State private var didCopy = false
     @State private var isHovering = false
-    @State private var resetTask: Task<Void, Never>?
+    @State private var feedback = TransientFeedback()
 
     var body: some View {
         Button {
             guard !text.isEmpty else { return }
             onCopy(text)
             didCopy = true
-            resetTask?.cancel()
-            resetTask = Task {
-                try? await Task.sleep(for: .seconds(PanelTiming.copiedFeedback))
-                guard !Task.isCancelled else { return }
+            feedback.schedule(after: PanelTiming.copiedFeedback) {
                 didCopy = false
             }
         } label: {
@@ -45,11 +42,11 @@ struct CopyTextButton: View {
         // 长文本只把开头交给辅助功能，避免整段复制。
         .accessibilityValue(text.count > 200 ? String(text.prefix(200)) + "…" : text)
         .onChange(of: text) { _, _ in
-            resetTask?.cancel()
+            feedback.cancel()
             didCopy = false
         }
         .onDisappear {
-            resetTask?.cancel()
+            feedback.cancel()
         }
     }
 }

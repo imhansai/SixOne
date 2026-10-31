@@ -15,13 +15,14 @@ final class FileGroupRowState {
     var isDirectory = false
     var size: Int64?
     var isCopied = false
-    private var copyFeedbackID = 0
+    @ObservationIgnored private let feedback = TransientFeedback()
     private var loadedPath: String?
 
     func load(file: GroupFileEntry, cache: FileGroupThumbnailCache, displayScale: CGFloat) async {
         let path = file.url?.path ?? file.path
         if loadedPath != path {
             loadedPath = path
+            feedback.cancel()
             thumbnail = nil
             isCopied = false
         }
@@ -48,13 +49,11 @@ final class FileGroupRowState {
     }
 
     func markCopied() {
-        copyFeedbackID += 1
-        let feedbackID = copyFeedbackID
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             isCopied = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + PanelTiming.copiedFeedback) { [weak self] in
-            guard let self, self.copyFeedbackID == feedbackID else { return }
+        feedback.schedule(after: PanelTiming.copiedFeedback) { [weak self] in
+            guard let self else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 self.isCopied = false
             }

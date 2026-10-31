@@ -16,7 +16,7 @@ struct ColorPreview: View {
     @Environment(PanelContext.self) private var context
     @Environment(\.colorScheme) private var colorScheme
     @State private var copiedNotice: String?
-    @State private var noticeWork: DispatchWorkItem?
+    @State private var noticeFeedback = TransientFeedback()
 
     private var rgb: NSColor? {
         guard let colorData else { return nil }
@@ -40,8 +40,7 @@ struct ColorPreview: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onDisappear {
-                noticeWork?.cancel()
-                noticeWork = nil
+                noticeFeedback.cancel()
             }
         } else {
             PreviewUnavailable()
@@ -148,11 +147,9 @@ struct ColorPreview: View {
         context.copyText(value)
         let shown = [label, value].compactMap { $0 }.joined(separator: " ")
         copiedNotice = String(format: Localizer.string("%@ copied"), shown)
-
-        noticeWork?.cancel()
-        let work = DispatchWorkItem { copiedNotice = nil }
-        noticeWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + PanelTiming.colorCopiedNotice, execute: work)
+        noticeFeedback.schedule(after: PanelTiming.colorCopiedNotice) {
+            copiedNotice = nil
+        }
     }
 
     /// 预览副标题：色彩空间 + 不透明度，这两项正文的色值与 RGB 都给不出。

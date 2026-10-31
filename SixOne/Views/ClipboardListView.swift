@@ -20,7 +20,7 @@ struct ClipboardListView: View {
     private var actions: PanelActionHandler? { context.actions }
 
     @Environment(\.locale) private var locale
-    @State private var noticeWork: DispatchWorkItem?
+    @State private var noticeFeedback = TransientFeedback()
     @State private var coordinator: HistoryListCoordinator
 
     init(context: PanelContext) {
@@ -74,15 +74,13 @@ struct ClipboardListView: View {
             }
         }
         .onChange(of: noticeState.message) { _, message in
-            noticeWork?.cancel()
+            noticeFeedback.cancel()
             guard let message, !message.isEmpty else { return }
-            let work = DispatchWorkItem {
+            noticeFeedback.schedule(after: PanelTiming.notice) {
                 withAnimation(.easeOut(duration: 0.25)) {
                     noticeState.message = nil
                 }
             }
-            noticeWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + PanelTiming.notice, execute: work)
         }
         .onAppear {
             if store.rows.isEmpty {
@@ -90,8 +88,7 @@ struct ClipboardListView: View {
             }
         }
         .onDisappear {
-            noticeWork?.cancel()
-            noticeWork = nil
+            noticeFeedback.cancel()
             coordinator.stop()
         }
         .onChange(of: copyState.itemID) { _, id in
