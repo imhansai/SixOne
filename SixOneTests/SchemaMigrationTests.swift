@@ -30,14 +30,14 @@ struct SchemaMigrationTests {
         #expect(text.text == "legacy text")
         #expect(text.titleSnapshot == "legacy text")
         #expect(text.contentKeySnapshot != nil, "旧条目的去重 key 没有补齐")
-        #expect(text.contentKeyVersion == ClipboardItem.currentContentKeyVersion)
+        #expect(text.contentKeyVersion == SixOneSchemaV2.ClipboardItem.currentContentKeyVersion)
         #expect(text.searchText == "legacy text", "旧条目的搜索快照没有补齐")
 
         let file = try #require(items.first { $0.id == seeded.fileID })
         #expect(file.kind == .file)
         #expect(file.filePathsSearchText?.contains("legacy.txt") == true, "旧文件条目的路径快照没有补齐")
         #expect(file.contentKeySnapshot != nil)
-        #expect(file.contentKeyVersion == ClipboardItem.currentContentKeyVersion)
+        #expect(file.contentKeyVersion == SixOneSchemaV2.ClipboardItem.currentContentKeyVersion)
 
         let keyed = try #require(items.first { $0.id == seeded.keyedID })
         #expect(keyed.contentKeySnapshot == seeded.keyedSnapshot, "已有快照不该被重算覆盖")

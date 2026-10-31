@@ -63,6 +63,20 @@ struct ClipboardItemTests {
         #expect(Set([text, file, image]).count == 3)
     }
 
+    @Test("图片去重 key 覆盖整段数据，首尾相同也不碰撞")
+    func imageContentKeyUsesFullData() {
+        var first = Data(repeating: 0, count: 200)
+        var second = first
+        first[100] = 1
+        second[100] = 2
+
+        let keyA = ClipboardItem.contentKey(kind: .image, text: nil, imageData: first, filePaths: [])
+        let keyB = ClipboardItem.contentKey(kind: .image, text: nil, imageData: second, filePaths: [])
+
+        #expect(keyA != keyB)
+        #expect(ClipboardItem.currentContentKeyVersion == 2)
+    }
+
     @Test("多文件条目的路径搜索快照包含组内每个文件")
     func searchSnapshotCoversEveryPath() {
         let item = ClipboardItem(kind: .file, filePaths: ["/tmp/报告.md", "/tmp/截图.png"])

@@ -3,12 +3,11 @@
 //  SixOne
 //
 //  当前模型定义（V3）。V3 在 V2 上给 `id` 加索引，并记录缩略图生成版本；
-//  V2 → V3 的迁移会给旧缩略图打上版本。V1/V2 已冻结，改字段从 V3 复制出新版本。
+//  V2 → V3 只做轻量结构迁移，旧缩略图由列表惰性重算。V1/V2 已冻结，改字段从 V3 复制出新版本。
 //
 
 import Foundation
 import SwiftData
-import CryptoKit
 
 nonisolated enum SixOneSchemaV3: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
@@ -113,13 +112,6 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
             set { kindRaw = newValue.rawValue }
         }
 
-        private static let timestampNameFormatter: DateFormatter = {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-            return formatter
-        }()
-
         /// 全部文件路径：多文件返回全部，单文件/图片一条，非文件为空。
         var allFilePaths: [String] {
             if let filePaths, !filePaths.isEmpty { return filePaths }
@@ -135,8 +127,8 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
 
         // MARK: - 内容身份与去重
 
-        /// 当前去重算法版本（与 schema 版本独立）；改算法时递增，迁移会按版本补算旧条目。
-        static let currentContentKeyVersion = 1
+        /// 当前去重算法版本（与 schema 版本独立）；改算法时递增，后台会按版本重算旧条目。
+        static let currentContentKeyVersion = 2
         /// 当前缩略图生成版本；改尺寸/编码时递增，旧缩略图可据此识别并重算。
         static let currentThumbnailVersion = 2
         /// V2 时代的缩略图版本（256px）；旧库迁移后保持 nil，列表看到非当前版本会惰性重算。
@@ -160,30 +152,13 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
             filePaths: [String],
             colorData: Data? = nil
         ) -> String {
-            switch kind {
-            case .text:
-                return "t:" + sha256Hex(text ?? "")
-            case .file:
-                // 排序后哈希：文件顺序无关，也避免长路径串驻留内存。
-                return "f:" + sha256Hex(filePaths.sorted().joined(separator: "\n"))
-            case .image:
-                guard let data = imageData else { return "i:" }
-                let head = Data(data.prefix(64)).base64EncodedString()
-                let tail = Data(data.suffix(64)).base64EncodedString()
-                return "i:\(data.count):\(head):\(tail)"
-            case .link:
-                return "l:" + sha256Hex(text ?? "")
-            case .color:
-                return "c:" + sha256Hex(colorData ?? Data())
-            }
-        }
-
-        private static func sha256Hex(_ value: String) -> String {
-            sha256Hex(Data(value.utf8))
-        }
-
-        private static func sha256Hex(_ data: Data) -> String {
-            SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            ContentFingerprint.key(
+                kind: kind,
+                text: text,
+                imageData: imageData,
+                filePaths: filePaths,
+                colorData: colorData
+            )
         }
 
         // MARK: - 标题与搜索快照
@@ -208,7 +183,7 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
 
         @discardableResult
         func refreshSearchText() -> String? {
-            let normalized = Self.normalizedSearchText(text)
+            let normalized = SearchSnapshotter.normalized(text)
             searchText = normalized
             return normalized
         }
@@ -230,71 +205,28 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
 
         @discardableResult
         func refreshFilePathsSearchText() -> String? {
-            let paths = allFilePaths
-            filePathsSearchText = paths.isEmpty ? nil : paths.joined(separator: " ")
+            filePathsSearchText = SearchSnapshotter.filePaths(allFilePaths)
             return filePathsSearchText
         }
 
         /// 单行化搜索文本：空格原样保留，全空白视为 nil。
         static func normalizedSearchText(_ raw: String?) -> String? {
-            guard let raw else { return nil }
-            // 在 Scalar 层替换：CRLF 会被合成单个 Character，按 Character 处理会漏转。
-            let mappedScalars = raw.unicodeScalars.map { scalar -> Unicode.Scalar in
-                Self.searchLineSeparators.contains(scalar)
-                    ? Unicode.Scalar(0x20)!
-                    : scalar
-            }
-            let mapped = String(mappedScalars.map(Character.init))
-            return mapped.allSatisfy(\.isWhitespace) ? nil : mapped
+            SearchSnapshotter.normalized(raw)
         }
-
-        private static let searchLineSeparators: Set<Unicode.Scalar> = [
-            Unicode.Scalar(0x0A)!, Unicode.Scalar(0x0D)!,
-            Unicode.Scalar(0x0B)!, Unicode.Scalar(0x0C)!,
-            Unicode.Scalar(0x85)!, Unicode.Scalar(0x2028)!,
-            Unicode.Scalar(0x2029)!,
-        ]
 
         // MARK: - 标题生成
 
-        /// 空白折叠为单个空格，超过 `maxLength` 以 "..." 收尾。
-        private static func singleLineTruncated(_ text: String, maxLength: Int = 200) -> String {
-            let joined = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-            return joined.count > maxLength ? String(joined.prefix(maxLength)) + "..." : joined
-        }
-
         @MainActor
         private func computeTitle() -> String {
-            switch kind {
-            case .text:
-                guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-                    return Localizer.string("Text")
-                }
-                return Self.singleLineTruncated(trimmed)
-            case .image:
-                if let filePath, !filePath.isEmpty {
-                    let fileName = URL(fileURLWithPath: filePath).lastPathComponent
-                    if !fileName.isEmpty {
-                        return fileName
-                    }
-                }
-                let extensionName = (contentType ?? "").lowercased()
-                let suffix = PasteboardFormat.imageFileExtensions.contains(extensionName) ? extensionName : "png"
-                return Self.timestampNameFormatter.string(from: lastActivityAt) + "." + suffix
-            case .file:
-                let paths = allFilePaths
-                let name = URL(fileURLWithPath: paths.first ?? "").lastPathComponent
-                guard !name.isEmpty else { return Localizer.string("File") }
-                guard paths.count > 1 else { return name }
-                return Localizer.groupTitle(firstName: name, count: paths.count)
-            case .link:
-                guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-                    return Localizer.string("Link")
-                }
-                return Self.singleLineTruncated(trimmed)
-            case .color:
-                return colorHexString ?? Localizer.string("Color")
-            }
+            ItemTitleFormatter.title(
+                kind: kind,
+                text: text,
+                filePath: filePath,
+                filePaths: allFilePaths,
+                contentType: contentType,
+                colorHex: colorHexString,
+                lastActivityAt: lastActivityAt
+            )
         }
     }
 }
