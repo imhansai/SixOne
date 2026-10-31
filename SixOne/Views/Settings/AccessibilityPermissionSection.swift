@@ -49,6 +49,7 @@ struct AccessibilityPermissionSection: View {
                 radius: 6,
                 y: 2
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Paste Into Other Apps")

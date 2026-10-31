@@ -104,6 +104,7 @@ struct FileGroupRow: View {
             isCopied: state.isCopied,
             title: name,
             titleTooltipDetail: titleTooltipDetail,
+            accessibilityDetail: accessibilityDetail,
             subtitle: AnyView(Text(detailText)),
             onCopy: copyFile,
             onSelect: { _ in onSelect(index) },
@@ -194,6 +195,13 @@ struct FileGroupRow: View {
         if state.isDirectory { return Localizer.string("Folder") }
         guard let size = state.size else { return "" }
         return ByteCountFormatting.string(fromByteCount: size)
+    }
+
+    private var accessibilityDetail: String {
+        if url == nil {
+            return String(format: Localizer.string("File no longer exists: %@"), name)
+        }
+        return detailText
     }
 
     private var titleTooltipDetail: String {

@@ -59,5 +59,6 @@ struct AboutSettingsView: View {
                     .fill(Color.primary.opacity(0.06))
                     .shadow(color: .black.opacity(0.15), radius: 5, x: 0, y: 2)
             )
+            .accessibilityHidden(true)
     }
 }

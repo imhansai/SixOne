@@ -7,6 +7,13 @@
 import AppKit
 import SwiftUI
 
+/// 行级无障碍文案：标题后接类型/时间或文件大小，VoiceOver 不再逐个子元素读。
+enum RowAccessibility {
+    static func label(title: String, detail: String) -> String {
+        detail.isEmpty ? title : "\(title), \(detail)"
+    }
+}
+
 /// 行外观常量：两套列表共用，避免选中底色和图标阴影各自漂移。
 enum RowAppearance {
     static let activeSelection = Color(.sRGB, red: 84 / 255, green: 140 / 255, blue: 235 / 255)
@@ -30,6 +37,7 @@ struct ListRowShell<Leading: View>: View {
     let isCopied: Bool
     let title: String
     let titleTooltipDetail: String?
+    let accessibilityDetail: String
     let subtitle: AnyView
     let leading: Leading
     let onCopy: () -> Void
@@ -51,6 +59,7 @@ struct ListRowShell<Leading: View>: View {
         isCopied: Bool,
         title: String,
         titleTooltipDetail: String?,
+        accessibilityDetail: String,
         subtitle: AnyView,
         onCopy: @escaping () -> Void,
         onSelect: @escaping (UUID) -> Void,
@@ -68,6 +77,7 @@ struct ListRowShell<Leading: View>: View {
         self.isCopied = isCopied
         self.title = title
         self.titleTooltipDetail = titleTooltipDetail
+        self.accessibilityDetail = accessibilityDetail
         self.subtitle = subtitle
         self.leading = leading()
         self.onCopy = onCopy
@@ -158,6 +168,7 @@ struct ListRowShell<Leading: View>: View {
         .frame(maxWidth: .infinity, minHeight: ClipboardLayout.rowHeight, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(RowAccessibility.label(title: title, detail: accessibilityDetail))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onSelect(rowID) }
     }

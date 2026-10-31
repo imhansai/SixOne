@@ -16,13 +16,12 @@ struct PanelAssemblyTests {
         let assembly = try makeAssembly()
         #expect(assembly.manager.events === assembly.events)
 
-        // 发事件后等异步重载落定。
+        // 发事件后直接等事件链与它挂起的加载落定，避免用超时猜异步时点。
         let revisionBefore = assembly.store.dataRevision
         assembly.events.post(.inserted(id: UUID()))
-        let didRefresh = await Wait.until(timeout: .seconds(5), interval: .milliseconds(10)) {
-            assembly.store.dataRevision != revisionBefore
-        }
-        #expect(didRefresh, "事件要经「总线 → 主线程任务 → 后台读」三段异步，超时仍未刷新")
+        await assembly.store.waitForPendingEvents()
+        await assembly.store.waitForPendingLoad()
+        #expect(assembly.store.dataRevision != revisionBefore, "事件没有经「总线 → 主线程任务 → 后台读」刷新列表")
     }
 
     @Test("上下文与装配产出的是同一批对象")

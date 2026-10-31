@@ -45,10 +45,10 @@ nonisolated enum SecurityScopedFileAccess {
         let paths = item.allFilePaths
         guard !paths.isEmpty else { return [] }
         guard paths.count > 1 else {
-            return [resolvedURL(bookmark: item.securityScopeBookmark, path: item.filePath)]
+            return [resolvedURLWithoutAccess(bookmark: item.securityScopeBookmark, path: item.filePath)]
         }
         let bookmarks = decodeBookmarks(item.securityScopeBookmarks)
-        return paths.map { resolvedURL(bookmark: bookmarks[$0], path: $0) }
+        return paths.map { resolvedURLWithoutAccess(bookmark: bookmarks[$0], path: $0) }
     }
 
     /// 预览用：解析并 start 访问权，由调用方结束后统一释放。
@@ -58,8 +58,8 @@ nonisolated enum SecurityScopedFileAccess {
         return item.allFilePaths.map { startScopedURL(bookmark: bookmarks[$0], path: $0) }
     }
 
-    /// 按 bookmark 优先、原路径兜底解析；返回值已释放访问权。
-    static func resolvedURL(bookmark: Data?, path: String?) -> URL? {
+    /// 按 bookmark 优先、原路径兜底解析；返回值已释放访问权，只能用于显示或写回，不能继续做文件 I/O。
+    static func resolvedURLWithoutAccess(bookmark: Data?, path: String?) -> URL? {
         if let bookmark, let url = startAccess(bookmark: bookmark) {
             url.stopAccessingSecurityScopedResource()
             return url

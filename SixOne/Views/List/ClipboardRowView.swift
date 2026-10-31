@@ -48,6 +48,7 @@ struct ClipboardRowView: View {
             isCopied: isCopied,
             title: titleText,
             titleTooltipDetail: titleTooltipDetail,
+            accessibilityDetail: accessibilityDetail,
             subtitle: AnyView(Text(subtitleText)),
             onCopy: onCopy,
             onSelect: onSelect,
@@ -129,13 +130,22 @@ struct ClipboardRowView: View {
         }
     }
 
-    private var subtitleText: LocalizedStringKey {
-        let time = context.caches.time.copyTime(
+    private var copyTime: String {
+        context.caches.time.copyTime(
             for: row.id,
             lastActivityAt: row.lastActivityAt,
             locale: locale
         )
-        return "\(typeLabelKey) · copied at \(time)"
+    }
+
+    private var subtitleText: LocalizedStringKey {
+        "\(typeLabelKey) · copied at \(copyTime)"
+    }
+
+    private var accessibilityDetail: String {
+        var resource = typeLabelKey
+        resource.locale = RuntimeLanguage.shared.locale
+        return "\(String(localized: resource)), \(copyTime)"
     }
 
     private var typeLabelKey: LocalizedStringResource {

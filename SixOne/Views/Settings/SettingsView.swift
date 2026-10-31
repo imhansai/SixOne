@@ -52,6 +52,7 @@ struct SettingsView: View {
                     .disabled(!navigation.canGoBack)
                     .keyboardShortcut("[", modifiers: [.command])
                     .appTooltip(Localizer.string("Back"))
+                    .accessibilityLabel(Text(Localizer.string("Back")))
 
                     Button(action: navigation.goForward) {
                         Image(systemName: "chevron.right")
@@ -59,6 +60,7 @@ struct SettingsView: View {
                     .disabled(!navigation.canGoForward)
                     .keyboardShortcut("]", modifiers: [.command])
                     .appTooltip(Localizer.string("Forward"))
+                    .accessibilityLabel(Text(Localizer.string("Forward")))
                 }
             }
         }
