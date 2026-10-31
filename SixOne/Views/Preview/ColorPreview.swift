@@ -39,6 +39,10 @@ struct ColorPreview: View {
                 noticeLine
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onDisappear {
+                noticeWork?.cancel()
+                noticeWork = nil
+            }
         } else {
             PreviewUnavailable()
         }

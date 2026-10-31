@@ -102,7 +102,8 @@ struct RowMenuBuilder {
         case .delete:
             deleteRow(row.id)
         case .preview, .revealInFinder:
-            break
+            // 当前行菜单布局不含这两项；将来加入时先补动作，避免菜单点了没反应。
+            assertionFailure("行菜单动作未接线：\(command.rawValue)")
         }
     }
 

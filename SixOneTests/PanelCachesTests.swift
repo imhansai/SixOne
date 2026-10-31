@@ -36,6 +36,22 @@ struct PanelCachesTests {
         #expect(cache.fileKind(atPath: file.path) == .file)
     }
 
+    @Test("缺失判定短时缓存：文件随后出现，过窗口后会重新判定")
+    func missingKindIsCachedBriefly() throws {
+        let directory = try TemporaryFiles.makeDirectory(prefix: "sixone-cache")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("c.txt")
+        var clock = Date(timeIntervalSince1970: 0)
+        let cache = ClipboardQueryCache(missingTTL: 2, now: { clock })
+
+        #expect(cache.fileKind(atPath: file.path) == .missing)
+        try Data("x".utf8).write(to: file)
+        #expect(cache.fileKind(atPath: file.path) == .missing, "缺失窗口内不该翻新")
+
+        clock = clock.addingTimeInterval(2.1)
+        #expect(cache.fileKind(atPath: file.path) == .file, "窗口过后要重新判定")
+    }
+
     @Test("时间文案按条目 id + 时间值缓存：触达刷新时间后不复用旧文案")
     func timeCacheKeyFollowsActivity() {
         let cache = PanelCaches().time

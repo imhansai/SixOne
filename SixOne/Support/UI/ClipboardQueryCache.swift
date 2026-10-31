@@ -15,9 +15,17 @@ final class ClipboardQueryCache {
 
     private let urls = NSCache<NSString, NSURL>()
     private let fileKinds = NSCache<NSString, NSNumber>()
-    init() {
+    /// 缺失结果短时缓存：文件可能稍后出现，但滚动重绘也不该每次都打文件系统。
+    private let missingPaths = NSCache<NSString, NSDate>()
+    private let missingTTL: TimeInterval
+    private let now: () -> Date
+
+    init(missingTTL: TimeInterval = 2, now: @escaping () -> Date = { Date() }) {
+        self.missingTTL = missingTTL
+        self.now = now
         urls.countLimit = 400
         fileKinds.countLimit = 2000
+        missingPaths.countLimit = 2000
     }
 
     func appURL(for bundleIdentifier: String) -> URL? {
@@ -38,6 +46,10 @@ final class ClipboardQueryCache {
         if let cached = fileKinds.object(forKey: key) {
             return FileKind(rawValue: cached.intValue) ?? .missing
         }
+        if let checkedAt = missingPaths.object(forKey: key),
+           now().timeIntervalSince(checkedAt as Date) < missingTTL {
+            return .missing
+        }
 
         var kind: FileKind = .missing
         var isDirectory: ObjCBool = false
@@ -45,8 +57,10 @@ final class ClipboardQueryCache {
             kind = isDirectory.boolValue ? .folder : .file
         }
 
-        // 不缓存 missing：文件可能稍后出现，缓存会让行图标一直显示旧判断。
-        if kind != .missing {
+        if kind == .missing {
+            missingPaths.setObject(now() as NSDate, forKey: key)
+        } else {
+            missingPaths.removeObject(forKey: key)
             fileKinds.setObject(NSNumber(value: kind.rawValue), forKey: key)
         }
         return kind

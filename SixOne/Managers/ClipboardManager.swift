@@ -89,7 +89,7 @@ final class ClipboardManager {
             startRetentionSweep()
         }
         // 启动裁剪延后一轮：装配阶段不在主线程删大批过期条目。
-        Task { [weak self] in await self?.trimToRetention() }
+        retentionTrimTask = Task { [weak self] in await self?.trimToRetention() }
         // 后台清掉上次运行的导出临时文件（含剪贴板内容副本）。
         let logger = self.logger
         Task.detached(priority: .utility) {
@@ -142,6 +142,7 @@ final class ClipboardManager {
     // MARK: - 持久化维护
 
     private var isTrimmingRetention = false
+    private var retentionTrimTask: Task<Void, Never>?
 
     /// 同一时刻只跑一轮裁剪；保留期变更与定时器撞车时不重复扫库。
     func trimToRetention() async {
@@ -149,6 +150,11 @@ final class ClipboardManager {
         isTrimmingRetention = true
         defer { isTrimmingRetention = false }
         await writer.trimToRetention()
+    }
+
+    /// 等启动裁剪落定；测试判断最终状态时用。
+    func waitForPendingRetentionTrim() async {
+        await retentionTrimTask?.value
     }
 
     func clearAll() {

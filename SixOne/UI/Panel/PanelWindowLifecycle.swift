@@ -107,6 +107,7 @@ final class PanelWindowLifecycle {
     }
 
     isolated deinit {
+        removeMonitors()
         for token in [resignObserver, becomeKeyObserver, becomeActiveObserver] {
             if let token {
                 NotificationCenter.default.removeObserver(token)

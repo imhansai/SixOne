@@ -72,9 +72,10 @@ struct HistoryRetentionTests {
             try context.save()
         }
 
-        // 启动裁剪可能已经在跑；以广播为完成信号，再确认空库不重复广播。
-        #expect(await Wait.until { harness.recorder.events == [.trimmed] })
+        // 等启动裁剪本身落定，避免用事件轮询去猜它是否还在跑。
+        await harness.manager.waitForPendingRetentionTrim()
         #expect(harness.itemsNewestFirst().isEmpty)
+        #expect(harness.recorder.events == [.trimmed])
 
         await harness.manager.trimToRetention()
         #expect(harness.recorder.events == [.trimmed], "空库再裁剪不应重复广播")
@@ -89,7 +90,8 @@ struct HistoryRetentionTests {
             try context.save()
         }
 
-        #expect(await Wait.until { harness.recorder.events == [.trimmed] })
+        await harness.manager.waitForPendingRetentionTrim()
         #expect(harness.itemsNewestFirst().isEmpty)
+        #expect(harness.recorder.events == [.trimmed])
     }
 }

@@ -25,6 +25,9 @@ struct ClipboardListView: View {
     @State private var noticeWork: DispatchWorkItem?
     /// 编辑保存后预览仍开：关闭时滚回顶部展示已置顶的条目。
     @State private var pendingTopFocusAfterEditedPreview = false
+    /// 窗口外预览的存在性探测；同一 id 在途时不重复发。
+    @State private var existenceProbeID: UUID?
+    @State private var existenceProbeTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -89,6 +92,9 @@ struct ClipboardListView: View {
         .onDisappear {
             noticeWork?.cancel()
             noticeWork = nil
+            existenceProbeTask?.cancel()
+            existenceProbeTask = nil
+            existenceProbeID = nil
             navigationState.clearPendingReveal()
             pendingTopFocusAfterEditedPreview = false
         }
@@ -132,9 +138,15 @@ struct ClipboardListView: View {
         guard let previewed = previewState.item?.id else { return }
         // 还在窗口内就必然在库里，省一次探测。
         guard !store.rows.contains(where: { $0.id == previewed }) else { return }
-        // context 由面板持有，闭包可直接捕获 self。
-        Task {
-            guard !(await store.itemExists(id: previewed)) else { return }
+        // 同一 id 的探测在途时不重复发；缩略图批量更新会连续触发 dataRevision。
+        guard existenceProbeID != previewed else { return }
+        existenceProbeTask?.cancel()
+        existenceProbeID = previewed
+        existenceProbeTask = Task {
+            let exists = await store.itemExists(id: previewed)
+            guard !Task.isCancelled else { return }
+            existenceProbeID = nil
+            guard !exists else { return }
             // 等待期间用户可能已切到别的预览，只关仍停在已删除条目上的那个。
             guard previewState.item?.id == previewed else { return }
             previewState.close()

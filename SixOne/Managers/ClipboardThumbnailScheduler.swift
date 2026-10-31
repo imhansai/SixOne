@@ -12,6 +12,8 @@ final class ClipboardThumbnailScheduler {
     private let events: ClipboardHistoryEventBus
     private let previewCache: ClipboardPreviewCache
     private var tasks: [UUID: Task<Void, Never>] = [:]
+    /// 同一 id 的调度代际：后一次调度会让前一次的结果与登记都作废。
+    private var generations: [UUID: Int] = [:]
 
     init(
         writer: ClipboardHistoryWriter,
@@ -51,10 +53,13 @@ final class ClipboardThumbnailScheduler {
     }
 
     func schedule(for id: UUID, source: ClipboardThumbnailService.Source) {
+        let generation = (generations[id] ?? 0) + 1
+        generations[id] = generation
         let task = Task.detached(priority: .utility) { [weak self] in
             guard let thumb = await ClipboardThumbnailService.makeThumbnail(from: source) else { return }
             guard let self else { return }
             await MainActor.run {
+                guard self.generations[id] == generation else { return }
                 guard let item = self.writer.fetchFullItem(id: id),
                       item.thumbnailData != thumb
                         || item.thumbnailVersion != ClipboardItem.currentThumbnailVersion else { return }
@@ -66,10 +71,12 @@ final class ClipboardThumbnailScheduler {
             }
         }
         tasks[id] = task
-        // 落定后摘掉登记，表不能随历史增长。
+        // 落定后摘掉登记，表不能随历史增长；旧代际不能清掉新任务的登记。
         Task { [weak self] in
             await task.value
-            self?.tasks[id] = nil
+            guard let self, self.generations[id] == generation else { return }
+            self.tasks[id] = nil
+            self.generations[id] = nil
         }
     }
 
