@@ -12,7 +12,7 @@ import Testing
 @MainActor
 struct AppCompositionTests {
     @Test("面板认领动作、保留时长接上裁剪、快捷键启动即注册")
-    func wiresDataPanelAndHotKey() throws {
+    func wiresDataPanelAndHotKey() async throws {
         let registrar = FakeHotKeyRegistrar()
         let monitor = FakeHotKeyEventMonitor()
         let storage = InMemorySettingsStorage()
@@ -32,7 +32,9 @@ struct AppCompositionTests {
         context.insert(expired)
         try context.save()
         composition.settings.historyRetention = .oneMonth
-        #expect(try context.fetch(FetchDescriptor<ClipboardItem>()).isEmpty, "改了保留时长没有立刻裁剪")
+        #expect(await Wait.until {
+            (try? context.fetch(FetchDescriptor<ClipboardItem>()))?.isEmpty == true
+        }, "改了保留时长没有立刻裁剪")
         #expect(registrar.registered.count == 1)
         #expect(composition.hotKey.isActive)
         #expect(storage.object(forKey: "globalHotKeyConfigured") == nil)

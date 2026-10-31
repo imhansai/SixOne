@@ -9,13 +9,15 @@ import UniformTypeIdentifiers
 
 // MARK: - 行视图
 
-/// 单行内容（HistoryRow 轻量快照）：选中态按值注入，复制反馈在行内观察。
+/// 单行内容（HistoryRow 轻量快照）：选中态与复制反馈都按值注入。
 struct ClipboardRowView: View {
     let row: HistoryRow
     /// 按住 ⌘ 时的快速粘贴编号；不显示时为空。
     var shortcutNumber: Int? = nil
     let isSelected: Bool
     let isListActive: Bool
+    /// 复制反馈由表格按行值传入，避免每行都观察全局反馈。
+    var isCopied = false
     /// 首末行额外让出的列表留白，算在行内并随内容滚动。
     var listTopPadding: CGFloat = 0
     var listBottomPadding: CGFloat = 0
@@ -34,10 +36,6 @@ struct ClipboardRowView: View {
     @State private var isCopyButtonPressed = false
 
     private var isActiveSelection: Bool { isSelected && isListActive }
-
-    private var isCopied: Bool {
-        context.copyState.feedbackItemID == row.id
-    }
 
     private var usesOverlayScrollers: Bool {
         context.scrollerLayout.usesOverlayScrollers

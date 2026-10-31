@@ -176,6 +176,7 @@ struct ClipboardListView: View {
             dataRevision: store.dataRevision,
             locale: locale,
             selectedItemID: navigationState.selectedItemID,
+            copiedItemID: copyState.feedbackItemID,
             isSelectionActive: navigationState.isSelectionActive,
             scrollRevision: navigationState.scrollRevision,
             isScrollBlocked: confirmationState.isPresenting,

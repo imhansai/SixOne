@@ -88,7 +88,6 @@ final class ClipboardHistoryWriter {
             existing.securityScopeBookmarks = fileAccess.bookmarks
             guard recordTouch(existing, isExternal: isExternal) else { return }
             onStored?(existing, entry)
-            trimToRetention()
             return
         }
 
@@ -112,7 +111,6 @@ final class ClipboardHistoryWriter {
         guard save("新增条目") else { return }
         events.post(.inserted(id: item.id))
         onStored?(item, entry)
-        trimToRetention()
     }
 
     /// 触达：换新排序键置顶、刷新时间与快照，保存后广播。
@@ -135,32 +133,60 @@ final class ClipboardHistoryWriter {
 
     // MARK: - 维护
 
-    func trimToRetention() {
+    /// 维护操作的单批条数；改小保留期时不至于一次把整段过期集合读进内存。
+    private static let maintenanceBatchSize = 500
+
+    /// 分批裁剪：每批保存并让出一拍，避免大批过期条目连续占住主线程。
+    /// 部分批次已落盘后才失败也照常广播，界面据实重载。
+    func trimToRetention() async {
         guard let interval = retentionInterval() else { return }
         let cutoff = Date().addingTimeInterval(-interval)
-        let descriptor = FetchDescriptor<ClipboardItem>(
-            predicate: #Predicate { $0.lastActivityAt < cutoff }
-        )
-        // 括号包住闭包：尾随闭包会与 guard 语句体混淆。
-        guard let expired = fetchLogged("裁剪：查询过期条目", { try context.fetch(descriptor) }),
-              !expired.isEmpty else { return }
-        for item in expired {
-            context.delete(item)
+        var didDelete = false
+        while true {
+            var descriptor = FetchDescriptor<ClipboardItem>(
+                predicate: #Predicate { $0.lastActivityAt < cutoff }
+            )
+            descriptor.fetchLimit = Self.maintenanceBatchSize
+            // 括号包住闭包：尾随闭包会与 guard 语句体混淆。
+            guard let expired = fetchLogged("裁剪：查询过期条目", { try context.fetch(descriptor) }),
+                  !expired.isEmpty else { break }
+            for item in expired {
+                context.delete(item)
+            }
+            guard save("裁剪过期条目") else {
+                if didDelete { events.post(.trimmed) }
+                return
+            }
+            didDelete = true
+            await Task.yield()
         }
-        guard save("裁剪过期条目") else { return }
+        guard didDelete else { return }
         events.post(.trimmed)
     }
 
     func clearAll() {
-        let descriptor = FetchDescriptor<ClipboardItem>()
-        let all = fetchLogged("清空：查询全部条目") { try context.fetch(descriptor) } ?? []
-        for item in all {
-            context.delete(item)
+        // 按 recencyID 游标分批读，避免一次把整库读进数组；仍是一次保存，失败即整体回滚。
+        var cursor: UUID?
+        var didDelete = false
+        while true {
+            var descriptor = FetchDescriptor<ClipboardItem>(
+                sortBy: [SortDescriptor(\ClipboardItem.recencyID)]
+            )
+            if let cursor {
+                descriptor.predicate = #Predicate { $0.recencyID > cursor }
+            }
+            descriptor.fetchLimit = Self.maintenanceBatchSize
+            guard let batch = fetchLogged("清空：查询条目", { try context.fetch(descriptor) }),
+                  !batch.isEmpty else { break }
+            for item in batch {
+                context.delete(item)
+            }
+            cursor = batch.last?.recencyID
+            didDelete = true
         }
+        guard didDelete else { return }
         guard save("清空历史") else { return }
-        if !all.isEmpty {
-            events.post(.cleared)
-        }
+        events.post(.cleared)
     }
 
     /// 删除一条；已不存在视为已完成。返回是否落盘。

@@ -113,6 +113,11 @@ final class HistoryListStore {
         await loadTask?.value
     }
 
+    /// 等已发布的事件链处理完；测试判断最终状态时用。
+    func waitForPendingEvents() async {
+        await eventTask?.value
+    }
+
     /// 记录视口顶行；深处攒下的刷新回到顶部再执行。
     func noteTopVisibleIndex(_ index: Int) {
         topVisibleIndex = max(0, index)
@@ -158,6 +163,25 @@ final class HistoryListStore {
             logger.error("读取条目快照失败（\(id.uuidString, privacy: .public)）：\(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// 新条目增量插到窗口头部；搜索与初始窗口仍走整窗重载。
+    private func insertRowAtTop(id: UUID) async {
+        guard !rows.contains(where: { $0.id == id }) else {
+            await moveRowToTop(id: id)
+            return
+        }
+        guard let row = await fetchRow(id: id) else {
+            startWindowLoad()
+            return
+        }
+        rows.insert(row, at: 0)
+        if rows.count > windowLimit {
+            rows.removeLast(rows.count - windowLimit)
+            hasOlder = true
+        }
+        dataRevision &+= 1
+        invalidatePendingLoad()
     }
 
     private func moveRowToTop(id: UUID) async {
@@ -206,10 +230,20 @@ final class HistoryListStore {
 
     private func handle(_ event: ClipboardHistoryEvent) async {
         switch event {
-        case .inserted:
+        case .inserted(let id):
             // 只有真新增内容才作数；面板内复制/粘贴发的是 touched，深浏览的连续性不受影响。
             if !isListVisible { receivedNewContentWhileHidden = true }
-            refreshAfterContentChange()
+            if isSearching {
+                startWindowLoad()
+            } else if isListVisible, topVisibleIndex > ClipboardLayout.viewportRowCount {
+                // 用户在深浏览：不在背后换窗口，回顶部再补。
+                needsTopRefresh = true
+            } else if rows.isEmpty || isLoading {
+                // 初始窗口还没落定：重取一窗，避免只插入一行就丢掉了其余行。
+                startWindowLoad()
+            } else {
+                await insertRowAtTop(id: id)
+            }
         case .trimmed:
             refreshAfterContentChange()
         case .cleared:

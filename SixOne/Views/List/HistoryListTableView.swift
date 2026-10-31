@@ -33,6 +33,8 @@ struct HistoryListTableView: NSViewRepresentable {
     let dataRevision: Int
     let locale: Locale
     let selectedItemID: UUID?
+    /// 正在显示复制反馈的条目；行视图按值接收，不各自观察全局状态。
+    var copiedItemID: UUID? = nil
     var isSelectionActive = false
     /// 让 SwiftUI 在选中没变、只多了滚动命令时也更新一轮。
     let scrollRevision: Int
@@ -106,6 +108,7 @@ struct HistoryListTableView: NSViewRepresentable {
             animation.duration = 0
             animation.allowsImplicitAnimation = false
             coordinator.syncSelectionAppearance(in: tableView)
+            coordinator.syncCopyFeedback(in: tableView)
             coordinator.syncQuickPasteHints(in: tableView)
             coordinator.syncSelection(in: tableView)
             coordinator.handle(
@@ -128,6 +131,7 @@ struct HistoryListTableView: NSViewRepresentable {
         private var rows: [HistoryRow] = []
         private var makeRow: ((HistoryRow, Int, CGFloat, CGFloat) -> AnyView)?
         private var selectedItemID: UUID?
+        private var copiedItemID: UUID?
         private var isSelectionActive = false
         private var quickPasteRange: ClosedRange<Int>?
 
@@ -140,6 +144,7 @@ struct HistoryListTableView: NSViewRepresentable {
             var isActive: Bool
         }
         private var renderedSelection = RenderedSelection(id: nil, isActive: false)
+        private var renderedCopyFeedbackID: UUID?
         private var renderedQuickPasteRange: ClosedRange<Int>?
         private var beep: () -> Void = { NSSound.beep() }
 
@@ -176,6 +181,7 @@ struct HistoryListTableView: NSViewRepresentable {
         /// 收下本轮落点与回调；行视图在这里拼好，环境逐行注入。
         func apply(_ parent: HistoryListTableView) {
             selectedItemID = parent.selectedItemID
+            copiedItemID = parent.copiedItemID
             isSelectionActive = parent.isSelectionActive
             quickPasteRange = parent.quickPasteRange
             beep = parent.beep
@@ -183,6 +189,7 @@ struct HistoryListTableView: NSViewRepresentable {
             rowClickTracker.onActivate = parent.onActivate
             let tracker = rowClickTracker
             let selectedID = parent.selectedItemID
+            let copiedID = parent.copiedItemID
             let selectionActive = parent.isSelectionActive
             let quickPasteRange = parent.quickPasteRange
             makeRow = { [context = parent.context, locale = parent.locale] row, index, topPadding, bottomPadding in
@@ -192,6 +199,7 @@ struct HistoryListTableView: NSViewRepresentable {
                         shortcutNumber: QuickPaste.shortcutNumber(forRow: index, in: quickPasteRange),
                         isSelected: row.id == selectedID,
                         isListActive: selectionActive,
+                        isCopied: row.id == copiedID,
                         listTopPadding: topPadding,
                         listBottomPadding: bottomPadding,
                         onSelect: { parent.onSelect($0) },
@@ -236,6 +244,7 @@ struct HistoryListTableView: NSViewRepresentable {
             mirroredSelectionID = nil
             tableView.reloadData()
             renderedSelection = RenderedSelection(id: selectedItemID, isActive: isSelectionActive)
+            renderedCopyFeedbackID = copiedItemID
             return true
         }
 
@@ -248,6 +257,17 @@ struct HistoryListTableView: NSViewRepresentable {
             let previous = renderedSelection
             renderedSelection = current
             for id in Set([previous.id, current.id].compactMap { $0 }) {
+                guard let index = rows.firstIndex(where: { $0.id == id }) else { continue }
+                refreshRowContent(at: index, in: tableView)
+            }
+        }
+
+        /// 复制反馈落点变化时只刷新前后两行。
+        func syncCopyFeedback(in tableView: NSTableView) {
+            guard copiedItemID != renderedCopyFeedbackID else { return }
+            let previous = renderedCopyFeedbackID
+            renderedCopyFeedbackID = copiedItemID
+            for id in Set([previous, copiedItemID].compactMap { $0 }) {
                 guard let index = rows.firstIndex(where: { $0.id == id }) else { continue }
                 refreshRowContent(at: index, in: tableView)
             }

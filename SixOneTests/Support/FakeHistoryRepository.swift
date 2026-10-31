@@ -35,6 +35,10 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         delaysByQuery[query] = delay
     }
 
+    func setRows(_ rows: [HistoryRow], for query: String) {
+        rowsByQuery[query] = rows
+    }
+
     /// 让之后的查询都失败。
     func startFailing() {
         isFailing = true

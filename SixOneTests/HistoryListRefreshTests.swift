@@ -222,6 +222,25 @@ struct HistoryListRefreshTests {
         #expect(store.rows.map(\.id) == [second.id, first.id])
     }
 
+    @Test("新增条目增量插入，不重取整窗")
+    func insertsNewRowIncrementally() async {
+        let first = HistoryRow.stub(title: "A")
+        let repository = FakeHistoryRepository(rowsByQuery: ["": [first]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        await store.loadLatestAndWait()
+        let queriesBefore = await repository.requestedQueries.count
+
+        let inserted = HistoryRow.stub(title: "B")
+        await repository.setRows([inserted, first], for: "")
+        events.post(.inserted(id: inserted.id))
+
+        #expect(await Wait.until { store.rows.first?.id == inserted.id })
+        #expect(store.rows.map(\.id) == [inserted.id, first.id])
+        #expect(await repository.requestedQueries.count == queriesBefore, "新增不应触发整窗重载")
+    }
+
     @Test("删除与在途整窗加载并发：迟到的旧结果不能把行加回来")
     func deletedRowIsNotRestoredByInFlightLoad() async {
         let first = HistoryRow.stub(title: "A")
@@ -242,9 +261,9 @@ struct HistoryListRefreshTests {
         #expect(store.rows.map(\.id) == [second.id])
     }
 
-    /// 等事件链路走完：先让出主 actor，再等挂起加载；固定轮询或 sleep 都等不准。
+    /// 等事件链路走完：先等串行事件链，再等它挂起的加载；固定轮询或 sleep 都等不准。
     private func settle(_ store: HistoryListStore) async {
-        await Task.yield()
+        await store.waitForPendingEvents()
         await store.waitForPendingLoad()
     }
 

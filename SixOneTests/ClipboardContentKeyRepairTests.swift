@@ -69,4 +69,43 @@ struct ClipboardContentKeyRepairTests {
         #expect(untouched.contentKeySnapshot == "current-key")
         #expect(untouched.contentKeyVersion == ClipboardItem.currentContentKeyVersion)
     }
+
+    @Test("标记已到当前版本后跳过扫描，健康库不再每次启动全表查")
+    func markerSkipsHealthyStore() async throws {
+        let directory = try TemporaryFiles.makeDirectory(prefix: "sixone-repair-marker")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("SixOne.store")
+        let container = AppModelContainer.make(isStoredInMemoryOnly: false, storeURL: storeURL)
+        let context = container.mainContext
+
+        let legacy = ClipboardItem(kind: .image, imageData: Data(repeating: 0x44, count: 64))
+        legacy.contentKeyVersion = 1
+        legacy.contentKeySnapshot = "old"
+        context.insert(legacy)
+        try context.save()
+
+        let suite = "sixone-repair-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let marker = UserDefaultsContentKeyRepairMarker(defaults: defaults, key: "version")
+
+        await ClipboardContentKeyRepair(container: container, marker: marker).runIfNeeded()
+        var verification = ModelContext(container)
+        let repaired = try #require(verification.fetch(FetchDescriptor<ClipboardItem>()).first)
+        #expect(repaired.contentKeyVersion == ClipboardItem.currentContentKeyVersion)
+
+        // 标记已到位：再放进一条旧版本条目，本轮不应再扫描修复。
+        let legacyAgain = ClipboardItem(kind: .image, imageData: Data(repeating: 0x55, count: 64))
+        legacyAgain.contentKeyVersion = 1
+        legacyAgain.contentKeySnapshot = "old-again"
+        context.insert(legacyAgain)
+        try context.save()
+
+        await ClipboardContentKeyRepair(container: container, marker: marker).runIfNeeded()
+
+        verification = ModelContext(container)
+        let rows = try verification.fetch(FetchDescriptor<ClipboardItem>())
+        let untouched = try #require(rows.first { $0.id == legacyAgain.id })
+        #expect(untouched.contentKeyVersion == 1, "标记命中后仍执行了扫描")
+    }
 }

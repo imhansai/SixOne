@@ -89,7 +89,7 @@ final class ClipboardManager {
             startRetentionSweep()
         }
         // 启动裁剪延后一轮：装配阶段不在主线程删大批过期条目。
-        Task { [weak self] in self?.trimToRetention() }
+        Task { [weak self] in await self?.trimToRetention() }
         // 后台清掉上次运行的导出临时文件（含剪贴板内容副本）。
         let logger = self.logger
         Task.detached(priority: .utility) {
@@ -126,9 +126,7 @@ final class ClipboardManager {
 
     private func startRetentionSweep() {
         let timer = Timer(timeInterval: Self.retentionSweepInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.trimToRetention()
-            }
+            Task { await self?.trimToRetention() }
         }
         RunLoop.main.add(timer, forMode: .common)
         retentionTimer = timer
@@ -137,17 +135,20 @@ final class ClipboardManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            // 通知在 main queue 送达，可断言已回到主 actor。
-            MainActor.assumeIsolated {
-                self?.trimToRetention()
-            }
+            Task { await self?.trimToRetention() }
         }
     }
 
     // MARK: - 持久化维护
 
-    func trimToRetention() {
-        writer.trimToRetention()
+    private var isTrimmingRetention = false
+
+    /// 同一时刻只跑一轮裁剪；保留期变更与定时器撞车时不重复扫库。
+    func trimToRetention() async {
+        guard !isTrimmingRetention else { return }
+        isTrimmingRetention = true
+        defer { isTrimmingRetention = false }
+        await writer.trimToRetention()
     }
 
     func clearAll() {

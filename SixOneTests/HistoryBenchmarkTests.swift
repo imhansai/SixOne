@@ -63,7 +63,7 @@ struct HistoryBenchmarkTests {
         }
         let image = try #require(imageID)
 
-        await timed("启动：ClipboardManager 构造 + 保留期裁剪") {
+        await timed("启动：ClipboardManager 构造（裁剪已延后）") {
             _ = ClipboardManager(
                 container: container,
                 settings: SettingsStore(storage: InMemorySettingsStorage()),
@@ -98,6 +98,14 @@ struct HistoryBenchmarkTests {
             print("BENCH   最近 \(limit) 条取回 \(rows.count) 行：缩略图 \(thumbCount) 张 / \(thumbBytes / 1024) KB，标题 \(titleBytes / 1024) KB")
             if limit == 200 { browseCount = rows.count }
         }
+        let probeRowID = try #require(try context.fetch(FetchDescriptor<ClipboardItem>()).first?.id)
+        try await timed("复制后刷新：取单行快照（增量插入路径）") {
+            _ = try await repository.row(id: probeRowID)
+        }
+        try await timed("复制后刷新：整窗 1000 行（旧路径对照）") {
+            _ = try await repository.latest(query: "", limit: 1000)
+        }
+
         let docBytes = Self.documentThumbnail?.count ?? 0
         let photoBytes = Self.photoThumbnail?.count ?? 0
         print("BENCH 样本缩略图：文档图标 \(docBytes) B，照片 \(photoBytes) B（HEIC \(Int(ClipboardThumbnailService.listThumbnailPixelSize))px q0.8）")

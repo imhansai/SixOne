@@ -16,7 +16,7 @@ struct HistoryRetentionTests {
         harness.pasteboard.simulateCopy(text: "fresh")
         await harness.pollAndWait()
 
-        harness.manager.trimToRetention()
+        await harness.manager.trimToRetention()
 
         #expect(harness.itemsNewestFirst().map(\.text) == ["fresh"])
         #expect(!harness.recorder.events.contains(.trimmed))
@@ -34,7 +34,7 @@ struct HistoryRetentionTests {
         old.lastActivityAt = Date().addingTimeInterval(-40 * 24 * 3600)
         try harness.context.save()
 
-        harness.manager.trimToRetention()
+        await harness.manager.trimToRetention()
 
         #expect(harness.itemsNewestFirst().map(\.text) == ["recent"])
         #expect(harness.recorder.events.last == .trimmed)
@@ -54,10 +54,30 @@ struct HistoryRetentionTests {
         item.lastActivityAt = Date().addingTimeInterval(-400 * 24 * 3600)
         try harness.context.save()
 
-        harness.manager.trimToRetention()
+        await harness.manager.trimToRetention()
 
         #expect(harness.itemsNewestFirst().count == 1)
         #expect(!harness.recorder.events.contains(.trimmed))
+    }
+
+    @Test("过期条目超过一批时全部裁掉，且只广播一次")
+    func trimsInBatches() async throws {
+        let harness = try ClipboardHarness(retention: .oneMonth) { context in
+            let expiredAt = Date().addingTimeInterval(-40 * 24 * 3600)
+            for index in 0..<1100 {
+                let item = ClipboardItem(kind: .text, text: "old \(index)")
+                item.lastActivityAt = expiredAt
+                context.insert(item)
+            }
+            try context.save()
+        }
+
+        // 启动裁剪可能已经在跑；以广播为完成信号，再确认空库不重复广播。
+        #expect(await Wait.until { harness.recorder.events == [.trimmed] })
+        #expect(harness.itemsNewestFirst().isEmpty)
+
+        await harness.manager.trimToRetention()
+        #expect(harness.recorder.events == [.trimmed], "空库再裁剪不应重复广播")
     }
 
     @Test("启动时就按当前保留时长裁一次")
@@ -69,7 +89,7 @@ struct HistoryRetentionTests {
             try context.save()
         }
 
-        #expect(await Wait.until { harness.itemsNewestFirst().isEmpty })
-        #expect(harness.recorder.events == [.trimmed])
+        #expect(await Wait.until { harness.recorder.events == [.trimmed] })
+        #expect(harness.itemsNewestFirst().isEmpty)
     }
 }
