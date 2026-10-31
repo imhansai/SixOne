@@ -8,11 +8,9 @@ import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
     private var statusBarController: StatusBarController?
-    private var clipboardManager: ClipboardManager?
-    private var hotKeyManager: HotKeyManager?
-    private var panelController: ClipboardPanelController?
+    /// 组合根；数据层、面板与快捷键都由它持有。
+    private var composition: AppComposition?
     private var settingsWindowController: SettingsWindowController?
-    private var settingsStore: SettingsStore?
 
     /// 是否单测宿主；测试宿主与运行中的 SixOne 同容器、同快捷键。
     static var isRunningUnitTests: Bool {
@@ -31,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
         guard !Self.isRunningUnitTests else { return }
 
         let composition = AppComposition(modelContainer: modelContainer)
-        let settingsStore = composition.settings
+        self.composition = composition
         let panelController = composition.controller
         let hotKeyManager = composition.hotKey
 
@@ -63,10 +61,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
         statusBar.updateOpenClipboardShortcut()
 
         self.statusBarController = statusBar
-        self.clipboardManager = composition.panel.manager
-        self.hotKeyManager = hotKeyManager
-        self.panelController = panelController
-        self.settingsStore = settingsStore
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -75,23 +69,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
 
     /// 退出前拦一道未提交的预览编辑；编辑结束后再按一次 ⌘Q 才退出。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard panelController?.handleQuitAttempt() == true else { return .terminateNow }
+        guard composition?.controller.handleQuitAttempt() == true else { return .terminateNow }
         return .terminateCancel
     }
 
     @objc func openSettings() {
         // 不恢复焦点到唤出前的应用，避免与激活设置窗口产生竞态。
-        panelController?.hide(restoresPreviousApplication: false)
-        guard let settingsStore, let hotKeyManager else { return }
+        composition?.controller.hide(restoresPreviousApplication: false)
+        guard let composition else { return }
         let container = modelContainer
         let controller = settingsWindowController ?? SettingsWindowController(
-            settings: settingsStore,
-            hotKeyManager: hotKeyManager,
+            settings: composition.settings,
+            hotKeyManager: composition.hotKey,
             loadStorageStats: {
                 await HistoryStorageStatsReader.read(container: container)
             },
             onClearHistory: { [weak self] in
-                self?.clipboardManager?.clearAll()
+                self?.composition?.panel.manager.clearAll()
             }
         )
         settingsWindowController = controller

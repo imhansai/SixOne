@@ -118,6 +118,19 @@ struct HistoryListRefreshTests {
         #expect(harness.store.takeNewContentWhileHidden())
     }
 
+    @Test("窗口外的旧条目被触达后重载并置顶")
+    func refreshesWhenTouchedItemOutsideWindow() async throws {
+        let harness = try Harness(itemCount: 1005)
+        await harness.store.loadLatestAndWait()
+        let outsideID = harness.itemIDs[0]
+        #expect(!harness.store.rows.contains { $0.id == outsideID }, "前置现场不对：旧条目不该在窗口里")
+
+        try harness.touch(outsideID)
+        await settle(harness.store)
+
+        #expect(harness.store.rows.first?.id == outsideID, "触达后旧条目没有置顶到最新一窗")
+    }
+
     @Test("收起时把已经攒下的刷新补上")
     func flushesPendingRefreshOnHide() async throws {
         let harness = try Harness(itemCount: 250)
@@ -233,6 +246,17 @@ struct HistoryListRefreshTests {
             try context.save()
             events.post(.inserted(id: item.id))
             return item.id
+        }
+
+        func touch(_ id: UUID) throws {
+            let descriptor = FetchDescriptor<ClipboardItem>(
+                predicate: #Predicate { $0.id == id }
+            )
+            guard let item = try context.fetch(descriptor).first else { return }
+            item.recencyID = OrderedUUID.make()
+            item.lastActivityAt = Date()
+            try context.save()
+            events.post(.touched(id: id))
         }
 
         func clearAll() throws {

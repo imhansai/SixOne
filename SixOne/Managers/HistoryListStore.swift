@@ -13,6 +13,8 @@ import os
 @Observable
 final class HistoryListStore {
     private let repository: ClipboardHistoryRepository
+    private let eventBus: ClipboardHistoryEventBus
+    private var eventObservation: ClipboardHistoryEventBus.Observation?
     private let logger = AppLog.logger("HistoryList")
     let windowLimit = 1000
     private(set) var rows: [HistoryRow] = []
@@ -34,11 +36,18 @@ final class HistoryListStore {
 
     init(repository: ClipboardHistoryRepository, events: ClipboardHistoryEventBus) {
         self.repository = repository
+        self.eventBus = events
         // 推迟一轮主线程再处理，避免读到发布方的写库中间状态。
-        events.observe { [weak self] event in
+        eventObservation = events.observe { [weak self] event in
             Task { @MainActor in
                 self?.handle(event)
             }
+        }
+    }
+
+    isolated deinit {
+        if let eventObservation {
+            eventBus.removeObserver(eventObservation)
         }
     }
 
@@ -201,8 +210,11 @@ final class HistoryListStore {
             if isExternal, !isListVisible { receivedNewContentWhileHidden = true }
             if isSearching {
                 startWindowLoad()
-            } else {
+            } else if rows.contains(where: { $0.id == id }) {
                 Task { [weak self] in await self?.moveRowToTop(id: id) }
+            } else {
+                // 被触达的条目不在当前 1000 行窗口里：它已置顶，必须重载才能看到。
+                startWindowLoad()
             }
         case .thumbnailUpdated(let id):
             Task { [weak self] in await self?.reloadRow(id: id) }

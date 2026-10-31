@@ -19,13 +19,23 @@ enum ClipboardHistoryEvent: Equatable {
     case cleared
 }
 
-/// 事件总线：写方 `post`、读方 `observe`；全程主线程，无退订接口。
+/// 事件总线：写方 `post`、读方 `observe`；全程主线程，可按 token 退订。
+@MainActor
 final class ClipboardHistoryEventBus {
-    private var handlers: [UUID: (ClipboardHistoryEvent) -> Void] = [:]
+    typealias Observation = UUID
 
-    /// 订阅事件，回调在主线程调用。
-    func observe(_ handler: @escaping (ClipboardHistoryEvent) -> Void) {
-        handlers[UUID()] = handler
+    private var handlers: [Observation: (ClipboardHistoryEvent) -> Void] = [:]
+
+    /// 订阅事件，回调在主线程调用；返回的 token 交给 `removeObserver(_:)`。
+    @discardableResult
+    func observe(_ handler: @escaping (ClipboardHistoryEvent) -> Void) -> Observation {
+        let token = UUID()
+        handlers[token] = handler
+        return token
+    }
+
+    func removeObserver(_ token: Observation) {
+        handlers[token] = nil
     }
 
     func post(_ event: ClipboardHistoryEvent) {
