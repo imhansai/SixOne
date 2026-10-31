@@ -16,6 +16,7 @@ final class ClipboardManager {
     private let pasteboardWriter: ClipboardPasteboardWriter
     private let thumbnails: ClipboardThumbnailScheduler
     private let capturePipeline: ClipboardCapturePipeline
+    private let imageLoader: ClipboardImageLoader
     private var retentionTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
     private let logger = AppLog.logger("ClipboardManager")
@@ -75,6 +76,7 @@ final class ClipboardManager {
         self.pasteboardWriter = pasteboardWriter
         self.thumbnails = thumbnails
         self.capturePipeline = capturePipeline
+        self.imageLoader = ClipboardImageLoader(container: container)
 
         writer.onStored = { [weak self] item, entry in
             self?.thumbnails.schedule(for: item, entry: entry)
@@ -91,6 +93,10 @@ final class ClipboardManager {
         let logger = self.logger
         Task.detached(priority: .utility) {
             ClipboardFileAccess.removeStaleTemporaryExports(logger: logger)
+        }
+        // 图片去重 key 升级后，旧条目在后台分批重算。
+        Task.detached(priority: .utility) {
+            await ClipboardContentKeyRepair(container: container).runIfNeeded()
         }
     }
 
@@ -248,6 +254,11 @@ final class ClipboardManager {
 
     func hasInlineImage(id: UUID) -> Bool {
         writer.hasInlineImage(id: id)
+    }
+
+    /// 预览用：后台读取完整位图，避免主线程加载大字段。
+    func loadImageData(id: UUID) async -> Data? {
+        await imageLoader.imageData(id: id)
     }
 
     // MARK: - 缩略图

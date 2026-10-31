@@ -524,6 +524,20 @@ struct ClipboardCaptureTests {
         #expect(harness.itemsNewestFirst().allSatisfy { $0.kind == .text })
     }
 
+    @Test("PNG 与 TIFF 同时存在时只读 PNG，避免主线程重复拷位图")
+    func snapshotPrefersPNGOverTIFF() throws {
+        let image = try #require(NSImage(data: Self.pngBytes))
+        let tiff = try #require(image.tiffRepresentation)
+        let pasteboardItem = NSPasteboardItem()
+        pasteboardItem.setData(Self.pngBytes, forType: .png)
+        pasteboardItem.setData(tiff, forType: .tiff)
+
+        let snapshot = PasteboardSnapshot.capture(from: [pasteboardItem])
+
+        #expect(snapshot.items.first?.data(.png) != nil)
+        #expect(snapshot.items.first?.data(.tiff) == nil)
+    }
+
     // MARK: - 夹具
 
     /// 真实可解码的 1×1 PNG：`isBitmap` 校验容器头，随手造的字节过不了。

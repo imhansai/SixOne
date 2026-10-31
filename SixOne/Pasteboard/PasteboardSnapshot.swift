@@ -66,6 +66,12 @@ nonisolated struct PasteboardSnapshot: Sendable {
                 }
             }
             for type in dataTypes {
+                // 同时提供 PNG/TIFF 时只留 PNG：解析器本来就优先 PNG，避免主线程重复拷一份位图。
+                if type == .tiff,
+                   let png = values[NSPasteboard.PasteboardType.png.rawValue],
+                   PasteboardFormat.isBitmap(png) {
+                    continue
+                }
                 if let data = item.data(forType: type) {
                     values[type.rawValue] = data
                 }

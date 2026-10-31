@@ -5,66 +5,6 @@
 import AppKit
 import SwiftUI
 
-/// 主标题后的复制按钮。
-struct PreviewHeaderCopy {
-    let text: String
-    let help: String
-}
-
-enum PreviewHeaderCopyAction {
-    @MainActor
-    static func make(
-        for item: ClipboardItem,
-        isEditing: Bool,
-        fileNameTitle: String?,
-        linkOrigin: String?
-    ) -> PreviewHeaderCopy? {
-        guard !isEditing else { return nil }
-        switch item.kind {
-        case .text:
-            guard let text = item.text, !text.isEmpty else { return nil }
-            return PreviewHeaderCopy(text: text, help: Localizer.string("Copy Text"))
-        case .image, .file:
-            guard let fileNameTitle, !fileNameTitle.isEmpty else { return nil }
-            return PreviewHeaderCopy(text: fileNameTitle, help: Localizer.string("Copy File Name"))
-        case .link:
-            if let linkOrigin {
-                return PreviewHeaderCopy(text: linkOrigin, help: Localizer.string("Copy Origin"))
-            }
-            // 无 host 的链接，复制地址本身。
-            guard let text = item.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else { return nil }
-            return PreviewHeaderCopy(text: text, help: Localizer.string("Copy Link"))
-        case .color:
-            guard let hex = item.colorHexString else { return nil }
-            return PreviewHeaderCopy(text: hex, help: Localizer.string("Copy Hex Value"))
-        }
-    }
-}
-
-/// 预览顶栏主标题：各类型都尽量给出内容身份，而不是类别名。
-enum PreviewHeaderTitle {
-    @MainActor
-    static func mainTitle(
-        for item: ClipboardItem,
-        isEditing: Bool,
-        fileNameTitle: String?,
-        linkOrigin: String?
-    ) -> String {
-        if isEditing { return Localizer.string("Edit") }
-        switch item.kind {
-        case .text, .color:
-            // 文本取首行、颜色取色值，比类别名更能辨认。
-            return item.displayTitle
-        case .image, .file:
-            return fileNameTitle ?? item.displayTitle
-        case .link:
-            // 无 host 的链接（mailto: 等）用地址本身。
-            return linkOrigin ?? item.displayTitle
-        }
-    }
-}
-
 /// 预览内容视图：顶栏标题 + 内容区；文本可内联编辑，文件按类型选渲染器，自身不带玻璃材质。
 struct PreviewDetailView: View {
     let item: ClipboardItem
@@ -72,7 +12,6 @@ struct PreviewDetailView: View {
 
     @Environment(PanelContext.self) private var context
 
-    private var manager: ClipboardManager { context.manager }
     private var previewState: PreviewState { context.previewState }
     private var actions: PanelActionHandler? { context.actions }
 
@@ -81,8 +20,6 @@ struct PreviewDetailView: View {
     @State private var previewImage: PreviewImage?
     @State private var previewImageData: Data?
     @State private var imageLoadFailed = false
-    @State private var defaultApp: URL?
-    @State private var availableApps: [URL] = []
     @State private var fileMeta: (size: Int64?, modDate: Date?, isDirectory: Bool)?
     @State private var groupMeta: GroupMeta?
     @State private var shareAnchor = ViewAnchorBox()
@@ -142,9 +79,6 @@ struct PreviewDetailView: View {
         .onChange(of: previewState.groupFileIndex) { _, _ in
             ensureMetadata()
             refreshPathBarReachability()
-            defaultApp = nil
-            availableApps = []
-            loadOpenWithApps()
             revealGroupFilePosition()
         }
         .task(id: item.id) {
@@ -359,8 +293,13 @@ struct PreviewDetailView: View {
     /// 图片条目按 id 补齐 imageData 并解码（列表查询不含大字段）。
     private func loadPreviewImage() async {
         guard item.kind == .image, previewImage == nil else { return }
-        let full = item.imageData == nil ? manager.fetchFullItem(id: item.id) : item
-        guard let data = full?.imageData else {
+        let data: Data?
+        if let imageData = item.imageData {
+            data = imageData
+        } else {
+            data = await context.manager.loadImageData(id: item.id)
+        }
+        guard let data else {
             imageLoadFailed = true
             return
         }
@@ -577,51 +516,15 @@ struct PreviewDetailView: View {
 
     // MARK: - 打开 / 在访达中显示
 
-    /// 仿 QuickLook 菜单；应用列表仅首次出现时查询，避免反复枚举 LaunchServices。
+    @ViewBuilder
     private var openWithMenu: some View {
-        Menu {
-            if let defaultApp {
-                Button(String(format: Localizer.string("Open in %@"), defaultApp.displayName)) {
-                    openIn(defaultApp)
-                }
-                Divider()
-                ForEach(availableApps.filter { $0 != defaultApp }, id: \.self) { app in
-                    Button(app.displayName) {
-                        openIn(app)
-                    }
-                }
-                Divider()
-            } else {
-                ForEach(availableApps, id: \.self) { app in
-                    Button(app.displayName) {
-                        openIn(app)
-                    }
-                }
-                if !availableApps.isEmpty {
-                    Divider()
-                }
-            }
-            Button(Localizer.string("Reveal in Finder")) {
-                revealInFinder()
-            }
-        } label: {
-            PreviewHeaderMenuLabel(systemImage: "arrow.up.forward.app")
-        }
-        .buttonStyle(.plain)
-        .appTooltip(Localizer.string("Open with"))
-        .accessibilityLabel(Localizer.string("Open with"))
-        .onAppear {
-            loadOpenWithApps()
-        }
-    }
-
-    private func loadOpenWithApps() {
-        guard let fileURL else { return }
-        if defaultApp == nil {
-            defaultApp = NSWorkspace.shared.urlForApplication(toOpen: fileURL)
-        }
-        if availableApps.isEmpty {
-            availableApps = NSWorkspace.shared.urlsForApplications(toOpen: fileURL)
+        if let fileURL {
+            PreviewOpenWithMenu(
+                fileURL: fileURL,
+                onHandOff: { actions?.panelDidHandOffToExternalApp() }
+            )
+            // 组内切换文件时重建，重新枚举打开方式。
+            .id(fileURL)
         }
     }
 
@@ -677,60 +580,25 @@ struct PreviewDetailView: View {
         actions?.panelDidHandOffToExternalApp()
     }
 
-    private func openIn(_ app: URL) {
-        guard let fileURL else { return }
-        if let defaultApp, app == defaultApp {
-            NSWorkspace.shared.open(fileURL)
-        } else {
-            let config = NSWorkspace.OpenConfiguration()
-            NSWorkspace.shared.open([fileURL], withApplicationAt: app, configuration: config) { _, error in
-                if error != nil {
-                    NSWorkspace.shared.open(fileURL)
-                }
-            }
-        }
-        actions?.panelDidHandOffToExternalApp()
-    }
-
-    private func revealInFinder() {
-        guard let fileURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-        actions?.panelDidHandOffToExternalApp()
-    }
-
     private var linkURL: URL? {
         guard item.kind == .link, let text = item.text else { return nil }
         let url = URL(string: text)
         return url?.scheme != nil ? url : nil
     }
 
+    @ViewBuilder
     private var openLinkButton: some View {
-        let isWeb = Self.isWebScheme(linkURL?.scheme)
-        let titleKey: String.LocalizationValue = isWeb ? "Open in Browser" : "Open Link"
-        return PreviewHeaderActionButton(
-            systemImage: isWeb ? "safari" : "arrow.up.forward.app",
-            help: Localizer.string(titleKey)
-        ) {
-            openLink()
-        }
-    }
-
-    /// 打开链接；无处理程序时提示，不静默失败。
-    private func openLink() {
-        guard let url = linkURL else { return }
-        guard NSWorkspace.shared.open(url) else {
-            context.noticeState.message = String(
-                format: Localizer.string("Cannot open link: %@"),
-                url.absoluteString
+        if let linkURL {
+            PreviewLinkOpenButton(
+                url: linkURL,
+                onHandOff: { actions?.panelDidHandOffToExternalApp() },
+                onError: { message in context.noticeState.message = message }
             )
-            return
         }
-        actions?.panelDidHandOffToExternalApp()
     }
 
     nonisolated static func isWebScheme(_ scheme: String?) -> Bool {
-        guard let scheme = scheme?.lowercased() else { return false }
-        return scheme == "http" || scheme == "https"
+        PreviewLinkOpenButton.isWebScheme(scheme)
     }
 
     // MARK: - 内容分发
@@ -815,30 +683,3 @@ struct PreviewDetailView: View {
     }
 }
 
-private struct GroupFilePositionBadge: View {
-    let position: Int
-    let total: Int
-
-    var body: some View {
-        Text("\(position) / \(total)")
-            .font(.system(size: 11, weight: .medium))
-            .monospacedDigit()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(.regularMaterial))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 1))
-            .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
-            .allowsHitTesting(false)
-    }
-}
-
-private extension URL {
-    /// 应用包路径的显示名（去掉 .app 后缀）。
-    var displayName: String {
-        var name = lastPathComponent
-        if name.hasSuffix(".app") {
-            name.removeLast(4)
-        }
-        return name
-    }
-}
