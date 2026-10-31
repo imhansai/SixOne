@@ -135,7 +135,7 @@ open build/Build/Products/Debug/SixOne.app
 | 改文本文件的编码判定 | `TextFileReader`（BOM → UTF-8 → GB18030 → Latin-1）+ `TextFileReaderTests` |
 | 改列表选中移动 / 预览跟随 | `PanelSelectionCursor`（切预览失败要回滚）+ `PanelSelectionCursorTests` |
 | 改列表会话协调（选中 / 预览关闭 / 揭示 / 复制反馈） | `HistoryListCoordinator` + `HistoryListCoordinatorTests`；视图只保留渲染与回调 |
-| 动列表容器 / 滚动手感 / 可见区 | `ListTableCoordinator` / `ListTableScaffold` 承载共用的 NSTableView 机制；`HistoryListTableView` 与 `GroupListTableView` 只提供行数据、行内容与选中。共用积木仍在 `ListRowPrimitives` / `HistoryListScrollGeometry`。测试：`ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
+| 动列表容器 / 滚动手感 / 可见区 | `ListTableCoordinator` / `ListTableScaffold` 承载共用的 NSTableView 机制；`HistoryListTableView` 与 `GroupListTableView` 只提供行数据、行内容与选中。共用积木在 `ListRowPrimitives` / `HistoryListScrollGeometry` / `ListRowShell`（几何、选中底色、复制命中与交互宿主）。测试：`ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
 | 改文件组预览（条目 / 行 / 菜单） | `FileGroupEntry`（条目、动作与滚动几何）、`FileGroupRowView`（行与异步状态）、`FileGroupMenuBuilder`（右键菜单）、`FileGroupPreview`（容器）。测试：`FileGroupMenuBuilderTests` / `GroupListTableViewTests` / `GroupPreviewNavigationTests` |
 | 动分享 | `PanelSharing`；面板侧只把锚点与「收起面板」交进去 |
 | 改装配（谁接谁） | `AppComposition` / `PanelAssembly`，并补一条接线用例（`AppCompositionTests`） |

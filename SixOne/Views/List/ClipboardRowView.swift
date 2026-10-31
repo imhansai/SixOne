@@ -33,89 +33,29 @@ struct ClipboardRowView: View {
     @Environment(\.locale) private var locale
     @Environment(PanelContext.self) private var context
 
-    @State private var isCopyButtonPressed = false
-
-    private var isActiveSelection: Bool { isSelected && isListActive }
-
-    private var usesOverlayScrollers: Bool {
-        context.scrollerLayout.usesOverlayScrollers
-    }
-
     private var iconShadowColor: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.24)
-            : Color.black.opacity(0.30)
-    }
-
-    /// 选中底色：激活蓝实心/失焦灰，只改内容层，不叠第二层玻璃；高亮只包住行本体。
-    @ViewBuilder
-    private var selectionBackground: some View {
-        Group {
-            if isActiveSelection {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(activeSelectionColor)
-            } else if isSelected {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(inactiveSelectionColor)
-            }
-        }
-        .padding(.top, listTopPadding)
-        .padding(.bottom, listBottomPadding)
-        .padding(.leading, ClipboardLayout.rowHorizontalInset)
-        .padding(
-            .trailing,
-            ClipboardLayout.rowSelectionTrailingInset(usesOverlayScrollers: usesOverlayScrollers)
-        )
-    }
-
-    private var activeSelectionColor: Color {
-        Color(.sRGB, red: 84 / 255, green: 140 / 255, blue: 235 / 255)
-    }
-
-    private var inactiveSelectionColor: Color {
-        Color(.sRGB, white: 0.45).opacity(0.30)
-    }
-
-    private var rowTotalHeight: CGFloat {
-        ClipboardLayout.rowHeight + listTopPadding + listBottomPadding
-    }
-
-    private var copyButtonRect: CGRect {
-        ClipboardLayout.rowCopyButtonRect(listTopPadding: listTopPadding)
+        RowAppearance.iconShadowColor(for: colorScheme)
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            bodyColumn
-
-            trailingColumn
-        }
-        .frame(height: rowTotalHeight)
-        // 高亮走 background：可伸缩形状放进 ZStack 会把行撑大。
-        .background(selectionBackground)
-        .overlay {
-            RowInteractionHost(
-                rowID: row.id,
-                onSelect: onSelect,
-                onActivate: onActivate,
-                makeMenu: menuProvider,
-                clickTracker: clickTracker
-            )
-        }
-        // 复制命中层在宿主之上，其余事件放行给宿主；编号占位时让整行照常响应。
-        .overlay(alignment: .topTrailing) {
-            if shortcutNumber == nil {
-                RowCopyHitTarget(
-                    onCopy: onCopy,
-                    onPressChanged: { isCopyButtonPressed = $0 }
-                )
-                    .frame(width: copyButtonRect.width, height: copyButtonRect.height)
-                    .padding(.top, copyButtonRect.minY)
-                    .padding(
-                        .trailing,
-                        ClipboardLayout.rowCopyButtonTrailingInset(usesOverlayScrollers: usesOverlayScrollers)
-                    )
-            }
+        ListRowShell(
+            rowID: row.id,
+            isSelected: isSelected,
+            isListActive: isListActive,
+            listTopPadding: listTopPadding,
+            listBottomPadding: listBottomPadding,
+            shortcutNumber: shortcutNumber,
+            isCopied: isCopied,
+            title: titleText,
+            titleTooltipDetail: titleTooltipDetail,
+            subtitle: AnyView(Text(subtitleText)),
+            onCopy: onCopy,
+            onSelect: onSelect,
+            onActivate: onActivate,
+            makeMenu: menuProvider,
+            clickTracker: clickTracker
+        ) {
+            leadingIcon
         }
         // 旧尺寸缩略图在行第一次出现时按当前尺寸重算；只处理已有缩略图的条目。
         .task(id: row.id) {
@@ -125,71 +65,11 @@ struct ClipboardRowView: View {
         }
     }
 
-    private var bodyColumn: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: listTopPadding)
-            rowContent
-            Color.clear.frame(height: listBottomPadding)
-        }
-    }
-
     private var titleTooltipDetail: String? {
         guard row.kind == .file || row.kind == .image,
               let path = row.filePath,
               !path.isEmpty else { return nil }
         return path
-    }
-
-    private var rowContent: some View {
-        HStack(spacing: 16) {
-            leadingIcon
-                .frame(width: 40, height: 40)
-
-            VStack(alignment: .leading, spacing: 4) {
-                RowTitleText(
-                    text: titleText,
-                    isActiveSelection: isActiveSelection,
-                    detail: titleTooltipDetail
-                )
-
-                Text(subtitleText)
-                    .font(.system(size: 12.5))
-                    // 语义次级色随外观与「增强对比度」取值；写死灰在玻璃上对比度不足。
-                    .foregroundStyle(
-                        isActiveSelection
-                            ? Color.white.opacity(0.85)
-                            : Color.secondary
-                    )
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .frame(maxWidth: .infinity, minHeight: ClipboardLayout.rowHeight, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { onSelect(row.id) }
-    }
-
-    private var trailingColumn: some View {
-        Group {
-            if let shortcutNumber {
-                RowActionButton(
-                    content: .number(shortcutNumber),
-                    isActiveSelection: isActiveSelection
-                )
-            } else {
-                copyButton
-            }
-        }
-        .padding(.top, copyButtonRect.minY)
-        .frame(
-            width: ClipboardLayout.rowCopyButtonColumnWidth(usesOverlayScrollers: usesOverlayScrollers),
-            height: rowTotalHeight,
-            alignment: .topLeading
-        )
     }
 
     private enum RowType {
@@ -273,18 +153,6 @@ struct ClipboardRowView: View {
         case .color:
             return "Color"
         }
-    }
-
-    private var copyButton: some View {
-        Button(action: onCopy) {
-            RowActionButton(
-                content: .copy(isCopied: isCopied),
-                isActiveSelection: isActiveSelection,
-                isPressed: isCopyButtonPressed
-            )
-        }
-        .buttonStyle(NoPressFeedbackButtonStyle())
-        .accessibilityLabel(Localizer.string("Copy"))
     }
 
     @ViewBuilder
