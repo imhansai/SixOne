@@ -61,7 +61,7 @@ struct HistoryRetentionTests {
     }
 
     @Test("启动时就按当前保留时长裁一次")
-    func trimsOnLaunch() throws {
+    func trimsOnLaunch() async throws {
         let harness = try ClipboardHarness(retention: .oneMonth) { context in
             let expired = ClipboardItem(kind: .text, text: "left over")
             expired.lastActivityAt = Date().addingTimeInterval(-40 * 24 * 3600)
@@ -69,7 +69,7 @@ struct HistoryRetentionTests {
             try context.save()
         }
 
-        #expect(harness.itemsNewestFirst().isEmpty)
+        #expect(await Wait.until { harness.itemsNewestFirst().isEmpty })
         #expect(harness.recorder.events == [.trimmed])
     }
 }

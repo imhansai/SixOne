@@ -46,20 +46,32 @@ final class ClipboardCapturePipeline {
 
     /// 轮询一次剪贴板；主线程只做 changeCount、隐私判定与读内容，解析交给后台。
     func pollPasteboard() {
-        guard pasteboard.changeCount != lastChangeCount else { return }
-        lastChangeCount = pasteboard.changeCount
-        // 隐私判定须先于读内容：只看类型就拒绝，敏感字节不进内存。
-        if pasteboard.isMarkedDoNotRecord {
-            logger.notice("跳过被标记为不记录的剪贴板内容")
-            return
-        }
+        let changeCount = pasteboard.changeCount
+        guard changeCount != lastChangeCount else { return }
+
+        // 来源忽略判定先于读内容：被忽略的应用写进来的字节不进内存。
         let source = frontmostApplication()
         if isIgnoredSource(source) {
+            // 判定期间又变了就不认领，下一轮按新来源重新判。
+            if pasteboard.changeCount == changeCount {
+                lastChangeCount = changeCount
+            }
             return
         }
-        let snapshot = pasteboard.snapshot
-        guard !snapshot.items.isEmpty else { return }
-        scheduleCapture(snapshot: snapshot, source: source)
+
+        switch pasteboard.readRecordableSnapshot() {
+        case let .captured(snapshot, capturedChangeCount):
+            lastChangeCount = capturedChangeCount
+            scheduleCapture(snapshot: snapshot, source: source)
+        case let .markedDoNotRecord(readChangeCount):
+            lastChangeCount = readChangeCount
+            logger.notice("跳过被标记为不记录的剪贴板内容")
+        case let .empty(readChangeCount):
+            lastChangeCount = readChangeCount
+        case .unstable:
+            // 读取期间又有新复制：不认领，下一轮重新读。
+            return
+        }
     }
 
     /// 串行排一次捕获：等上一次落定，后台解析后再回主线程入库。

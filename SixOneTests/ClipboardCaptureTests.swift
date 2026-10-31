@@ -50,6 +50,24 @@ struct ClipboardCaptureTests {
         #expect(harness.recorder.events.count == 1)
     }
 
+    @Test("读取期间剪贴板再次变化：本轮丢弃，下一次轮询补上")
+    func retriesWhenPasteboardChangesDuringRead() async throws {
+        let harness = try ClipboardHarness()
+        harness.pasteboard.simulateCopy(text: "hello")
+        harness.pasteboard.unstableReadsRemaining = 1
+
+        harness.manager.pollPasteboard()
+        await harness.manager.waitForPendingCapture()
+
+        #expect(harness.itemsNewestFirst().isEmpty)
+        #expect(harness.manager.hasUnpolledPasteboardChange)
+
+        await harness.pollAndWait()
+
+        #expect(harness.itemsNewestFirst().map(\.text) == ["hello"])
+        #expect(!harness.manager.hasUnpolledPasteboardChange)
+    }
+
     @Test("复制后还没轮询：能探测到未认领的变化，轮询后清除")
     func detectsUnpolledPasteboardChange() async throws {
         let harness = try ClipboardHarness()

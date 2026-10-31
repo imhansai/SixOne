@@ -61,7 +61,7 @@ final class ClipboardThumbnailScheduler {
                 self.previewCache.remove(for: "thumb-\(item.id.uuidString)")
                 item.thumbnailData = thumb
                 item.thumbnailVersion = ClipboardItem.currentThumbnailVersion
-                self.writer.save("写入缩略图")
+                guard self.writer.save("写入缩略图") else { return }
                 self.events.post(.thumbnailUpdated(id: id))
             }
         }

@@ -88,7 +88,8 @@ final class ClipboardManager {
         if pollInterval != nil {
             startRetentionSweep()
         }
-        trimToRetention()
+        // 启动裁剪延后一轮：装配阶段不在主线程删大批过期条目。
+        Task { [weak self] in self?.trimToRetention() }
         // 后台清掉上次运行的导出临时文件（含剪贴板内容副本）。
         let logger = self.logger
         Task.detached(priority: .utility) {
@@ -153,7 +154,8 @@ final class ClipboardManager {
         writer.clearAll()
     }
 
-    func delete(id: UUID) {
+    @discardableResult
+    func delete(id: UUID) -> Bool {
         writer.delete(id: id)
     }
 

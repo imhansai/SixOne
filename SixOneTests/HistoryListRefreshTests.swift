@@ -202,6 +202,46 @@ struct HistoryListRefreshTests {
         #expect(!store.didFailToLoad)
     }
 
+    @Test("连续触达按发布顺序处理：后触达的条目最终在顶部")
+    func serializesTouchEvents() async {
+        let first = HistoryRow.stub(title: "A")
+        let second = HistoryRow.stub(title: "B")
+        let repository = FakeHistoryRepository(rowsByQuery: ["": [first, second]])
+        await repository.setRowDelay(.milliseconds(200), for: first.id)
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        await store.loadLatestAndWait()
+        #expect(store.rows.map(\.id) == [first.id, second.id])
+
+        events.post(.touched(id: first.id))
+        events.post(.touched(id: second.id))
+
+        // 两个单行刷新都返回后再断言：旧实现并发跑，先返回的 B 会被后返回的 A 顶下去。
+        #expect(await repository.waitUntilRowsReturned(2))
+        #expect(store.rows.map(\.id) == [second.id, first.id])
+    }
+
+    @Test("删除与在途整窗加载并发：迟到的旧结果不能把行加回来")
+    func deletedRowIsNotRestoredByInFlightLoad() async {
+        let first = HistoryRow.stub(title: "A")
+        let second = HistoryRow.stub(title: "B")
+        let repository = FakeHistoryRepository(rowsByQuery: ["": [first, second]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        await store.loadLatestAndWait()
+        #expect(store.rows.map(\.id) == [first.id, second.id])
+
+        // 让下一次整窗加载慢返回，再在它落定前删掉 A。
+        await repository.setQueryDelay(.milliseconds(300), for: "")
+        events.post(.trimmed)
+        events.post(.deleted(id: first.id))
+
+        #expect(await repository.waitUntilReturnedCount(2))
+        #expect(store.rows.map(\.id) == [second.id])
+    }
+
     /// 等事件链路走完：先让出主 actor，再等挂起加载；固定轮询或 sleep 都等不准。
     private func settle(_ store: HistoryListStore) async {
         await Task.yield()

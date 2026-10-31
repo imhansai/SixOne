@@ -18,26 +18,44 @@ enum PasteboardPayload: Equatable {
     case color(text: String?, archive: Data)
 }
 
+/// 一次读取的结果：判定与快照必须基于同一份 pasteboardItems。
+enum PasteboardReadResult {
+    /// 可记录；changeCount 是读到这份快照时的那一次。
+    case captured(PasteboardSnapshot, changeCount: Int)
+    /// 被标记为「不要记录」；只看类型，未读内容。
+    case markedDoNotRecord(changeCount: Int)
+    /// 剪贴板为空，没有可记录的内容。
+    case empty(changeCount: Int)
+    /// 读取期间剪贴板又被改写：这份快照可能是半截的，本轮作废。
+    case unstable
+}
+
 /// 系统剪贴板读写口；抽出以便测试，避免覆写用户剪贴板。
 protocol PasteboardAccessing {
     /// 变化计数，轮询据此判断是否有新内容。
     var changeCount: Int { get }
-    /// 是否标记「不要记录」；只看类型不读内容，须在取 `snapshot` 前判定。
-    var isMarkedDoNotRecord: Bool { get }
-    /// 值快照；交出快照而非 `NSPasteboardItem`，因为后者不能离开主线程。
-    var snapshot: PasteboardSnapshot { get }
+    /// 一次读取：先判「不要记录」，再由同一份 items 生成快照。
+    /// 「不要记录」的判定必须先于读内容，且不能与快照各读一次剪贴板。
+    func readRecordableSnapshot() -> PasteboardReadResult
     func write(_ payload: PasteboardPayload)
 }
 
 struct SystemPasteboard: PasteboardAccessing {
     var changeCount: Int { NSPasteboard.general.changeCount }
 
-    var isMarkedDoNotRecord: Bool {
-        PasteboardSnapshot.isMarkedDoNotRecord(NSPasteboard.general.pasteboardItems ?? [])
-    }
-
-    var snapshot: PasteboardSnapshot {
-        PasteboardSnapshot.capture(from: NSPasteboard.general.pasteboardItems ?? [])
+    func readRecordableSnapshot() -> PasteboardReadResult {
+        let pasteboard = NSPasteboard.general
+        let changeCount = pasteboard.changeCount
+        // 只读一次剪贴板：判定与快照共用这份 items，避免两次读取之间的 TOCTOU。
+        let items = pasteboard.pasteboardItems ?? []
+        guard !PasteboardSnapshot.isMarkedDoNotRecord(items) else {
+            return .markedDoNotRecord(changeCount: changeCount)
+        }
+        guard !items.isEmpty else { return .empty(changeCount: changeCount) }
+        let snapshot = PasteboardSnapshot.capture(from: items)
+        // 读取期间被改写：快照可能只拷到一半，丢弃等下一轮。
+        guard pasteboard.changeCount == changeCount else { return .unstable }
+        return .captured(snapshot, changeCount: changeCount)
     }
 
     func write(_ payload: PasteboardPayload) {

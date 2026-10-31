@@ -13,6 +13,8 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     private var rowsByQuery: [String: [HistoryRow]]
     /// 查询词 → 延迟，用来制造「先发的请求后返回」。
     private var delaysByQuery: [String: Duration]
+    /// 条目 id → 延迟，用来制造单行刷新乱序。
+    private var rowDelays: [UUID: Duration] = [:]
     /// 置位后所有查询都抛错。
     private var isFailing = false
     /// 依次收到的查询词。
@@ -21,10 +23,16 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     private(set) var returnedQueries: [String] = []
     /// 依次收到的条数上限。
     private(set) var requestedLimits: [Int] = []
+    /// 依次返回过结果的条目 id。
+    private(set) var returnedRowIDs: [UUID] = []
 
     init(rowsByQuery: [String: [HistoryRow]] = [:], delaysByQuery: [String: Duration] = [:]) {
         self.rowsByQuery = rowsByQuery
         self.delaysByQuery = delaysByQuery
+    }
+
+    func setQueryDelay(_ delay: Duration, for query: String) {
+        delaysByQuery[query] = delay
     }
 
     /// 让之后的查询都失败。
@@ -59,11 +67,42 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         return returnedQueries.contains(query)
     }
 
+    /// 等至少 `count` 次查询返回过结果（超时返回 false）。
+    func waitUntilReturnedCount(_ count: Int, timeout: Duration = .seconds(5)) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if returnedQueries.count >= count { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return returnedQueries.count >= count
+    }
+
+    func setRowDelay(_ delay: Duration, for id: UUID) {
+        rowDelays[id] = delay
+    }
+
     func row(id: UUID) async throws -> HistoryRow? {
+        if let delay = rowDelays[id] {
+            try? await Task.sleep(for: delay)
+        }
         if isFailing {
             throw FakeHistoryError.readFailed
         }
-        return rowsByQuery.values.flatMap { $0 }.first { $0.id == id }
+        let row = rowsByQuery.values.flatMap { $0 }.first { $0.id == id }
+        if row != nil {
+            returnedRowIDs.append(id)
+        }
+        return row
+    }
+
+    /// 等至少 `count` 次单行读取返回过结果（超时返回 false）。
+    func waitUntilRowsReturned(_ count: Int, timeout: Duration = .seconds(5)) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if returnedRowIDs.count >= count { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return returnedRowIDs.count >= count
     }
 
     func itemExists(id: UUID) async throws -> Bool {

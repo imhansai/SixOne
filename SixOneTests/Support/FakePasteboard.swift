@@ -13,13 +13,20 @@ final class FakePasteboard: PasteboardAccessing {
     private(set) var items: [NSPasteboardItem] = []
     /// 最近一次写回的内容。
     private(set) var lastWrite: PasteboardPayload?
+    /// 模拟读取期间剪贴板又被改写：接下来的这么多次读取返回 unstable。
+    var unstableReadsRemaining = 0
 
-    var isMarkedDoNotRecord: Bool {
-        PasteboardSnapshot.isMarkedDoNotRecord(items)
-    }
-
-    var snapshot: PasteboardSnapshot {
-        PasteboardSnapshot.capture(from: items)
+    func readRecordableSnapshot() -> PasteboardReadResult {
+        if unstableReadsRemaining > 0 {
+            unstableReadsRemaining -= 1
+            return .unstable
+        }
+        let changeCount = changeCount
+        guard !PasteboardSnapshot.isMarkedDoNotRecord(items) else {
+            return .markedDoNotRecord(changeCount: changeCount)
+        }
+        guard !items.isEmpty else { return .empty(changeCount: changeCount) }
+        return .captured(PasteboardSnapshot.capture(from: items), changeCount: changeCount)
     }
 
     /// 模拟带「不要记录」标记的复制。

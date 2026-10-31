@@ -33,14 +33,20 @@ final class HistoryListStore {
     var isSearching: Bool { !query.isEmpty }
     private var generation = 0
     private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var eventTask: Task<Void, Never>?
 
     init(repository: ClipboardHistoryRepository, events: ClipboardHistoryEventBus) {
         self.repository = repository
         self.eventBus = events
-        // 推迟一轮主线程再处理，避免读到发布方的写库中间状态。
+        // 推迟一轮主线程再处理，避免读到发布方的写库中间状态；
+        // 串成一条任务链，事件必须按发布顺序落定。
         eventObservation = events.observe { [weak self] event in
-            Task { @MainActor in
-                self?.handle(event)
+            guard let self else { return }
+            let previous = self.eventTask
+            self.eventTask = Task { [weak self] in
+                await previous?.value
+                guard let self else { return }
+                await self.handle(event)
             }
         }
     }
@@ -163,6 +169,7 @@ final class HistoryListStore {
         updated.insert(refreshed, at: 0)
         rows = updated
         dataRevision &+= 1
+        invalidatePendingLoad()
     }
 
     private func reloadRow(id: UUID) async {
@@ -170,12 +177,20 @@ final class HistoryListStore {
         guard let refreshed = await fetchRow(id: id) else { return }
         rows[index] = refreshed
         dataRevision &+= 1
+        invalidatePendingLoad()
     }
 
     private func removeRow(id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows.remove(at: index)
         dataRevision &+= 1
+        invalidatePendingLoad()
+    }
+
+    /// 本地已经改过 rows：让更早发出的整窗加载作废，避免它用旧快照把改动盖回去。
+    private func invalidatePendingLoad() {
+        generation &+= 1
+        isLoading = false
     }
 
     /// 条目是否还在库里；读库出错按「还在」处理。
@@ -189,7 +204,7 @@ final class HistoryListStore {
 
     // MARK: - 数据变化响应
 
-    private func handle(_ event: ClipboardHistoryEvent) {
+    private func handle(_ event: ClipboardHistoryEvent) async {
         switch event {
         case .inserted:
             // 只有真新增内容才作数；面板内复制/粘贴发的是 touched，深浏览的连续性不受影响。
@@ -211,13 +226,13 @@ final class HistoryListStore {
             if isSearching {
                 startWindowLoad()
             } else if rows.contains(where: { $0.id == id }) {
-                Task { [weak self] in await self?.moveRowToTop(id: id) }
+                await moveRowToTop(id: id)
             } else {
                 // 被触达的条目不在当前 1000 行窗口里：它已置顶，必须重载才能看到。
                 startWindowLoad()
             }
         case .thumbnailUpdated(let id):
-            Task { [weak self] in await self?.reloadRow(id: id) }
+            await reloadRow(id: id)
         case .deleted(let id):
             removeRow(id: id)
         }

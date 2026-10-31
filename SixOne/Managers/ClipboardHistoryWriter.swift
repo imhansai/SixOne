@@ -13,6 +13,8 @@ final class ClipboardHistoryWriter {
     private let container: ModelContainer
     private let context: ModelContext
     private let retentionInterval: () -> TimeInterval?
+    /// 写盘动作；测试注入失败来验证回滚。
+    private let persist: () throws -> Void
     let events: ClipboardHistoryEventBus
     private let logger = AppLog.logger("ClipboardHistoryWriter")
 
@@ -24,23 +26,31 @@ final class ClipboardHistoryWriter {
     init(
         container: ModelContainer,
         events: ClipboardHistoryEventBus,
-        retentionInterval: @escaping () -> TimeInterval?
+        retentionInterval: @escaping () -> TimeInterval?,
+        persist: (() throws -> Void)? = nil
     ) {
+        let context = container.mainContext
         self.container = container
-        self.context = container.mainContext
+        self.context = context
         self.events = events
         self.retentionInterval = retentionInterval
+        self.persist = persist ?? { try context.save() }
     }
 
     // MARK: - 写库
 
-    /// 写盘：失败记日志并上报，不打断剪贴板流程。
-    func save(_ reason: String) {
+    /// 写盘：失败回滚这一轮改动并上报，不打断剪贴板流程。返回是否落盘。
+    @discardableResult
+    func save(_ reason: String) -> Bool {
         do {
-            try context.save()
+            try persist()
+            return true
         } catch {
+            // 不回滚的话，context 里的改动会继续被读到，随后的事件也会让界面与磁盘分叉。
+            context.rollback()
             logger.error("保存失败（\(reason, privacy: .public)）：\(error.localizedDescription, privacy: .public)")
             onPersistenceFailure?(reason)
+            return false
         }
     }
 
@@ -76,7 +86,7 @@ final class ClipboardHistoryWriter {
             }
             existing.securityScopeBookmark = fileAccess.bookmark
             existing.securityScopeBookmarks = fileAccess.bookmarks
-            recordTouch(existing, isExternal: isExternal)
+            guard recordTouch(existing, isExternal: isExternal) else { return }
             onStored?(existing, entry)
             trimToRetention()
             return
@@ -99,14 +109,15 @@ final class ClipboardHistoryWriter {
         item.securityScopeBookmark = fileAccess.bookmark
         item.securityScopeBookmarks = fileAccess.bookmarks
         context.insert(item)
-        save("新增条目")
+        guard save("新增条目") else { return }
         events.post(.inserted(id: item.id))
         onStored?(item, entry)
         trimToRetention()
     }
 
     /// 触达：换新排序键置顶、刷新时间与快照，保存后广播。
-    func recordTouch(_ item: ClipboardItem, isExternal: Bool = false) {
+    @discardableResult
+    func recordTouch(_ item: ClipboardItem, isExternal: Bool = false) -> Bool {
         item.lastActivityAt = Date()
         item.recencyID = OrderedUUID.make()
         // 标题快照可能依赖 lastActivityAt，触达后统一刷新。
@@ -117,8 +128,9 @@ final class ClipboardHistoryWriter {
             item.refreshColorSearchText()
         }
         item.refreshFilePathsSearchText()
-        save("触达置顶")
+        guard save("触达置顶") else { return false }
         events.post(.touched(id: item.id, isExternal: isExternal))
+        return true
     }
 
     // MARK: - 维护
@@ -135,7 +147,7 @@ final class ClipboardHistoryWriter {
         for item in expired {
             context.delete(item)
         }
-        save("裁剪过期条目")
+        guard save("裁剪过期条目") else { return }
         events.post(.trimmed)
     }
 
@@ -145,17 +157,20 @@ final class ClipboardHistoryWriter {
         for item in all {
             context.delete(item)
         }
-        save("清空历史")
+        guard save("清空历史") else { return }
         if !all.isEmpty {
             events.post(.cleared)
         }
     }
 
-    func delete(id: UUID) {
-        guard let item = fetchFullItem(id: id) else { return }
+    /// 删除一条；已不存在视为已完成。返回是否落盘。
+    @discardableResult
+    func delete(id: UUID) -> Bool {
+        guard let item = fetchFullItem(id: id) else { return true }
         context.delete(item)
-        save("删除条目")
+        guard save("删除条目") else { return false }
         events.post(.deleted(id: id))
+        return true
     }
 
     // MARK: - 取数

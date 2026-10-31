@@ -222,10 +222,10 @@ final class PanelItemActions {
     private func confirmDelete(id: UUID) {
         confirmationState.pendingDeletionID = nil
         guard let item = manager.fetchLightItem(id: id) else { return }
+        guard manager.delete(id: item.id) else { return }
         if previewState.item?.id == item.id {
             previewState.close()
         }
-        manager.delete(id: item.id)
         if cursor.selectedItemID == item.id {
             cursor.selectedItemID = nil
             navigationState.isSelectionActive = false
