@@ -52,26 +52,6 @@ struct FilePathBarTests {
         )
     }
 
-    @Test("无选区时 ⌘C 复制整段路径")
-    func copyWithoutSelectionCopiesWholePath() {
-        let textView = Self.makeTextView(path: "/Users/example/a.txt")
-        var copied: String?
-        textView.onCopyWhole = { copied = textView.string }
-
-        textView.copy(nil)
-
-        #expect(copied == "/Users/example/a.txt")
-    }
-
-    @Test("菜单校验：无选区的 Copy 仍然可用，整段复制才有入口")
-    func validatesCopyWithoutSelection() {
-        let textView = Self.makeTextView(path: "/tmp/a.txt")
-        textView.onCopyWhole = {}
-        let item = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-
-        #expect(textView.validateUserInterfaceItem(item))
-    }
-
     // MARK: - 预览接入
 
     @Test("单文件预览显示源文件路径")
@@ -162,7 +142,7 @@ struct FilePathBarTests {
     ) -> (host: NSHostingView<AnyView>, window: NSWindow) {
         OffscreenHost.make(
             AnyView(
-                FilePathBar(location: location, onCopy: { _ in }, onPaste: {})
+                FilePathBar(location: location, onCopy: { _ in })
                     .frame(width: size.width, height: size.height)
             ),
             size: size
@@ -201,16 +181,7 @@ struct FilePathBarTests {
         return url.path
     }
 
-    private static func makeTextView(path: String) -> SelectablePathTextView {
-        let textView = SelectablePathTextView(frame: NSRect(x: 0, y: 0, width: 320, height: ClipboardLayout.pathBarHeight))
-        textView.string = path
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.setSelectedRange(NSRange(location: 0, length: 0))
-        return textView
-    }
-
-    private static func pathTextView(in host: NSView) async -> SelectablePathTextView? {
+    private static func pathTextView(in host: NSView) async -> NSTextView? {
         let appeared = await Wait.until {
             findPathTextView(in: host) != nil
         }
@@ -219,8 +190,10 @@ struct FilePathBarTests {
         return appeared ? findPathTextView(in: host) : nil
     }
 
-    private static func findPathTextView(in view: NSView) -> SelectablePathTextView? {
-        if let textView = view as? SelectablePathTextView { return textView }
+    private static func findPathTextView(in view: NSView) -> NSTextView? {
+        if let textView = view as? NSTextView, textView.identifier == .pathTextView {
+            return textView
+        }
         for subview in view.subviews {
             if let found = findPathTextView(in: subview) { return found }
         }

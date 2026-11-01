@@ -57,6 +57,17 @@ struct PanelWindowKeyHandlingTests {
         override var acceptsFirstResponder: Bool { true }
     }
 
+    /// 类名含 Popover，模拟系统翻译弹层 `_NSPopoverWindow` 的识别路径。
+    private final class FakePopoverWindow: NSWindow {
+        var closeCount = 0
+
+        override func performClose(_ sender: Any?) {
+            closeCount += 1
+        }
+    }
+
+    private final class FakeChildWindow: NSWindow {}
+
     private final class FakeActionDelegate: NSObject, NSWindowDelegate {
         var moveUpCount = 0
         var insertNewlineCount = 0
@@ -233,6 +244,94 @@ struct PanelWindowKeyHandlingTests {
         let (panel, handler, _) = makePanel()
         panel.cancelOperation(nil)
         #expect(handler.escapeCount == 1)
+    }
+
+    @Test("有系统弹层时 Esc 只关弹层，不再触发预览的 Esc 路由")
+    func escapeDismissesPresentedPopoverFirst() {
+        let (panel, handler, _) = makePanel()
+        defer { panel.orderOut(nil) }
+        let popover = FakePopoverWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [],
+            backing: .buffered,
+            defer: false
+        )
+        panel.addChildWindow(popover, ordered: .above)
+        popover.orderFront(nil)
+        handler.preDispatchResult = true
+
+        panel.sendEvent(keyEvent(
+            UInt16(kVK_Escape),
+            characters: "\u{1b}",
+            windowNumber: panel.windowNumber
+        ))
+
+        #expect(popover.closeCount == 1)
+        #expect(handler.preDispatchCount == 0)
+        #expect(handler.escapeCount == 0)
+    }
+
+    @Test("没有弹层时 Esc 仍交给按键路由")
+    func escapeWithoutPopoverRoutesToHandler() {
+        let (panel, handler, _) = makePanel()
+        defer { panel.orderOut(nil) }
+        handler.preDispatchResult = true
+
+        panel.sendEvent(keyEvent(
+            UInt16(kVK_Escape),
+            characters: "\u{1b}",
+            windowNumber: panel.windowNumber
+        ))
+
+        #expect(handler.preDispatchCount == 1)
+    }
+
+    @Test("带修饰键的 Esc 不当作弹层关闭键")
+    func modifiedEscapeDoesNotDismissPopover() {
+        let (panel, handler, _) = makePanel()
+        defer { panel.orderOut(nil) }
+        let popover = FakePopoverWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [],
+            backing: .buffered,
+            defer: false
+        )
+        panel.addChildWindow(popover, ordered: .above)
+        popover.orderFront(nil)
+        handler.preDispatchResult = true
+
+        panel.sendEvent(keyEvent(
+            UInt16(kVK_Escape),
+            characters: "\u{1b}",
+            modifiers: [.option],
+            windowNumber: panel.windowNumber
+        ))
+
+        #expect(popover.closeCount == 0)
+        #expect(handler.preDispatchCount == 1)
+    }
+
+    @Test("非弹层的子窗口不被 Esc 拦截")
+    func nonPopoverChildWindowDoesNotConsumeEscape() {
+        let (panel, handler, _) = makePanel()
+        defer { panel.orderOut(nil) }
+        let child = FakeChildWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [],
+            backing: .buffered,
+            defer: false
+        )
+        panel.addChildWindow(child, ordered: .above)
+        child.orderFront(nil)
+        handler.preDispatchResult = true
+
+        panel.sendEvent(keyEvent(
+            UInt16(kVK_Escape),
+            characters: "\u{1b}",
+            windowNumber: panel.windowNumber
+        ))
+
+        #expect(handler.preDispatchCount == 1)
     }
 
     @Test("Tab：handler 允许时走焦点循环，不允许时交给系统")

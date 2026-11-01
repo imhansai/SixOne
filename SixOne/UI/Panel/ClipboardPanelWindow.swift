@@ -34,10 +34,32 @@ final class ClipboardPanel: NSPanel {
             keyHandler?.handleModifierFlagsChanged(event)
         }
         if event.type == .keyDown, let keyHandler {
+            // 系统翻译等弹层挂在面板的 NSPopover 子窗口上，按键窗口仍是面板；
+            // Esc 必须先只关弹层，否则预览一关，弹层随锚点消失也会一起没。
+            if Self.isPlainEscape(event), dismissPresentedPopover() { return }
             if keyHandler.handlePreDispatchKey(event) { return }
             if keyHandler.handleCommandKey(event) { return }
         }
         super.sendEvent(event)
+    }
+
+    /// 关掉面板上的系统弹层；没有弹层时返回 false 交回按键路由。
+    private func dismissPresentedPopover() -> Bool {
+        guard let popover = childWindows?.first(where: { $0.isVisible && Self.isPopoverWindow($0) }) else {
+            return false
+        }
+        popover.performClose(nil)
+        return true
+    }
+
+    private static func isPlainEscape(_ event: NSEvent) -> Bool {
+        event.keyCode == PanelKeyCode.escape
+            && event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty
+    }
+
+    /// 系统弹层（翻译）的窗口类是私有的 `_NSPopoverWindow`；按类名识别，避免误关查找栏等其它子窗口。
+    private static func isPopoverWindow(_ window: NSWindow) -> Bool {
+        String(describing: type(of: window)).localizedCaseInsensitiveContains("popover")
     }
 
     /// ⌘F 先交给面板路由，不认时再回菜单/响应链。

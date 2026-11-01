@@ -24,10 +24,6 @@ protocol PanelActionHandler: AnyObject {
     func panelDidRequestEscape()
     func panelDidRequestCancelEditing()
     func panelDidRequestClearHistory()
-    /// 预览正文无选区时的 ⌘C：复制整条（或组内聚焦的文件）。
-    func panelDidRequestCopyItem()
-    /// 只读文本预览里的 ⌘V：整条粘贴到上一个应用。
-    func panelDidRequestPasteItem()
     /// 复制指定条目回剪贴板；反馈由调用方负责。
     func panelDidRequestCopy(id: UUID)
     /// 只复制指定条目的纯文本形态。

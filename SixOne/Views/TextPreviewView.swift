@@ -28,8 +28,6 @@ struct TextPreviewView: NSViewRepresentable {
     var onDirtyChange: ((Bool) -> Void)?
     /// ⌘S 请求：递增即保存，不退出编辑态。
     var saveRequestID = 0
-    var onCopyFallback: (() -> Void)?
-    var onPasteFallback: (() -> Void)?
     var onEscape: (() -> Void)?
 
     // MARK: - NSViewRepresentable
@@ -42,8 +40,6 @@ struct TextPreviewView: NSViewRepresentable {
         let textView = Self.makeTextView()
         textView.identifier = Self.textViewIdentifier
         textView.delegate = context.coordinator
-        textView.onCopyFallback = onCopyFallback
-        textView.onPasteFallback = onPasteFallback
         textView.onEscape = onEscape
         context.coordinator.onDirtyChange = onDirtyChange
         context.coordinator.lastSaveRequestID = saveRequestID
@@ -107,8 +103,6 @@ struct TextPreviewView: NSViewRepresentable {
         guard let textView = context.coordinator.textView else { return }
         context.coordinator.onEditingFinished = onEditingFinished
         context.coordinator.onDirtyChange = onDirtyChange
-        textView.onCopyFallback = onCopyFallback
-        textView.onPasteFallback = onPasteFallback
         textView.onEscape = onEscape
 
         // 编辑态切换：进入建立基线，退出把最终内容交给宿主保存。

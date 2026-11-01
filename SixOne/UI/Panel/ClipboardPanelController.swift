@@ -248,14 +248,6 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         editingSession.requestCancelEditing()
     }
 
-    func panelDidRequestCopyItem() {
-        itemActions.copySelectedItem()
-    }
-
-    func panelDidRequestPasteItem() {
-        itemActions.pasteSelectedItem()
-    }
-
     func panelDidRequestCopy(id: UUID) {
         itemActions.copyItem(id: id)
     }
@@ -501,7 +493,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             return false
         }
 
-        // 只读文本预览的 ⌘V 由 PreviewTextView 处理；PDF/Web 预览没有这层兜底。
+        // 文本预览的 ⌘V 保持 NSTextView 默认行为；PDF/Web 等非文本预览才回落到粘贴条目。
         if let command,
            command.action == #selector(NSText.paste(_:)),
            previewState.item != nil,

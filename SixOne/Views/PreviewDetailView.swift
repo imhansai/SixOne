@@ -81,8 +81,7 @@ struct PreviewDetailView: View {
                     FilePathBar(
                         location: pathBarLocation,
                         isReachable: pathBarReachable,
-                        onCopy: { context.copyText($0) },
-                        onPaste: { actions?.panelDidRequestPasteItem() }
+                        onCopy: { context.copyText($0) }
                     )
                 }
             }
@@ -251,8 +250,6 @@ struct PreviewDetailView: View {
                 onEditingFinished: { finishEditing($0) },
                 onDirtyChange: { previewState.hasUnsavedChanges = $0 },
                 saveRequestID: previewState.saveRequestID,
-                onCopyFallback: { [weak actions] in actions?.panelDidRequestCopyItem() },
-                onPasteFallback: { [weak actions] in actions?.panelDidRequestPasteItem() },
                 onEscape: { [weak actions] in actions?.panelDidRequestEscape() }
             )
         case .image:

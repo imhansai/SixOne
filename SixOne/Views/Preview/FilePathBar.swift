@@ -14,8 +14,6 @@ struct FilePathBar: View {
     var isReachable = true
     /// 整段复制；只写剪贴板，不写历史。
     let onCopy: (String) -> Void
-    /// 路径文本聚焦时 ⌘V 交回面板粘贴。
-    let onPaste: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -30,12 +28,8 @@ struct FilePathBar: View {
                     .accessibilityHidden(true)
             }
 
-            SelectablePathText(
-                text: location.path,
-                onCopyWhole: { onCopy(location.path) },
-                onPaste: onPaste
-            )
-            .frame(maxWidth: .infinity)
+            SelectablePathText(text: location.path)
+                .frame(maxWidth: .infinity)
 
             CopyTextButton(
                 text: location.path,
@@ -47,11 +41,13 @@ struct FilePathBar: View {
     }
 }
 
+extension NSUserInterfaceItemIdentifier {
+    static let pathTextView = NSUserInterfaceItemIdentifier("SixOne.PathTextView")
+}
+
 /// 可选择、可横向滚动的单行路径。
 struct SelectablePathText: NSViewRepresentable {
     let text: String
-    let onCopyWhole: () -> Void
-    let onPaste: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -66,10 +62,9 @@ struct SelectablePathText: NSViewRepresentable {
         scrollView.verticalScrollElasticity = .none
         scrollView.horizontalScrollElasticity = .allowed
 
-        let textView = SelectablePathTextView()
+        let textView = NSTextView()
+        textView.identifier = .pathTextView
         configure(textView)
-        textView.onCopyWhole = onCopyWhole
-        textView.onPasteFallback = onPaste
         textView.string = text
         context.coordinator.textView = textView
         scrollView.documentView = textView
@@ -78,8 +73,6 @@ struct SelectablePathText: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
-        textView.onCopyWhole = onCopyWhole
-        textView.onPasteFallback = onPaste
         guard textView.string != text else { return }
         textView.string = text
         textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -88,7 +81,7 @@ struct SelectablePathText: NSViewRepresentable {
         scrollView.needsLayout = true
     }
 
-    private func configure(_ textView: SelectablePathTextView) {
+    private func configure(_ textView: NSTextView) {
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
@@ -120,7 +113,7 @@ struct SelectablePathText: NSViewRepresentable {
     }
 
     final class Coordinator {
-        var textView: SelectablePathTextView?
+        var textView: NSTextView?
     }
 }
 
@@ -144,36 +137,3 @@ final class PathScrollView: NSScrollView {
     }
 }
 
-/// 无选区时 ⌘C 复制整段路径。
-final class SelectablePathTextView: NSTextView {
-    var onCopyWhole: (() -> Void)?
-    var onPasteFallback: (() -> Void)?
-
-    override func copy(_ sender: Any?) {
-        if selectedRange().length == 0, let onCopyWhole {
-            onCopyWhole()
-            return
-        }
-        super.copy(sender)
-    }
-
-    override func paste(_ sender: Any?) {
-        if let onPasteFallback {
-            onPasteFallback()
-            return
-        }
-        super.paste(sender)
-    }
-
-    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
-        if item.action == #selector(NSText.copy(_:)),
-           selectedRange().length == 0,
-           onCopyWhole != nil {
-            return true
-        }
-        if item.action == #selector(NSText.paste(_:)), onPasteFallback != nil {
-            return true
-        }
-        return super.validateUserInterfaceItem(item)
-    }
-}

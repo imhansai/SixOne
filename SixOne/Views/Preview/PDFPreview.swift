@@ -9,11 +9,8 @@ import SwiftUI
 struct PDFPreview: NSViewRepresentable {
     let url: URL
 
-    @Environment(PanelContext.self) private var panelContext
-
     func makeNSView(context: Context) -> PDFView {
-        let view = PanelPDFView()
-        view.onCopyFallback = { panelContext.actions?.panelDidRequestCopyItem() }
+        let view = PDFView()
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
@@ -24,9 +21,6 @@ struct PDFPreview: NSViewRepresentable {
     }
 
     func updateNSView(_ view: PDFView, context: Context) {
-        (view as? PanelPDFView)?.onCopyFallback = {
-            panelContext.actions?.panelDidRequestCopyItem()
-        }
         guard view.document?.documentURL != url else { return }
         view.document = PDFDocument(url: url)
     }

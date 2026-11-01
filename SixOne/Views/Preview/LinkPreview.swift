@@ -34,8 +34,6 @@ struct LinkPreview: View {
                 onEditingFinished: onEditingFinished,
                 onDirtyChange: onDirtyChange,
                 saveRequestID: saveRequestID,
-                onCopyFallback: { [weak context] in context?.actions?.panelDidRequestCopyItem() },
-                onPasteFallback: { [weak context] in context?.actions?.panelDidRequestPasteItem() },
                 onEscape: { [weak context] in context?.actions?.panelDidRequestEscape() }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)

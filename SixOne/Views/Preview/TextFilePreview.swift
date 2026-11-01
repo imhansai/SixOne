@@ -31,8 +31,6 @@ struct TextFilePreview: View {
                 contentID: url.path,
                 attributedTextData: nil,
                 plainText: text,
-                onCopyFallback: { [weak context] in context?.actions?.panelDidRequestCopyItem() },
-                onPasteFallback: { [weak context] in context?.actions?.panelDidRequestPasteItem() },
                 onEscape: { [weak context] in context?.actions?.panelDidRequestEscape() }
             )
         case .quickLook:
