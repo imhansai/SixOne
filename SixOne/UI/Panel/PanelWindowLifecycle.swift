@@ -2,7 +2,8 @@
 //  PanelWindowLifecycle.swift
 //  SixOne
 //
-//  面板窗口生命周期：显示/收起、定位、会话恢复、焦点判定与外部点击监听。
+//  面板窗口生命周期：显示/收起、定位、会话恢复与外部点击监听；
+//  焦点判定、窗口事件与 Quick Look 播放分别交给协作者。
 //
 
 import AppKit
@@ -24,19 +25,20 @@ final class PanelWindowLifecycle {
     private let cursor: PanelSelectionCursor
     private let sharing: PanelSharing
 
-    var positionProvider: (() -> NSRect?)?
+    private let focusGuard: PanelFocusGuard
+    private let quickLook: PanelQuickLookPlayback
+    private var eventMonitor: PanelWindowEventMonitor?
+
+    var positionProvider: (() -> NSRect?)? {
+        get { focusGuard.positionProvider }
+        set { focusGuard.positionProvider = newValue }
+    }
     /// 收起那一拍摘掉设置窗口的 key/main 候选，收完恢复（未建窗口时无需做事）。
     var setSettingsKeyAndMainSuspended: ((_ suspended: Bool) -> Void)?
 
     /// 上次收起时的界面快照；首次唤出前为 nil。
     private var session: PanelSession?
-    /// 挂起期间摘下的 Quick Look 预览项。
-    private var suspendedQuickLookItemURL: URL?
     private var previousApplication: NSRunningApplication?
-    private var mouseMonitor: Any?
-    private var resignObserver: NSObjectProtocol?
-    private var becomeKeyObserver: NSObjectProtocol?
-    private var becomeActiveObserver: NSObjectProtocol?
 
     init(
         panel: ClipboardPanel,
@@ -68,51 +70,33 @@ final class PanelWindowLifecycle {
         self.quickPasteHintState = quickPasteHintState
         self.cursor = cursor
         self.sharing = sharing
+        self.focusGuard = PanelFocusGuard(
+            panel: panel,
+            shareState: shareState,
+            previewState: previewState,
+            searchState: searchState
+        )
+        self.quickLook = PanelQuickLookPlayback(panel: panel)
 
-        // 失去 key 时延后判定收起：resign 到达时新 key 窗口可能还没挂上。
-        resignObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
+        self.eventMonitor = PanelWindowEventMonitor(
+            panel: panel,
+            onResignKey: { [weak self] in
                 // 不恢复原应用，避免 SixOne 自己的设置窗口抢 key 时切走应用。
                 self?.quickPasteHintState.cancel()
                 self?.hideIfFocusLeft(restoresPreviousApplication: false)
-            }
-        }
-
-        // 拿到 key 就激活应用：nonactivating 面板光成为 key 不会回到前台，手势只派给激活应用。
-        becomeKeyObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            },
+            onBecomeKey: { [weak self] in
                 self?.activateApp()
-            }
-        }
-
-        // 应用回到前台：停在「选服务」的分享会话已结束；执行中的服务由自身回话。
-        becomeActiveObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            },
+            onBecomeActive: { [weak self] in
                 guard let self, case .picking = self.shareState.stage else { return }
                 self.sharing.finishPickingSessions()
             }
-        }
+        )
     }
 
     isolated deinit {
-        removeMonitors()
-        for token in [resignObserver, becomeKeyObserver, becomeActiveObserver] {
-            if let token {
-                NotificationCenter.default.removeObserver(token)
-            }
-        }
+        eventMonitor?.removeAll()
     }
 
     /// 唤起面板前的前台应用；粘贴流程据此找回目标。
@@ -155,7 +139,7 @@ final class PanelWindowLifecycle {
         searchState.isFocused = false
         moreActionsState.isFocused = false
         // 影片挂在视图树上，不停掉会在收起后继续出声。
-        suspendQuickLookPlayback()
+        quickLook.suspend()
         sharing.finishPickingSessions()
         shareState.stage = .idle
         orderOutPanel()
@@ -217,7 +201,7 @@ final class PanelWindowLifecycle {
             previewState.close()
         }
 
-        restoreQuickLookItemIfNeeded()
+        quickLook.restoreIfNeeded(hasPreview: previewState.item != nil)
 
         if let resolution = session?.resolve(againstRows: store.rows, hasNewContent: hasNewContent) {
             cursor.selectedItemID = resolution.selectedItemID
@@ -242,22 +226,6 @@ final class PanelWindowLifecycle {
         }
     }
 
-    /// 影片播放跑在 QuickLookUIService，只有摘掉 previewItem 才会停（约 2s 尾音）。
-    private func suspendQuickLookPlayback() {
-        guard let view = previewSurface.quickLookView(),
-              let url = view.previewItem as? URL,
-              FilePreviewKind.isMovie(url) else { return }
-        suspendedQuickLookItemURL = url
-        view.previewItem = nil
-    }
-
-    private func restoreQuickLookItemIfNeeded() {
-        let suspended = suspendedQuickLookItemURL
-        suspendedQuickLookItemURL = nil
-        guard previewState.item != nil, let url = suspended else { return }
-        previewSurface.quickLookView()?.previewItem = url as NSURL
-    }
-
     // MARK: - 焦点判定
 
     /// 用 WindowServer 侧状态而非 `NSApp.isActive`，避免焦点切换瞬间读到旧值。
@@ -265,54 +233,13 @@ final class PanelWindowLifecycle {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
     }
 
-    /// 前台是别的进程的非 regular 辅助面板（自动填充、指纹认证）；排除本进程。
-    private var isSystemHelperFrontmost: Bool {
-        guard let frontmost = NSWorkspace.shared.frontmostApplication,
-              frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
-        return frontmost.activationPolicy != .regular
-    }
-
-    /// 搜索框或预览正文是否正在编辑；面板失 key 后编辑会话仍在，所以仍可据此判断。
-    private var isEditingText: Bool {
-        previewState.isEditing || searchState.isFocused || panel.firstResponder is NSTextView
-    }
-
-    /// 用类型判断而非 `.shared`，避免比较时把字体/颜色面板提前创建出来。
-    private var isTextAuxiliaryPanelKey: Bool {
-        guard let keyWindow = NSApp.keyWindow else { return false }
-        return keyWindow is NSFontPanel || keyWindow is NSColorPanel
-    }
-
-    /// 正按着菜单栏状态项；这一下由按钮动作（鼠标抬起）负责，不能收面板。
-    private var isPressingStatusItem: Bool {
-        guard NSEvent.pressedMouseButtons != 0 else { return false }
-        guard let rect = positionProvider?() else { return false }
-        return rect.contains(NSEvent.mouseLocation)
-    }
-
-    /// 查现场交给 `PanelFocusPolicy`；`clickedOutside` 表示用户主动点了面板外面。
-    private func focusSnapshot(clickedOutside: Bool) -> PanelFocusSnapshot {
-        PanelFocusSnapshot(
-            isSharing: shareState.isActive,
-            hasAttachedSheet: panel.attachedSheet != nil,
-            isPressingStatusItem: isPressingStatusItem,
-            isAppFrontmost: isAppFrontmost,
-            isPanelKeyWindow: panel.isKeyWindow,
-            isTextAuxiliaryPanelKey: isTextAuxiliaryPanelKey,
-            hasApplicationSheet: NSApp.keyWindow?.sheetParent != nil,
-            isEditingText: isEditingText,
-            clickedOutside: clickedOutside,
-            isSystemHelperFrontmost: isSystemHelperFrontmost,
-            hasKeyWindow: NSApp.keyWindow != nil
-        )
-    }
-
     /// 焦点真的离开时才隐藏；延后一拍，等新 key 窗口落定，避免辅助面板抢焦点时误收。
     private func hideIfFocusLeft(restoresPreviousApplication: Bool, clickedOutside: Bool = false) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.panel.isVisible else { return }
-            guard PanelFocusPolicy.shouldHide(self.focusSnapshot(clickedOutside: clickedOutside)) else { return }
-            self.hide(restoresPreviousApplication: restoresPreviousApplication)
+        focusGuard.hideIfFocusLeft(
+            restoresPreviousApplication: restoresPreviousApplication,
+            clickedOutside: clickedOutside
+        ) { [weak self] restores in
+            self?.hide(restoresPreviousApplication: restores)
         }
     }
 
@@ -343,23 +270,13 @@ final class PanelWindowLifecycle {
     // MARK: - 监听
 
     private func installMonitors() {
-        removeMonitors()
-
-        // 点面板外只是线索，真正是否收起交给 hideIfFocusLeft。
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
-            guard let self, self.panel.isVisible else { return }
-            guard !self.panel.frame.contains(NSEvent.mouseLocation) else { return }
-            self.hideIfFocusLeft(restoresPreviousApplication: true, clickedOutside: true)
+        eventMonitor?.startOutsideClickMonitor { [weak self] in
+            self?.hideIfFocusLeft(restoresPreviousApplication: true, clickedOutside: true)
         }
     }
 
     private func removeMonitors() {
-        if let mouseMonitor {
-            NSEvent.removeMonitor(mouseMonitor)
-        }
-        mouseMonitor = nil
+        eventMonitor?.stopOutsideClickMonitor()
     }
 
     private var previewSurface: PreviewSurfaceProbe {
