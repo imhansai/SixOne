@@ -112,7 +112,7 @@ open build/Build/Products/Debug/SixOne.app
 | 加 / 改一个按键分支 | `PanelKeyRouter`（窗口 pre-dispatch）+ `PanelKeyActionExecutor`；条目动作在 `PanelItemActions`，编辑与 Esc 在 `PanelEditingSession`。测试：`PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
 | 加 / 改一个带菜单或快捷键的面板命令 | `PanelMenuCommand`（可用性）+ `PanelMenuCommandTable`（selector / 标题 / 键位）+ `MainMenuBuilder` 的菜单树。测试：`PanelMenuCommandTableTests` / `MainMenuBuilderTests` / `MenuKeyEquivalentIndexTests` |
 | 加一条「该不该收起面板」的规则 | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
-| 动面板激活 / 预览捏合手势 / 状态栏点击 | 手势只投递给激活的应用，唤出时要成为 key 与 main，收起时把设置窗口摘出 key/main 候选；见 `PanelWindowLifecycle` 与 `SettingsWindowPresentationTests` |
+| 动面板激活 / 预览捏合手势 / 状态栏点击 | 手势只投递给激活的应用：唤出时设为 key 与 main，收起时把设置窗口摘出 key/main 候选；见 `PanelWindowLifecycle` 与 `SettingsWindowController` |
 | 改搜索词管道（防抖 / 清空 / 对齐） | `PanelSearchSession` + `PanelSearchSessionTests`；顶栏只交入「输入变了」 |
 | 加一个右键菜单项 | `ItemCommand`（标题、快捷键、布局）+ `ItemCommandTests`，动作落在 `RowMenuBuilder` / `FileGroupPreview` |
 | 加一个视图侧动作（复制、保存编辑、复制文字） | 经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 发意图，落到 `PanelActionHandler`；不要在视图里调 `ClipboardManager` 的写方法 |

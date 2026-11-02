@@ -27,7 +27,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let loadStorageStats: () async -> HistoryStorageStats
     private let onClearHistory: () -> Void
     private var toolbarObservations: [NSKeyValueObservation] = []
-    let presentation = SettingsWindowPresentation()
 
     init(
         settings: SettingsStore,
@@ -67,12 +66,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.contentViewController = NSHostingController(rootView: makeRootView())
         window.setContentSize(Self.contentSize)
         window.center()
-        presentation.isWindowVisible = { [weak window] in window?.isVisible ?? false }
-        presentation.bringForward.orderFront = { [weak self] in
-            guard let self else { return }
-            self.settingsWindow.makeKeyAndOrderFront(nil)
-            self.navigation.requestSidebarFocus()
-        }
     }
 
     private func makeRootView() -> SettingsRootView {
@@ -99,7 +92,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         settingsWindow.makeFirstResponder(nil)
         prepareWindow()
         navigation.requestSidebarFocus()
-        presentation.windowDidShow()
     }
 
     func setKeyAndMainSuspended(_ suspended: Bool) {
