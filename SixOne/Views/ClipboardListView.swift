@@ -17,7 +17,7 @@ struct ClipboardListView: View {
     private var navigationState: NavigationState { context.navigationState }
     private var copyState: CopyState { context.copyState }
     private var noticeState: NoticeState { context.noticeState }
-    private var actions: PanelActionHandler? { context.actions }
+    private var actions: ItemActionHandling? { context.itemActions }
 
     @Environment(\.locale) private var locale
     @State private var noticeFeedback = TransientFeedback()

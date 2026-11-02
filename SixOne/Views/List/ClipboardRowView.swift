@@ -62,7 +62,7 @@ struct ClipboardRowView: View {
         .task(id: row.id) {
             guard row.thumbnailData != nil,
                   row.thumbnailVersion != ClipboardItem.currentThumbnailVersion else { return }
-            context.actions?.panelDidRequestThumbnailRefresh(id: row.id)
+            context.itemActions?.panelDidRequestThumbnailRefresh(id: row.id)
         }
     }
 

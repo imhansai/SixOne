@@ -31,7 +31,7 @@ struct TextFilePreview: View {
                 contentID: url.path,
                 attributedTextData: nil,
                 plainText: text,
-                onEscape: { [weak context] in context?.actions?.panelDidRequestEscape() }
+                onEscape: { [weak context] in context?.editingActions?.panelDidRequestEscape() }
             )
         case .quickLook:
             QuickLookPreview(url: url)

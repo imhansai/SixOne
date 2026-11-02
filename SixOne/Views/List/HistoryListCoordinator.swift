@@ -48,11 +48,11 @@ final class HistoryListCoordinator {
     func activate(id: UUID, asPlainText: Bool) {
         searchState.resignFocus()
         moreActionsState.resignFocus()
-        context.actions?.panelDidActivate(id: id, asPlainText: asPlainText)
+        context.itemActions?.panelDidActivate(id: id, asPlainText: asPlainText)
     }
 
     func requestDelete(id: UUID) {
-        context.actions?.panelDidRequestDelete(id: id)
+        context.itemActions?.panelDidRequestDelete(id: id)
     }
 
     func noteVisibleRowRange(_ range: ClosedRange<Int>) {

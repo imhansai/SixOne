@@ -10,7 +10,7 @@ import AppKit
 /// 行菜单的依赖与落点：面板动作、选中、复制反馈与删除收尾。
 struct RowMenuBuilder {
     let manager: ClipboardManager
-    let panelActions: () -> PanelActionHandler?
+    let panelActions: () -> ItemActionHandling?
     let selectRow: (UUID) -> Void
     let copyFeedback: (UUID) -> Void
     let copyItem: (UUID) -> Void

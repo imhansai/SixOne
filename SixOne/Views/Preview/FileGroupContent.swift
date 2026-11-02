@@ -16,7 +16,8 @@ struct FileGroupContent: View {
     @Environment(PanelContext.self) private var context
 
     private var previewState: PreviewState { context.previewState }
-    private var actions: PanelActionHandler? { context.actions }
+    private var groupActions: GroupActionHandling? { context.groupActions }
+    private var shellActions: ShellActionHandling? { context.shellActions }
 
     var body: some View {
         let viewingIndex = viewingGroupFileIndex
@@ -40,12 +41,12 @@ struct FileGroupContent: View {
                 onSelect: { index in
                     previewState.selectGroupFile(index)
                     // 收回键盘焦点，让方向键与裸 ⌫ 仍可用。
-                    actions?.panelDidRequestFocusContent()
+                    shellActions?.panelDidRequestFocusContent()
                 },
                 onPreview: { previewState.showGroupFile($0) },
                 onCommand: handleGroupFileCommand,
                 onShare: { index, anchorView in
-                    actions?.panelDidRequestGroupFileShare(at: index, anchorView: anchorView)
+                    groupActions?.panelDidRequestGroupFileShare(at: index, anchorView: anchorView)
                 }
             )
             .opacity(viewingIndex == nil ? 1 : 0)
@@ -85,13 +86,13 @@ struct FileGroupContent: View {
         case .reveal:
             if groupURLs.indices.contains(index), let url = groupURLs[index] { revealInFinder(url) }
         case .paste, .copy:
-            actions?.panelDidInvokeGroupFileCommand(command, index: index)
+            groupActions?.panelDidInvokeGroupFileCommand(command, index: index)
         }
     }
 
     private func revealInFinder(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
-        actions?.panelDidHandOffToExternalApp()
+        shellActions?.panelDidHandOffToExternalApp()
     }
 
     private func missingGroupFileNotice(index: Int) -> some View {
@@ -130,6 +131,6 @@ struct FileGroupContent: View {
 
     private func openGroupFile(_ url: URL) {
         NSWorkspace.shared.open(url)
-        actions?.panelDidHandOffToExternalApp()
+        shellActions?.panelDidHandOffToExternalApp()
     }
 }

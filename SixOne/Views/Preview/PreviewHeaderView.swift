@@ -18,7 +18,8 @@ struct PreviewHeaderView: View {
     @Environment(PanelContext.self) private var context
 
     private var previewState: PreviewState { context.previewState }
-    private var actions: PanelActionHandler? { context.actions }
+    private var editingActions: EditingActionHandling? { context.editingActions }
+    private var shellActions: ShellActionHandling? { context.shellActions }
 
     var body: some View {
         let subtitleText = subtitle
@@ -106,8 +107,8 @@ struct PreviewHeaderView: View {
         PreviewHeaderActionButton(systemImage: "xmark", help: closeButtonHelp) {
             if previewState.isEditing {
                 // 有改动时由面板先弹确认，不能直接丢弃。
-                if let actions {
-                    actions.panelDidRequestCancelEditing()
+                if let editingActions {
+                    editingActions.panelDidRequestCancelEditing()
                 } else {
                     previewState.cancelEditing()
                 }
@@ -158,7 +159,7 @@ struct PreviewHeaderView: View {
         if let fileURL {
             PreviewOpenWithMenu(
                 fileURL: fileURL,
-                onHandOff: { actions?.panelDidHandOffToExternalApp() }
+                onHandOff: { shellActions?.panelDidHandOffToExternalApp() }
             )
             // 组内切换文件时重建，重新枚举打开方式。
             .id(fileURL)
@@ -170,7 +171,7 @@ struct PreviewHeaderView: View {
         if let linkURL {
             PreviewLinkOpenButton(
                 url: linkURL,
-                onHandOff: { actions?.panelDidHandOffToExternalApp() },
+                onHandOff: { shellActions?.panelDidHandOffToExternalApp() },
                 onError: { message in context.noticeState.message = message }
             )
         }
@@ -186,7 +187,8 @@ struct PreviewGroupHeaderView: View {
     @Environment(PanelContext.self) private var context
 
     private var previewState: PreviewState { context.previewState }
-    private var actions: PanelActionHandler? { context.actions }
+    private var groupActionHandler: GroupActionHandling? { context.groupActions }
+    private var shellActions: ShellActionHandling? { context.shellActions }
 
     var body: some View {
         PanelHeaderChrome {
@@ -216,7 +218,7 @@ struct PreviewGroupHeaderView: View {
                 systemImage: "square.and.arrow.up",
                 help: Localizer.string("Share")
             ) {
-                actions?.panelDidRequestShareGroup(anchorView: shareAnchor.view)
+                groupActionHandler?.panelDidRequestShareGroup(anchorView: shareAnchor.view)
             }
             .background(ViewAnchor(box: shareAnchor))
 
@@ -250,15 +252,15 @@ struct PreviewGroupHeaderView: View {
                 // 有词时清空并保持焦点，无词才退出到列表。
                 let wasEmpty = previewState.groupFilterText.isEmpty
                 previewState.cancelGroupFilter()
-                if wasEmpty { actions?.panelDidRequestFocusContent() }
+                if wasEmpty { shellActions?.panelDidRequestFocusContent() }
             },
             onMoveDown: {
                 previewState.moveFromGroupFilterToList()
-                actions?.panelDidRequestFocusContent()
+                shellActions?.panelDidRequestFocusContent()
             },
             onTab: { _ in
                 previewState.moveFromGroupFilterToList()
-                actions?.panelDidRequestFocusContent()
+                shellActions?.panelDidRequestFocusContent()
             }
         )
     }

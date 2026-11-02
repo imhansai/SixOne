@@ -15,7 +15,8 @@ struct ClipboardTopBar: View {
     private var moreActionsState: MoreActionsState { context.moreActionsState }
     private var navigationState: NavigationState { context.navigationState }
     private var searchSession: PanelSearchSession { context.searchSession }
-    private var actions: PanelActionHandler? { context.actions }
+    private var searchActions: SearchActionHandling? { context.searchActions }
+    private var shellActions: ShellActionHandling? { context.shellActions }
 
     @FocusState private var isMoreActionsFocused: Bool
 
@@ -70,14 +71,14 @@ struct ClipboardTopBar: View {
                 guard searchState.isFocused != focused else { return }
                 searchState.isFocused = focused
             },
-            onCancel: { [weak actions] in
-                actions?.panelDidRequestSearchCancel()
+            onCancel: { [weak searchActions] in
+                searchActions?.panelDidRequestSearchCancel()
             },
-            onMoveDown: { [weak actions] in
-                actions?.panelDidRequestSearchMoveDown()
+            onMoveDown: { [weak searchActions] in
+                searchActions?.panelDidRequestSearchMoveDown()
             },
-            onTab: { [weak actions] backwards in
-                actions?.panelDidRequestSearchTab(backwards: backwards)
+            onTab: { [weak searchActions] backwards in
+                searchActions?.panelDidRequestSearchTab(backwards: backwards)
             }
         )
     }
@@ -87,14 +88,14 @@ struct ClipboardTopBar: View {
     private var moreActionsMenu: some View {
         Menu {
             Button {
-                actions?.panelDidRequestClearHistory()
+                shellActions?.panelDidRequestClearHistory()
             } label: {
                 Label(Localizer.string("Clear History"), systemImage: "trash")
             }
 
-            if actions?.canRequestSettings == true {
+            if shellActions?.canRequestSettings == true {
                 Button {
-                    actions?.panelDidRequestSettings()
+                    shellActions?.panelDidRequestSettings()
                 } label: {
                     Label(Localizer.string("Open Settings"), systemImage: "gearshape")
                 }

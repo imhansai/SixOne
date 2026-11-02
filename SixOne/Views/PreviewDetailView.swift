@@ -12,7 +12,8 @@ struct PreviewDetailView: View {
     var onItemEdited: (() -> Void)? = nil
 
     private var previewState: PreviewState { context.previewState }
-    private var actions: PanelActionHandler? { context.actions }
+    private var shellActions: ShellActionHandling? { context.shellActions }
+    private var editingActions: EditingActionHandling? { context.editingActions }
 
     private let cornerRadius: CGFloat = 24
 
@@ -220,7 +221,7 @@ struct PreviewDetailView: View {
         let urls = groupURLs.compactMap { $0 }
         guard !urls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
-        actions?.panelDidHandOffToExternalApp()
+        shellActions?.panelDidHandOffToExternalApp()
     }
 
     private var linkURL: URL? {
@@ -250,7 +251,7 @@ struct PreviewDetailView: View {
                 onEditingFinished: { finishEditing($0) },
                 onDirtyChange: { previewState.hasUnsavedChanges = $0 },
                 saveRequestID: previewState.saveRequestID,
-                onEscape: { [weak actions] in actions?.panelDidRequestEscape() }
+                onEscape: { [weak editingActions] in editingActions?.panelDidRequestEscape() }
             )
         case .image:
             if let previewImage = metadata.image {

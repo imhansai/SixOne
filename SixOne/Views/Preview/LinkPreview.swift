@@ -34,7 +34,7 @@ struct LinkPreview: View {
                 onEditingFinished: onEditingFinished,
                 onDirtyChange: onDirtyChange,
                 saveRequestID: saveRequestID,
-                onEscape: { [weak context] in context?.actions?.panelDidRequestEscape() }
+                onEscape: { [weak context] in context?.editingActions?.panelDidRequestEscape() }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
