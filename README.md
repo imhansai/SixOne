@@ -1,182 +1,176 @@
 # SixOne
 
-**English · [简体中文](README.zh-Hans.md)**
+**简体中文 · [English](README.en.md)**
 
-A macOS menu-bar clipboard history tool. A global hotkey (default `⌃⌘V`) opens a floating panel where you can browse, search, preview, edit in place, and paste history entries back. Five content kinds: **text / image / file (including multi-file groups) / link / colour**.
+macOS 菜单栏剪贴板历史工具。按 `⌃⌘V`（默认）唤出浮层面板，浏览、搜索、预览、就地编辑并粘回历史条目。支持五类内容：**文本 / 图片 / 文件（含多文件组）/ 链接 / 颜色**。
 
-What it does:
+- 菜单栏图标左键开关面板，右键打开菜单（剪贴板 / 设置… / 退出）。面板贴在唤出处：状态栏图标下方、指针处或屏幕居中。
+- 原生搜索框：按正文、标题与文件路径过滤，输入经 200 ms 防抖后查询数据库。
+- 预览：文本（富文本、就地编辑、`⌘F` 查找）、图片（缩放 / 平移）、文件（图片 / 视频 / 网页 / PDF / 文本 / Quick Look）、多文件列表（组内按名称 / 路径筛选）、链接、颜色。文件与磁盘图片预览底部显示来源路径，可拖选片段或一键拷贝完整路径。
+- 条目动作：复制回剪贴板、粘贴进上一个应用（合成 `⌘V`）、分享、用默认应用打开 / 在访达中显示、删除、纯文本拷贝 / 粘贴（`⇧⌘C` / `⇧⌘V`）。上一个应用已退出或未回到前台时，只提示音并把内容留在剪贴板，不会粘进当前前台应用。
+- 设置：忽略应用、保留时长、全局快捷键、语言（跟随系统 / English / 简体中文）、开机自启、清空历史。语言改动重启后生效。
 
-- Click the menu-bar icon to toggle the panel, or right-click it for a menu (Open Clipboard / Settings / Quit SixOne). The panel is anchored to wherever the summon came from — under the status item, under the pointer, or centred on the screen.
-- Native search field: filters across body text, titles, and file paths, debounced 200 ms before the query reaches the database.
-- Previews: text (rich text, editable in place, `⌘F` find), image (zoom / pan), file (image / video / web page / PDF / text / Quick Look), multi-file list (filter by file name / path), link, colour. File and on-disk image previews show the source path at the bottom; drag to select part of it or copy the full path in one click, and the file name is copyable too.
-- Item actions: copy back to the clipboard, paste into the previous app (synthesizes `⌘V`), share, open with the default app / reveal in Finder, delete, and copy or paste as plain text (`⇧⌘C` / `⇧⌘V`). If the previous app has quit or does not come forward, SixOne beeps and leaves the item on the clipboard rather than pasting into whatever is frontmost.
-- Settings: privacy ignore-list, history retention, global hotkey, language (Follow System / English / Chinese (Simplified)), launch at login, and clear-history. A language change takes effect after a restart.
+## 截图
 
-## Screenshots
+一段录屏：唤出面板、打开预览、缩放图片、拷贝来源路径，再回到列表搜索：
 
-A short clip: open the panel, preview and zoom an image, copy its source path, then search the list:
+![SixOne：唤出面板、预览并缩放图片、拷贝路径、搜索列表](docs/images/demo.gif)
 
-![SixOne: open the panel, preview and zoom an image, copy its path, and search](docs/images/demo.gif)
-
-| Panel | Search | Preview | Settings |
+| 面板 | 搜索 | 预览 | 设置 |
 | --- | --- | --- | --- |
-| <a href="docs/images/panel.jpg"><img src="docs/images/panel.jpg" alt="The panel listing text, image, and file entries" width="180"></a> | <a href="docs/images/panel-search.jpg"><img src="docs/images/panel-search.jpg" alt="The search field filtering the list" width="180"></a> | <a href="docs/images/preview.jpg"><img src="docs/images/preview.jpg" alt="An image previewed in the panel" width="180"></a> | <a href="docs/images/settings.jpg"><img src="docs/images/settings.jpg" alt="The Settings window: General pane with launch-at-login, language, and the Accessibility permission" width="180"></a> |
+| <a href="docs/images/panel.jpg"><img src="docs/images/panel.jpg" alt="面板列表，含文本、图片与文件条目" width="180"></a> | <a href="docs/images/panel-search.jpg"><img src="docs/images/panel-search.jpg" alt="搜索框过滤列表" width="180"></a> | <a href="docs/images/preview.jpg"><img src="docs/images/preview.jpg" alt="面板内的图片预览" width="180"></a> | <a href="docs/images/settings.jpg"><img src="docs/images/settings.jpg" alt="设置窗口：通用面板，含开机启动、语言与辅助功能权限" width="180"></a> |
 
-## Status
+## 项目状态
 
-**1.0.0, source release.** No prebuilt binaries — you build from source. The store is versioned (currently schema **V3**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates the existing store in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading to an older build.
+**1.0.0，源码发布。** 不提供预编译包。库已版本化（当前 schema **V3**），由 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移，改 schema 不再需要清空历史。迁移单向：回退旧版本前先备份库文件。
 
-**Non-goals:** cloud sync, accounts, multi-device history, an iOS client, auto-update. SixOne is deliberately a local-only, single-Mac tool.
+**非目标：** 云同步、账号体系、多设备历史、iOS 客户端、自动更新。SixOne 只在本机、只服务单台 Mac。
 
-## Requirements
+## 环境要求
 
-- **macOS 26.5 or later on Apple silicon.** Deployment target 26.5; the documented build command targets `arm64`.
-- **Xcode 27.1 (27A9275) with Swift 6.4** is what this project is verified against; another Xcode that still ships a ≥ 26.5 SDK may work, but nothing else is tested.
-- The command-line build needs no developer certificate (`CODE_SIGNING_ALLOWED=NO`). The Xcode build uses the team recorded in the project; contributors should set `DEVELOPMENT_TEAM` to their own in Signing & Capabilities.
+- **macOS 26.5 或更高，Apple 芯片。** 部署目标 26.5，文档命令指定 `arm64`。
+- 验证组合：**Xcode 27.1（27A9275）+ Swift 6.4**；其他带 ≥ 26.5 SDK 的 Xcode 未经验证。
+- 命令行构建不需要开发证书（`CODE_SIGNING_ALLOWED=NO`）；Xcode 构建请把 `DEVELOPMENT_TEAM` 改成自己的团队。
 
-## Privacy and data
+## 隐私与数据
 
-Clipboard history is among the most sensitive data on a Mac, so the rules are stated in full in **[PRIVACY.md](PRIVACY.md)**. The short version:
+完整规则见 **[PRIVACY.md](PRIVACY.md)**。要点：
 
-- **Everything stays on this Mac.** No telemetry, no accounts, no cloud sync, no auto-update, no third-party SDKs. History lives in a SwiftData store at `~/Library/Application Support/SixOne/SixOne.store` — a path whose name belongs to this app alone — inside the sandbox container when the app is signed with its entitlements.
-- **Two filters decide what gets recorded, and both run *before* any clipboard bytes are read:** the do-not-record pasteboard markers that password managers set, and an ignore-list of source apps you control (Passwords and Keychain Access are pre-ignored). The marker check is the one that matters — see §1 of PRIVACY.md for why a source-app rule alone is not enough.
-- **Nothing is encrypted at rest** beyond the container's own permissions and FileVault.
-- **The only network-capable component is the HTML preview, and it is fenced:** no content scripts, no navigation away from the local file, and the remote channels that could carry data away (`document`, `script`, `raw`, `popup`) are blocked. Remote images and stylesheets are deliberately allowed so a saved page renders instead of showing broken images; the residual cost is that a remote image request reveals your IP, the way any tracking pixel does.
-- **Accessibility permission is used for exactly one thing**: synthesizing a single `⌘V` into the app you were using before the panel opened. The app never reads other apps' UI.
+- **数据只在本机。** 无遥测、账号、云同步、自动更新或第三方 SDK。库位于 `~/Library/Application Support/SixOne/SixOne.store`（签名后位于沙盒容器内）。
+- **两道过滤都在读取剪贴板字节之前完成：** 密码管理器写入的「不要记录」标记，以及来源应用忽略列表（默认忽略「密码」与「钥匙串访问」）。标记判定才是关键，见 PRIVACY.md §1。
+- **除容器权限与 FileVault 外不额外加密。**
+- **唯一能联网的是 HTML 预览，且已围栏：** 不执行内容脚本、不允许离开本地文件，外传通道（`document`、`script`、`raw`、`popup`）全部阻断。远程图片与样式有意放行，代价是远程请求会暴露你的 IP。
+- **辅助功能权限只用于一件事：** 向唤出面板前的应用合成一次 `⌘V`。
 
-## Keyboard shortcuts
+## 键盘快捷键
 
-| Action | Key |
+| 动作 | 按键 |
 | --- | --- |
-| Open / close the panel | `⌃⌘V` (configurable in Settings) |
-| Search | `⌥⌘F` (or `⌘F` in the list); `Esc` clears, `Esc` again leaves the field |
-| Move selection | `↑` / `↓` (with nothing selected, `↓` lands on the first row and `↑` does nothing); `⌘↑` / `⌘↓` jump to the newest / oldest in the window |
-| Back to the search field | `↑` from the first row |
-| Paste into the previous app | `Return` (or `⌘V`) |
-| Quick-paste a visible row | Hold `⌘` to show numbers, then press `⌘1`…`⌘9` to paste a fully visible row (in a file-group overview it pastes the group file; `⇧` makes it plain text in the outer list) |
-| Copy back to the clipboard | `⌘C` |
-| Save edits | `⌘S` (editing only; stays in edit mode; `Return` still inserts a newline) |
-| Copy / paste as plain text | `⇧⌘C` / `⇧⌘V` |
-| Toggle preview | `Space` |
-| Step through items while previewing | `↑` / `↓` (file groups open only from the list: stepping onto one keeps the current preview and shows a hint) |
-| Group list | `↑` / `↓` move only inside the group (with nothing selected `↓` lands on the first row and `↑` does nothing; `↑` from the first row returns to the filter field, `↓` at the last row stops); `⌘↑` / `⌘↓` jump to the first / last file; `Space` previews the selected file (or closes the group preview when nothing is selected); `Esc` closes the group preview |
-| Group file preview | `↑` / `↓` switch to the previous / next file; `⌘↑` / `⌘↓` jump to the first / last file; `Space` / `Esc` / `×` return to the group list |
-| Filter files in a group | The filter field in the group list header (`⌘F` focuses it; `Esc` clears, then exits the field) |
-| Delete the selected item | `⌫` / `⌘⌫` / `⌦` (asks for confirmation) |
-| Open / reveal in Finder | `⌘O` / `⇧⌘R` |
-| Cancel editing, close preview, then the panel | `Esc` (layered — it closes the find bar, cancels editing and restores the original text, asks first if there are changes, then closes the preview) |
-| Cycle search field → more actions → list | `Tab` / `⇧Tab` (also `Control+Tab` / `Control+Shift+Tab`) |
-| Close the panel / quit / settings | `⌘W` / `⌘Q` / `⌘,` (while editing, both cancel editing and ask first if there are changes; press again to close the panel / quit) |
+| 唤出 / 收起面板 | `⌃⌘V`（可在设置中修改） |
+| 搜索 | `⌥⌘F`（列表内 `⌘F` 也可）；`Esc` 清空，再按离开输入框 |
+| 移动选中 | `↑` / `↓`（未选中时 `↓` 落首行、`↑` 不动）；`⌘↑` / `⌘↓` 跳到窗口内最新 / 最旧 |
+| 回到搜索框 | 在第一行按 `↑` |
+| 粘贴进上一个应用 | `Return` 或 `⌘V` |
+| 快速粘贴可见行 | 按住 `⌘` 显示编号，按 `⌘1`…`⌘9` 粘贴完整可见行（多文件组总览粘贴组内文件；外层列表加 `⇧` 为纯文本） |
+| 复制回剪贴板 | `⌘C` |
+| 保存编辑 | `⌘S`（仅编辑态，保存后继续编辑；`Return` 仍换行） |
+| 拷贝 / 粘贴为纯文本 | `⇧⌘C` / `⇧⌘V` |
+| 开关预览 | `Space` |
+| 预览中切换条目 | `↑` / `↓`（多文件组只能从列表打开，切到组时停在当前条目并提示） |
+| 文件组列表 | `↑` / `↓` 只在组内移动；首行 `↑` 回到筛选框，末行 `↓` 停住；`⌘↑` / `⌘↓` 跳组内首 / 末项；`Space` 预览选中文件，`Esc` 关闭组预览 |
+| 组内文件预览 | `↑` / `↓` 切换文件；`⌘↑` / `⌘↓` 跳组内首 / 末项；`Space` / `Esc` / `×` 回到组列表 |
+| 筛选组内文件 | 列表顶栏筛选框（`⌘F` 聚焦；`Esc` 先清空、再退出） |
+| 删除选中条目 | `⌫` / `⌘⌫` / `⌦`（会先确认） |
+| 打开 / 在访达中显示 | `⌘O` / `⇧⌘R` |
+| 取消编辑、关预览、再收面板 | `Esc`（分层：查找栏 → 取消编辑并恢复原文 → 关闭预览 → 收起面板；有改动会先确认） |
+| 循环搜索框 / 更多操作 / 列表 | `Tab` / `⇧Tab`（`Control+Tab` / `Control+Shift+Tab` 同） |
+| 收面板 / 退出 / 设置 | `⌘W` / `⌘Q` / `⌘,`（编辑态先取消编辑，有改动会确认；再按一次才执行） |
 
-The panel maintains its own Tab loop because the AppKit controls and the list have no usable system key view loop. With Full Keyboard Access on it visits search field → more actions → list; with it off it visits search field ↔ list, matching the system default. `Control+Tab` / `Control+Shift+Tab` use the same loop.
+面板维护自己的 Tab 循环（AppKit 控件与列表混排没有可用的系统 key view loop）：完整键盘访问开启时走「搜索框 → 更多操作 → 列表」，关闭时只走「搜索框 ↔ 列表」，与系统默认一致。主菜单不显示，只作为快捷键命令表；菜单不可用时由窗口级 fallback 按 key equivalent 找到同一菜单项、重跑校验后再发送 action。
 
-The main menu is not displayed in this menu bar app; it serves as a key-equivalent command table (`File` provides `⌘S` / `⌘W`, `Edit` / `Item` provide editing and item commands). `About SixOne`, `Settings`, and `Quit` live in the status bar menu. When the menu bar is unavailable (the panel is nonactivating, so the menu bar may still belong to the previous app), a window-level fallback looks up the same menu item by key equivalent, re-runs menu validation, and sends its action, keeping keyboard behavior consistent with the menu.
-
-## Quick start
+## 快速开始
 
 ```bash
-# Build (unsigned; no developer certificate required)
+# 构建（无签名，不需要开发证书）
 xcodebuild build -project SixOne.xcodeproj -scheme SixOne \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
-# Unit tests
+# 单元测试
 xcodebuild test -project SixOne.xcodeproj -scheme SixOne \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
-# Run — after the build step: `build/` is gitignored and absent in a fresh clone
+# 运行 —— 必须在构建之后：build/ 被 gitignore，新克隆里并不存在
 open build/Build/Products/Debug/SixOne.app
 ```
 
-The app is in the Swift 6 language mode (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`) and uses newer APIs such as `NSGlassEffectView`.
+工程处于 Swift 6 语言模式（`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`），使用了 `NSGlassEffectView` 等较新的 API。测试会真正拉起 XCTest 宿主（`TEST_HOST` 为 `SixOne.app`），需要正常的窗口会话与 pty；在容器或受限沙盒里执行 `test` 会在进程启动阶段失败，构建不受影响。
 
-The tests genuinely launch the XCTest host (`TEST_HOST` is `SixOne.app`), which needs a normal window session and a pty. Running the `test` action in a container or a restricted sandbox fails during process setup; building is unaffected.
+## 首次运行
 
-## First run
+**`open …` 之后看起来什么都没发生 —— 这是正常的。** SixOne 是菜单栏应用（`LSUIElement`），没有 Dock 图标也没有窗口。请看菜单栏里的剪贴板图标，或直接按 `⌃⌘V`。
 
-**After `open …` nothing appears to happen — that is expected.** SixOne is a menu-bar app (`LSUIElement`), so there is no Dock icon and no window. Look for the clipboard icon in the menu bar, or press `⌃⌘V`.
+第一次按 `Return`（或双击）往别的应用粘贴时，macOS 会要求**辅助功能**授权：系统设置 → 隐私与安全性 → 辅助功能 → 勾选 SixOne。未授权时面板会明确提示，不会静默失败。
 
-The first time you press `Return` (or double-click) to paste into another app, macOS asks for **Accessibility** permission: System Settings → Privacy & Security → Accessibility → enable SixOne. Until it is granted, the panel says so rather than failing silently.
+上面的命令行构建产物无签名、**也不带沙盒**：`CODE_SIGNING_ALLOWED=NO` 会一并丢掉 entitlements（包括 App Sandbox），库文件落在用户级 Application Support 目录而不是容器内。需要沙盒配置请用 Xcode 构建并运行（⌘R）。
 
-The command-line build above is unsigned *and unsandboxed*: `CODE_SIGNING_ALLOWED=NO` also drops the entitlements, including the App Sandbox, and the store then lives in the user-level Application Support directory rather than a container. Build and run from Xcode (⌘R) for the sandboxed configuration.
+## 架构
 
-## Architecture
+代码按「谁依赖谁」单向分层：入口层（`SixOneApp` / `AppDelegate` / `AppComposition` / `PanelAssembly`）接起 UI（`UI/`、`Views/`），UI 之下是 Managers（`Managers/`），再往下是剪贴板与持久化层，通用件收在 `Support/`。`AppComposition` 是组合根，建出数据层、面板与全局快捷键并接线，因此可脱离 `NSApplication` 测试。
 
-The code is layered one-way by "who depends on whom": a higher layer may depend on a lower one, never the reverse. The entry layer (`SixOneApp` / `AppDelegate` / `AppComposition` / `PanelAssembly`) wires up the UI (`UI/`, `Views/`), which sits on the managers (`Managers/`), which sit on the pasteboard and persistence layers, with business-agnostic helpers in `Support/`. `AppComposition` is the composition root: it builds the data layer, the panel, and the global hotkey, and connects them, which is why it can be exercised without an `NSApplication`.
+数据单向流动，只走 `ClipboardHistoryEventBus`：粘贴板变化在后台解析、去重、入库后广播，`HistoryListStore` 按发布顺序增量刷新。新增条目按 id 取单行插入窗口头部；读历史走后台 actor 上的 `ClipboardHistoryRepository`，只回传轻量 `HistoryRow`，大字段不进列表内存；写走主 context。界面动作（拷贝、粘贴、保存编辑、删除、清空）都经同一条总线回灌。
 
-Data flows one way, over one bus: an `NSPasteboard` change is parsed off the main thread, de-duplicated, inserted, and posted on `ClipboardHistoryEventBus`; `HistoryListStore` then applies events in publish order and refreshes incrementally. A new item is fetched by id and inserted at the head of the window instead of refetching the whole window; retention trimming saves in batches and yields between them; the image content-key repair uses a persisted version marker to skip healthy stores. Reads go through `ClipboardHistoryRepository` on a background actor and come back as lightweight `HistoryRow` values, so large fields never enter list memory; writes go through the main context and are immediately visible to reads. Every UI action — copy, paste, save an edit, delete, clear — flows back over that same bus, so the list never has to know who changed the data.
+原先的巨型类型已按职责拆分：`ClipboardManager` 是捕获、历史写入、粘贴板回写、文件访问与缩略图的统一门面；`ClipboardPanelController` 把窗口生命周期、条目动作、编辑会话与按键执行分别交给 `PanelWindowLifecycle`、`PanelItemActions`、`PanelEditingSession`、`PanelKeyActionExecutor`。两个列表共用 `ListTableCoordinator` / `ListTableScaffold`，列表会话规则集中在 `HistoryListCoordinator`，视图只负责渲染与转发回调；`Preferences` 是唯一的设置 / 存储门面。
 
-The two former god objects are split by responsibility: `ClipboardManager` is a façade over capture, history writes, pasteboard writes, file access, and thumbnails; `ClipboardPanelController` delegates to `PanelWindowLifecycle`, `PanelItemActions`, `PanelEditingSession`, and `PanelKeyActionExecutor`. The two NSTableView-based lists share `ListTableCoordinator` and `ListTableScaffold`; each list only supplies rows, row content, selection, and its scroll policy. List-session rules — selection, preview-close cleanup, reveal-after-touch, and copy feedback — live in `HistoryListCoordinator`; the view only renders and forwards callbacks. The preview is split into `PreviewHeaderView`, `PreviewMetadataModel`, and `PreviewSubtitle`; `PreviewDetailView` keeps layout, the path bar, and content dispatch. Views emit copy/save intents through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; they treat the manager as read-only. `Preferences` is the single settings/storage facade, and title text, content fingerprints, and search snapshots live in pure derivation helpers (`ItemTitleFormatter`, `ContentFingerprint`, `SearchSnapshotter`).
+**注释刻意写得短**：只记录仍然成立的约束，不写历史。测试是可执行的契约 —— 改非显然的规则前，先读对应类型和它的测试。
 
-**Comments are deliberately terse**: they state the constraint that still matters, not the history behind it. The tests are the executable contract — the table below points to the suite that pins each area — so read the type and its tests before changing a non-obvious rule.
+## 改代码时先看这里
 
-## Where to look when changing code
-
-| What to change | Where it goes |
+| 要改什么 | 落点 |
 | --- | --- |
-| Add / change a key branch | `PanelKeyRouter` (window pre-dispatch) + `PanelKeyActionExecutor` for routed actions; item commands live in `PanelItemActions`, editing/escape in `PanelEditingSession`; command keys come from `MenuKeyEquivalentIndex`. Tests: `PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
-| Add / change a panel command with a menu item or shortcut | `PanelMenuCommand` (availability) + `PanelMenuCommandTable` (selector/title/key) + the explicit menu tree in `MainMenuBuilder`; `validateMenuItem` and the command-key check read the table. Tests: `PanelMenuCommandTableTests` / `MainMenuBuilderTests` / `MenuKeyEquivalentIndexTests` |
-| Add a "should the panel hide" rule | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
-| Touch panel activation / image-preview pinch gestures / status-item click behaviour | Gesture events only reach the **active** app, so summoning the panel must make it key and main, and hiding must take the Settings window out of the key/main candidate set. See `PanelWindowLifecycle` and `SettingsWindowPresentationTests` for the key/main hand-off rules |
-| Change the query pipeline (debounce / clear / reveal alignment) | `PanelSearchSession` + `PanelSearchSessionTests`; the top bar only hands in "the input changed" |
-| Add a context-menu item | `ItemCommand` (title, shortcut, layout) + `ItemCommandTests`, with behavior in `RowMenuBuilder` / `FileGroupPreview` |
-| Add a view-side action (copy, save an edit, copy text) | Emit an intent through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; do not call `ClipboardManager` mutators from views. Tests: `RowMenuBuilderTests` / `TextPreviewFormattingTests` / `LinkPreviewInteractionTests` |
-| Add a setting | Add a typed accessor to `Preferences`, then `SettingsStore` + the matching pane file (`Views/Settings/*SettingsView.swift`) |
-| Change the global hotkey (registration / key events) | `HotKeyManager` + two ports: `HotKeyRegistering` (registration, can fail) / `HotKeyEventMonitoring` (key events, dispatched per instance) + `HotKeyManagerTests` |
-| Add / change a model field | Copy `Persistence/Schema/SixOneSchemaV3.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Shape changes and `#Index` additions reach existing stores through the plan. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
-| Change a fetch path | First decide "need the whole item" vs "only identity/paths": `ClipboardManager.fetchFullItem` / `ClipboardManager.fetchLightItem`. The list window is a different path — `ClipboardHistoryRepository.latest` on the background actor |
-| Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name: the fallback may only ever touch this app's own file |
-| Change how a file is reached after the fact (moved, renamed, or after a restart) | `SecurityScopedFileAccess`: bookmark first, original path as fallback, at most 100 bookmarks per copy. Covered by `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
-| Change the preview header / open-with menu | `PreviewHeaderModel` (titles and copy entry), `PreviewHeaderView` / `PreviewGroupHeaderView` (header layout and buttons), `PreviewOpenWithMenu` (app picker + link open), `PreviewDetailView` (layout, content, and path bar) |
-| Change preview metadata / subtitles | `PreviewMetadataModel` (image decode, file/group stat, text stats), `PreviewSubtitle` (pure formatting) |
-| Change what counts as "do not record" | `PasteboardSnapshot.doNotRecordTypes` + `ClipboardCaptureTests`; the check must stay *before* any content is read, and shares one `pasteboardItems` read with the snapshot via `PasteboardAccessing.readRecordableSnapshot` |
-| Change paste-into-another-app | `PanelPasteFlow` + `PanelPasteEnvironment` (event poster, app controller, permission, scheduler, clock, feedback). The `⌘V` event must be proven creatable *before* the clipboard is touched, because notices are invisible once the panel hides. Tests: `PanelPasteFlowTests` |
-| Change the sort key / touch `recencyID` | `OrderedUUID` (time ordering) + `OrderedUUIDTests`; sorting is by this column descending, and generation order must match comparison order |
-| Change text-file encoding detection | `TextFileReader` (BOM → UTF-8 → GB18030 → Latin-1) + `TextFileReaderTests` |
-| Change list selection movement / preview follow | `PanelSelectionCursor` (a failed preview switch must roll back) + `PanelSelectionCursorTests` |
-| Change list-session coordination (selection / preview close / reveal / copy feedback) | `HistoryListCoordinator` + `HistoryListCoordinatorTests`; the view only renders and forwards callbacks |
-| Change the list container / scroll feel / visible range | `ListTableCoordinator` / `ListTableScaffold` hold the shared NSTableView machinery; `HistoryListTableView` and `GroupListTableView` only supply rows, row content and selection. Shared primitives live in `ListRowPrimitives` / `HistoryListScrollGeometry` / `ListRowShell` (geometry, selection fill, copy hit target, interaction host). Tests: `ClipboardVisibleRangeTests` / `ClipboardScrollerFlashTests` / `HistoryListScrollTests` / `HistoryListRowViewReuseTests` / `GroupListTableViewTests` |
-| Change the file-group preview (entry / row / menu) | `FileGroupEntry` (entry, commands, scroll geometry), `FileGroupRowView` (row and async state), `FileGroupMenuBuilder` (context menu), `FileGroupPreview` (container). Tests: `FileGroupMenuBuilderTests` / `GroupListTableViewTests` / `GroupPreviewNavigationTests` |
-| Change share | `PanelSharing`; the panel side only hands in the anchor and "hide the panel" |
-| Change assembly (who wires to whom) | `AppComposition` / `PanelAssembly`, plus a wiring test (`AppCompositionTests`) |
-| Add a localized string | Use `Localizer.string(...)` / `LocalizedStringKey` in code, and add the entry to `Localizable.xcstrings` (English is the source language; add `zh-Hans`) |
-| Change tooltips / hover labels | `.appTooltip` (`TooltipAnchor`) + `TooltipPresenter`; positioning tests in `TooltipPresenterTests` |
-| Change row-level accessibility labels | `RowAccessibility.label` (title + detail) applied by `ListRowShell`; icon-only settings controls get labels / `accessibilityHidden`. Tests: `RowAccessibilityTests` |
-| Change transient feedback duration / cancellation | `TransientFeedback` (a new schedule cancels the previous one; views cancel on disappear); durations live in `PanelTiming`. Tests: `TransientFeedbackTests` |
+| 加 / 改一个按键分支 | `PanelKeyRouter`（窗口 pre-dispatch）+ `PanelKeyActionExecutor`；条目动作在 `PanelItemActions`，编辑与 Esc 在 `PanelEditingSession`。测试：`PanelKeyRouterTests` / `PanelWindowKeyHandlingTests` / `MenuKeyEquivalentIndexTests` |
+| 加 / 改一个带菜单或快捷键的面板命令 | `PanelMenuCommand`（可用性）+ `PanelMenuCommandTable`（selector / 标题 / 键位）+ `MainMenuBuilder` 的菜单树。测试：`PanelMenuCommandTableTests` / `MainMenuBuilderTests` / `MenuKeyEquivalentIndexTests` |
+| 加一条「该不该收起面板」的规则 | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
+| 动面板激活 / 预览捏合手势 / 状态栏点击 | 手势只投递给激活的应用，唤出时要成为 key 与 main，收起时把设置窗口摘出 key/main 候选；见 `PanelWindowLifecycle` 与 `SettingsWindowPresentationTests` |
+| 改搜索词管道（防抖 / 清空 / 对齐） | `PanelSearchSession` + `PanelSearchSessionTests`；顶栏只交入「输入变了」 |
+| 加一个右键菜单项 | `ItemCommand`（标题、快捷键、布局）+ `ItemCommandTests`，动作落在 `RowMenuBuilder` / `FileGroupPreview` |
+| 加一个视图侧动作（复制、保存编辑、复制文字） | 经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 发意图，落到 `PanelActionHandler`；不要在视图里调 `ClipboardManager` 的写方法 |
+| 加一个设置项 | 在 `Preferences` 加类型化访问器，再改 `SettingsStore` 与对应面板（`Views/Settings/*SettingsView.swift`） |
+| 改全局快捷键（注册 / 按键事件） | `HotKeyManager` + `HotKeyRegistering`（注册，会失败）/ `HotKeyEventMonitoring`（按键分发）+ `HotKeyManagerTests` |
+| 加 / 改一个模型字段 | 从 `Persistence/Schema/SixOneSchemaV3.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
+| 动取数路径 | 先分清「要整条」还是「只要身份 / 路径」：`ClipboardManager.fetchFullItem` / `fetchLightItem`；列表取窗走后台 actor 上的 `ClipboardHistoryRepository.latest` |
+| 改库文件位置或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名，兜底只允许动 `SixOne.store` |
+| 改「事后怎么找回文件」（移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark。用例：`ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
+| 改预览顶栏 / 打开方式菜单 | `PreviewHeaderModel`、`PreviewHeaderView` / `PreviewGroupHeaderView`、`PreviewOpenWithMenu`、`PreviewDetailView` |
+| 改预览元数据 / 副标题 | `PreviewMetadataModel`（解码、stat、文本统计）、`PreviewSubtitle`（纯格式化） |
+| 改「什么算不要记录」 | `PasteboardSnapshot.doNotRecordTypes` + `ClipboardCaptureTests`；判定必须留在读内容**之前**，并与快照共用同一次 `pasteboardItems` 读取 |
+| 动「粘贴进别的应用」 | `PanelPasteFlow` + `PanelPasteEnvironment`；`⌘V` 事件必须在碰剪贴板**之前**确认建得出来。测试：`PanelPasteFlowTests` |
+| 动排序键 / 触碰 `recencyID` | `OrderedUUID` + `OrderedUUIDTests`；生成顺序必须与比较顺序一致 |
+| 改文本文件编码判定 | `TextFileReader`（BOM → UTF-8 → GB18030 → Latin-1）+ `TextFileReaderTests` |
+| 改列表选中移动 / 预览跟随 | `PanelSelectionCursor`（切预览失败要回滚）+ `PanelSelectionCursorTests` |
+| 改列表会话协调（选中 / 预览关闭 / 揭示 / 复制反馈） | `HistoryListCoordinator` + `HistoryListCoordinatorTests` |
+| 动列表容器 / 滚动 / 可见区 | `ListTableCoordinator` / `ListTableScaffold`；共用积木在 `ListRowPrimitives` / `HistoryListScrollGeometry` / `ListRowShell`。测试：`ClipboardVisibleRangeTests` / `HistoryListScrollTests` 等 |
+| 改文件组预览（条目 / 行 / 菜单） | `FileGroupEntry`、`FileGroupRowView`、`FileGroupMenuBuilder`、`FileGroupPreview`。测试：`FileGroupMenuBuilderTests` / `GroupPreviewNavigationTests` |
+| 动分享 | `PanelSharing`；面板侧只交入锚点与「收起面板」 |
+| 改装配（谁接谁） | `AppComposition` / `PanelAssembly` + `AppCompositionTests` |
+| 加一条本地化文案 | 代码里用 `Localizer.string(...)` / `LocalizedStringKey`，词条进 `Localizable.xcstrings`（英文为源语言，补 `zh-Hans`） |
+| 改 tooltip / 悬停名称 | `.appTooltip`（`TooltipAnchor`）+ `TooltipPresenter`，测试 `TooltipPresenterTests` |
+| 改行级无障碍文案 | `RowAccessibility.label` + `ListRowShell`；纯图标控件补 label / `accessibilityHidden`。测试：`RowAccessibilityTests` |
+| 改短暂反馈的时长 / 取消 | `TransientFeedback`（新调度取消旧调度）+ `PanelTiming`。测试：`TransientFeedbackTests` |
 
-## Testing
+## 测试
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is 626 tests in 106 suites, about 11 seconds (swift-testing's own count; `xcresulttool` counts parameterized cases separately). The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches the process to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 626 项用例、106 个 suite，11 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
 
-Modules that touch system resources are driven by doubles, all under `SixOneTests/Support/`: the clipboard goes through `FakePasteboard` (so capture → dedup → touch-to-top is testable without overwriting your clipboard), settings and the hotkey through `InMemorySettingsStorage`, the hotkey event handler through `FakeHotKeyEventMonitor`, history reads through `FakeHistoryRepository`, offscreen windows and view-tree probes through `OffscreenHost` and `TestPanel`, temporary files through `TemporaryFiles`, and waiting through `Wait`. Preview, positioning, keyboard decisions, and focus policy are pure functions or pure value inputs. The performance benchmarks in `HistoryBenchmarkTests` and `MigrationBenchmarkTests` (V1/V2 large-store upgrades to V3) are skipped unless a switch file exists (`.benchmark-history` at the repo root, or `/tmp/sixone-benchmark`); do not leave either behind, as it slows the full suite down.
+系统资源一律用 `SixOneTests/Support/` 下的替身：`FakePasteboard`、`InMemorySettingsStorage`、`FakeHotKeyEventMonitor`、`FakeHistoryRepository`、`OffscreenHost` / `TestPanel`、`TemporaryFiles`、`Wait`。性能基准（`HistoryBenchmarkTests` / `MigrationBenchmarkTests`）只有在仓库根存在 `.benchmark-history` 或 `/tmp/sixone-benchmark` 时才跑，跑完请删掉开关文件。
 
-## Contributing
+## 参与贡献
 
-Contributions are welcome. The build and test commands are under **Quick start**, and the "Where to look when changing code" table is the fastest way to find the right file.
+欢迎贡献。构建与测试命令见 **快速开始**，「改代码时先看这里」是找文件最快的入口。
 
-### Privacy invariants — do not regress these
+### 隐私不变量 —— 不要破坏
 
-Each exists because of a specific failure. A change that weakens one has to say so and show how it still holds.
+每条都源自一次具体故障。削弱其中任何一条，都必须写明理由并论证它依然成立。
 
-1. **Do-not-record markers are checked before any clipboard content is read** (`PasteboardSnapshot.doNotRecordTypes`; `PasteboardAccessing.readRecordableSnapshot` does the marker check and the snapshot from one `pasteboardItems` read). A source-app ignore list exists too, but it cannot replace this one — the frontmost app is not reliably the app that wrote the content.
-2. **The store keeps its own file name.** `AppModelContainer` must never fall back to SwiftData's default `Application Support/default.store`, and the "won't open → rename it aside and rebuild" fallback may only touch `SixOne.store` — otherwise it acts on another app's database.
-3. **The HTML preview stays fenced.** No content JavaScript, no navigation away from local files, and the remote content-transfer channels stay blocked (`document`, `script`, `raw`, `popup`). Remote images, stylesheets, and fonts are deliberately allowed — see [PRIVACY.md](PRIVACY.md) §3 before changing the rule.
-4. **The paste path fails before it changes anything.** `PanelPasteFlow` proves a `⌘V` event can be created *before* writing the clipboard or hiding the panel, because a notice is invisible once the panel is gone.
-5. **Logs stay at the default privacy level.** Never interpolate clipboard text or file paths into `os.Logger` with `privacy: .public`.
+1. **「不要记录」标记必须在读取剪贴板内容之前判定**（`PasteboardSnapshot.doNotRecordTypes`；`readRecordableSnapshot` 用同一次 `pasteboardItems` 读取完成判定与快照）。来源应用忽略列表替代不了这一道 —— 前台应用并不总是写剪贴板的那个应用。
+2. **库文件保留专属文件名。** `AppModelContainer` 绝不回落到 SwiftData 默认的 `default.store`；「打不开 → 改名备份再新建」只允许动 `SixOne.store`。
+3. **HTML 预览保持围栏。** 不执行内容脚本、不允许离开本地文件，外传通道保持阻断；远程图片 / 样式 / 字体有意放行 —— 改这条规则前先看 [PRIVACY.md](PRIVACY.md) §3。
+4. **粘贴链路必须在改变任何东西之前失败。** 先确认 `⌘V` 事件建得出来，之后才写剪贴板、才收起面板。
+5. **日志保持默认隐私级别。** 绝不把剪贴板正文或文件路径以 `privacy: .public` 插进 `os.Logger`。
 
-### Conventions
+### 约定
 
-- **Language.** `README` and `PRIVACY` ship in both English and Chinese; keep the `.zh-Hans.md` side in sync in the same PR. Code comments, `@Suite` / `@Test` display names, and commit messages are Chinese. (Translating test display names to English is welcome: it changes no logic, and they are what an outside contributor reads when a test fails.)
-- **Keyboard decisions stay pure.** `PanelKeyRouter.route(_:context:)` and `PanelFocusPolicy.shouldHide(_:)` take a snapshot and return a value, never touch a window; a new branch needs a new row in the matching test file.
-- **New user-visible text** goes through `Localizer.string(...)` or a `LocalizedStringKey` **and** into `Localizable.xcstrings` with a `zh-Hans` value. `LocalizationCoverageTests` catches a literal key with no entry; it cannot see a key you never added.
-- **Tests never touch the real system** — `FakePasteboard`, `InMemorySettingsStorage`, `FakeHistoryRepository`, `OffscreenHost`, `TemporaryFiles` — and they poll with `Wait.until` rather than `sleep`.
+- **语言。** `README` / `PRIVACY` 以简体中文为默认（`README.md` / `PRIVACY.md`），英文版同步在 `README.en.md` / `PRIVACY.en.md`。代码注释、`@Suite` / `@Test` 显示名与提交信息用中文。
+- **键盘判定保持纯函数。** `PanelKeyRouter.route(_:context:)` 与 `PanelFocusPolicy.shouldHide(_:)` 只接收快照、返回一个值，从不碰窗口。
+- **新增用户可见文案**走 `Localizer.string(...)` 或 `LocalizedStringKey`，并补进 `Localizable.xcstrings` 的 `zh-Hans`。`LocalizationCoverageTests` 能抓出缺失条目。
+- **测试绝不碰真实系统**，等待用 `Wait.until` 轮询而不是 `sleep`。
 
-For a security or privacy issue, please use GitHub's private reporting (**Security** tab → *Report a vulnerability*) rather than a public issue. Details, and what to include, are in [PRIVACY.md](PRIVACY.md) §7.
+安全或隐私问题请走 GitHub 私下上报（**Security** → *Report a vulnerability*），不要开公开 issue。详见 [PRIVACY.md](PRIVACY.md) §7。
 
-## Acknowledgements
+## 致谢
 
-Built with [swift-testing](https://github.com/apple/swift-testing) (Apache-2.0 with the Swift Runtime Library Exception) for the test suite. Everything else is Apple's own frameworks: AppKit, SwiftUI, SwiftData, WebKit, Quick Look, and ServiceManagement.
+测试用 [swift-testing](https://github.com/apple/swift-testing)（Apache-2.0 with Swift Runtime Library Exception）。其余全部是 Apple 自带框架：AppKit、SwiftUI、SwiftData、WebKit、Quick Look、ServiceManagement。
 
 ## License
 
