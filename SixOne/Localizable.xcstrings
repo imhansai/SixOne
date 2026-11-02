@@ -110,6 +110,9 @@
         }
       }
     },
+    "1 GB" : {
+
+    },
     "1 Month" : {
       "localizations" : {
         "zh-Hans" : {
@@ -130,6 +133,9 @@
         }
       }
     },
+    "2 GB" : {
+
+    },
     "3 Months" : {
       "localizations" : {
         "zh-Hans" : {
@@ -140,6 +146,9 @@
         }
       }
     },
+    "5 GB" : {
+
+    },
     "6 Months" : {
       "localizations" : {
         "zh-Hans" : {
@@ -149,6 +158,12 @@
           }
         }
       }
+    },
+    "10 GB" : {
+
+    },
+    "500 MB" : {
+
     },
     "About" : {
       "localizations" : {
@@ -406,6 +421,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "颜色"
+          }
+        }
+      }
+    },
+    "Content too large · showing an excerpt" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内容过大 · 仅显示开头部分"
+          }
+        }
+      }
+    },
+    "Content too large to edit" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内容过大，无法编辑"
           }
         }
       }
@@ -824,12 +859,12 @@
         }
       }
     },
-    "Includes the history database and attachments; clearing history may not free disk space immediately." : {
+    "Includes the history database and attachments; clearing history may not free disk space immediately. Images and rich text are trimmed oldest-first when they exceed the storage limit; the most recent item is always kept." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "包含历史库与附件；清空历史后，磁盘空间可能不会立即释放。"
+            "value" : "包含历史库与附件；清空历史后，磁盘空间可能不会立即释放。图片和富文本超出存储上限时从最旧开始清理，最新一条始终保留。"
           }
         }
       }
@@ -1424,6 +1459,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "存储"
+          }
+        }
+      }
+    },
+    "Storage Limit" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储上限"
           }
         }
       }

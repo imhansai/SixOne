@@ -27,6 +27,29 @@ enum HistoryRetention: Int, CaseIterable, Identifiable {
     }
 }
 
+/// 外部存储（图片/富文本）上限；`nil` 表示不限制。
+enum HistoryStorageLimit: Int, CaseIterable, Identifiable {
+    case megabytes500
+    case gigabytes1
+    case gigabytes2
+    case gigabytes5
+    case gigabytes10
+    case unlimited
+
+    var id: Int { rawValue }
+
+    var bytes: Int64? {
+        switch self {
+        case .megabytes500: return 500 * 1024 * 1024
+        case .gigabytes1: return 1 * 1024 * 1024 * 1024
+        case .gigabytes2: return 2 * 1024 * 1024 * 1024
+        case .gigabytes5: return 5 * 1024 * 1024 * 1024
+        case .gigabytes10: return 10 * 1024 * 1024 * 1024
+        case .unlimited: return nil
+        }
+    }
+}
+
 struct IgnoredApplication: Codable, Identifiable, Hashable {
     let bundleIdentifier: String
     let path: String
@@ -79,6 +102,7 @@ struct IgnoredApplication: Codable, Identifiable, Hashable {
 final class SettingsStore {
     private static let logger = AppLog.logger("Settings")
     static let defaultRetention = Preferences.defaultRetention
+    static let defaultStorageLimit = Preferences.defaultStorageLimit
 
     private static let defaultIgnoredApps: [IgnoredApplication] = [
         IgnoredApplication(
@@ -100,15 +124,24 @@ final class SettingsStore {
         didSet {
             guard historyRetention != oldValue else { return }
             preferences.historyRetention = historyRetention
-            notifyRetentionChange()
+            notifyMaintenanceChange()
         }
     }
 
-    private var retentionObservers: [(HistoryRetention) -> Void] = []
+    /// 图片与富文本的总量上限；变化后立即可按新预算裁剪。
+    var storageLimit: HistoryStorageLimit {
+        didSet {
+            guard storageLimit != oldValue else { return }
+            preferences.storageLimit = storageLimit
+            notifyMaintenanceChange()
+        }
+    }
 
-    /// 订阅保留时长变化；闭包按约定持弱引用，随装配图同生共死。
-    func observeRetentionChanges(_ handler: @escaping (HistoryRetention) -> Void) {
-        retentionObservers.append(handler)
+    private var maintenanceObservers: [() -> Void] = []
+
+    /// 订阅会影响维护扫描的设置变化；闭包按约定持弱引用，随装配图同生共死。
+    func observeMaintenanceChanges(_ handler: @escaping () -> Void) {
+        maintenanceObservers.append(handler)
     }
 
     /// 语言偏好；重启后生效。
@@ -133,6 +166,7 @@ final class SettingsStore {
     init(preferences: Preferences) {
         self.preferences = preferences
         historyRetention = preferences.historyRetention
+        storageLimit = preferences.storageLimit
         language = preferences.language
         ignoredApps = Self.loadIgnoredApps(from: preferences)
     }
@@ -151,8 +185,8 @@ final class SettingsStore {
         }
     }
 
-    private func notifyRetentionChange() {
-        for observer in retentionObservers { observer(historyRetention) }
+    private func notifyMaintenanceChange() {
+        for observer in maintenanceObservers { observer() }
     }
 
     private func persistIgnoredApps() {

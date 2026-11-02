@@ -115,6 +115,9 @@ final class PanelWindowLifecycle {
     func show(anchor: PanelAnchor) {
         guard !panel.isVisible else { return }
         previousApplication = NSWorkspace.shared.frontmostApplication
+        // 此刻前台仍是原应用：先认领唤出前那次复制，归属不会被面板激活改掉。
+        let hadUnpolledPasteboardChange = manager.hasUnpolledPasteboardChange
+        manager.pollPasteboard(attributingTo: previousApplication.map(SourceApplication.init))
         positionPanel(anchor: anchor)
         present()
         noticeState.message = nil
@@ -124,7 +127,7 @@ final class PanelWindowLifecycle {
         sharing.finishPickingSessions()
         shareState.stage = .idle
         store.setListVisible(true)
-        restoreSession()
+        restoreSession(hadUnpolledPasteboardChange: hadUnpolledPasteboardChange)
         panelState.isVisible = true
         installMonitors()
     }
@@ -186,10 +189,12 @@ final class PanelWindowLifecycle {
     }
 
     /// 接回上次的预览、选中与滚动锚点；收起期间来过新复制就停到新顶部，停得深才不重载。
-    private func restoreSession() {
-        // 复制后立刻唤出时轮询还没认领，事件仍在流水线里；同样按「有新复制」处理。
+    /// `hadUnpolledPasteboardChange` 是唤出前刚认领的那次变化：入库还在后台路上。
+    private func restoreSession(hadUnpolledPasteboardChange: Bool) {
         let storeHasNewContent = store.takeNewContentWhileHidden()
-        let hasNewContent = storeHasNewContent || manager.hasUnpolledPasteboardChange
+        let hasNewContent = storeHasNewContent
+            || hadUnpolledPasteboardChange
+            || manager.hasUnpolledPasteboardChange
         if hasNewContent || !(session?.isDeepScroll ?? false) {
             store.loadLatest()
         }

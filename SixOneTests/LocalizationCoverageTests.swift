@@ -25,13 +25,18 @@ struct LocalizationCoverageTests {
 
     @Test("目录里的 zh-Hans 覆盖：除专有名词与纯格式键外都应有译文")
     func chineseCoverageIsComplete() throws {
-        // 产品名、仓库地址与纯格式化串无需翻译。
+        // 产品名、仓库地址、纯格式化串与容量单位无需翻译。
         let exempt: Set<String> = [
             "SixOne",
             "GitHub",
             "https://github.com/imhansai/SixOne",
             "%lld",
             "%lld / %lld",
+            "500 MB",
+            "1 GB",
+            "2 GB",
+            "5 GB",
+            "10 GB",
         ]
         let missing = try LocalizationCoverage.keysMissingChinese().subtracting(exempt).sorted()
         #expect(missing.isEmpty, "这些键缺少 zh-Hans 译文：\(missing)")

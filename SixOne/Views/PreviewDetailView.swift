@@ -155,6 +155,9 @@ struct PreviewDetailView: View {
     private var subtitle: String? {
         switch item.kind {
         case .text, .link:
+            if item.exceedsTextPreviewLimit {
+                return Localizer.string("Content too large · showing an excerpt")
+            }
             // 统计在后台缓存，未就绪先不显示，避免 body 内 O(n) 扫描。
             return PreviewSubtitle.text(metadata.textStats)
         case .image:

@@ -61,7 +61,11 @@ final class PreviewState {
 
     var saveRequestID: Int { editing.saveRequestID }
 
-    func startEditing() { editing.start() }
+    func startEditing() {
+        // 超上限的正文只渲染了开头，编辑会把这截写回条目。
+        guard item?.exceedsTextPreviewLimit != true else { return }
+        editing.start()
+    }
     func finishEditing() { editing.finish() }
     func requestSave() { editing.requestSave() }
     func cancelEditing() { editing.cancel() }

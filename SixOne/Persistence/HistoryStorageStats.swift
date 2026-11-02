@@ -9,6 +9,23 @@ import Foundation
 import os
 import SwiftData
 
+/// SwiftData 把 `.externalStorage` 数据放在库文件旁边的隐藏目录里；存储预算按这里统计。
+nonisolated enum ExternalStorageDirectory {
+    static func url(forStoreAt storeURL: URL) -> URL {
+        let baseName = storeURL.deletingPathExtension().lastPathComponent
+        return storeURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(baseName)_SUPPORT", isDirectory: true)
+            .appendingPathComponent("_EXTERNAL_DATA", isDirectory: true)
+    }
+
+    static func byteCount(forStoreAt storeURL: URL) async -> Int64 {
+        let directory = url(forStoreAt: storeURL)
+        return await Task.detached(priority: .utility) {
+            HistoryStorageStatsReader.byteCount(in: directory)
+        }.value
+    }
+}
+
 /// 一次概况读数；nil 表示读不到。
 nonisolated struct HistoryStorageStats: Equatable, Sendable {
     let itemCount: Int?

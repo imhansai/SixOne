@@ -2,7 +2,7 @@
 //  StorageSettingsView.swift
 //  SixOne
 //
-//  设置 → 存储：历史概况（条数、占用空间）、保留时长（整档滑块）与清空历史。
+//  设置 → 存储：历史概况（条数、占用空间）、存储上限、保留时长（整档滑块）与清空历史。
 //
 
 import AppKit
@@ -22,10 +22,16 @@ struct StorageSettingsView: View {
             Section {
                 statRow("Records", value: recordsText)
                 statRow("Disk Usage", value: spaceText)
+                Picker("Storage Limit", selection: storageLimitBinding) {
+                    ForEach(HistoryStorageLimit.allCases) { limit in
+                        Text(limit.title).tag(limit)
+                    }
+                }
+                .pickerStyle(.menu)
             } header: {
                 Text("History")
             } footer: {
-                Text("Includes the history database and attachments; clearing history may not free disk space immediately.")
+                Text("Includes the history database and attachments; clearing history may not free disk space immediately. Images and rich text are trimmed oldest-first when they exceed the storage limit; the most recent item is always kept.")
             }
 
             Section {
@@ -61,8 +67,11 @@ struct StorageSettingsView: View {
         .task {
             await refreshStats()
         }
-        // 改保留档位会立刻触发裁剪，概况要跟着变。
+        // 改保留档位或存储上限会立刻触发维护，概况要跟着变。
         .onChange(of: settings.historyRetention) { _, _ in
+            Task { await refreshStats() }
+        }
+        .onChange(of: settings.storageLimit) { _, _ in
             Task { await refreshStats() }
         }
     }
@@ -120,6 +129,13 @@ struct StorageSettingsView: View {
             }
         )
     }
+
+    private var storageLimitBinding: Binding<HistoryStorageLimit> {
+        Binding(
+            get: { settings.storageLimit },
+            set: { settings.storageLimit = $0 }
+        )
+    }
 }
 
 private extension HistoryRetention {
@@ -129,6 +145,19 @@ private extension HistoryRetention {
         case .threeMonths: "3 Months"
         case .sixMonths: "6 Months"
         case .oneYear: "1 Year"
+        case .unlimited: "Unlimited"
+        }
+    }
+}
+
+private extension HistoryStorageLimit {
+    var title: LocalizedStringKey {
+        switch self {
+        case .megabytes500: "500 MB"
+        case .gigabytes1: "1 GB"
+        case .gigabytes2: "2 GB"
+        case .gigabytes5: "5 GB"
+        case .gigabytes10: "10 GB"
         case .unlimited: "Unlimited"
         }
     }

@@ -17,8 +17,9 @@ final class ClipboardManager {
     private let thumbnails: ClipboardThumbnailScheduler
     private let capturePipeline: ClipboardCapturePipeline
     private let imageLoader: ClipboardImageLoader
-    private var retentionTimer: Timer?
+    private var maintenanceTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
     private let logger = AppLog.logger("ClipboardManager")
 
     let events: ClipboardHistoryEventBus
@@ -44,7 +45,8 @@ final class ClipboardManager {
         let writer = ClipboardHistoryWriter(
             container: container,
             events: events,
-            retentionInterval: { [weak settings] in settings?.historyRetention.interval }
+            retentionInterval: { [weak settings] in settings?.historyRetention.interval },
+            externalByteBudget: { [weak settings] in settings?.storageLimit.bytes }
         )
         let fileAccess = ClipboardFileAccess(writer: writer)
         let pasteboard = pasteboard ?? SystemPasteboard()
@@ -86,10 +88,11 @@ final class ClipboardManager {
         }
 
         if pollInterval != nil {
-            startRetentionSweep()
+            startMaintenanceSweep()
+            startApplicationActivationMonitor()
         }
-        // 启动裁剪延后一轮：装配阶段不在主线程删大批过期条目。
-        retentionTrimTask = Task { [weak self] in await self?.trimToRetention() }
+        // 启动维护延后一轮：装配阶段不在主线程删大批过期条目。
+        maintenanceTask = Task { [weak self] in await self?.performMaintenance() }
         // 后台清掉上次运行的导出临时文件（含剪贴板内容副本）。
         let logger = self.logger
         Task.detached(priority: .utility) {
@@ -102,9 +105,12 @@ final class ClipboardManager {
     }
 
     isolated deinit {
-        retentionTimer?.invalidate()
+        maintenanceTimer?.invalidate()
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
+        if let activationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
         }
     }
 
@@ -117,44 +123,80 @@ final class ClipboardManager {
         capturePipeline.pollPasteboard()
     }
 
+    /// 唤出面板时先认领变化，归属给唤出前的应用。
+    func pollPasteboard(attributingTo source: SourceApplication?) {
+        capturePipeline.pollPasteboard(attributingTo: source)
+    }
+
+    /// 应用切换：先把待认领的变化归给离开的应用；测试直接驱动。
+    func noteApplicationActivation(_ application: SourceApplication?) {
+        capturePipeline.noteActiveApplication(application)
+    }
+
     func waitForPendingCapture() async {
         await capturePipeline.waitForPendingCapture()
     }
 
-    /// 兜底间隔：应用常几周不重启，没有它保留期在无新复制时不生效。
-    private static let retentionSweepInterval: TimeInterval = 60 * 60
+    /// 兜底间隔：应用常几周不重启，没有它保留期与存储预算在无新复制时不生效。
+    private static let maintenanceSweepInterval: TimeInterval = 60 * 60
 
-    private func startRetentionSweep() {
-        let timer = Timer(timeInterval: Self.retentionSweepInterval, repeats: true) { [weak self] _ in
-            Task { await self?.trimToRetention() }
+    private func startMaintenanceSweep() {
+        let timer = Timer(
+            timeInterval: Self.maintenanceSweepInterval,
+            repeats: true
+        ) { [weak self] _ in
+            Task { await self?.performMaintenance() }
         }
+        // 允许系统合并唤醒，维护不需要精确到秒。
+        timer.tolerance = Self.maintenanceSweepInterval * 0.25
         RunLoop.main.add(timer, forMode: .common)
-        retentionTimer = timer
+        maintenanceTimer = timer
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { await self?.trimToRetention() }
+            Task { await self?.performMaintenance() }
+        }
+    }
+
+    /// 切换瞬间用离开的应用认领待处理变化，避免轮询读到新前台。
+    private func startApplicationActivationMonitor() {
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            // 通知对象不能跨隔离；先取出可发送的来源值。
+            let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                as? NSRunningApplication
+            let source = application.map {
+                SourceApplication(bundleIdentifier: $0.bundleIdentifier, name: $0.localizedName)
+            }
+            MainActor.assumeIsolated {
+                self?.noteApplicationActivation(source)
+            }
         }
     }
 
     // MARK: - 持久化维护
 
-    private var isTrimmingRetention = false
-    private var retentionTrimTask: Task<Void, Never>?
+    private var isMaintaining = false
+    private var maintenanceTask: Task<Void, Never>?
 
-    /// 同一时刻只跑一轮裁剪；保留期变更与定时器撞车时不重复扫库。
-    func trimToRetention() async {
-        guard !isTrimmingRetention else { return }
-        isTrimmingRetention = true
-        defer { isTrimmingRetention = false }
+    /// 同一时刻只跑一轮维护；保留期变更与定时器撞车时不重复扫库。
+    /// 先按保留期裁时间，再按外部存储预算裁字节。
+    func performMaintenance() async {
+        guard !isMaintaining else { return }
+        isMaintaining = true
+        defer { isMaintaining = false }
         await writer.trimToRetention()
+        await writer.trimToExternalStorageBudget()
     }
 
-    /// 等启动裁剪落定；测试判断最终状态时用。
-    func waitForPendingRetentionTrim() async {
-        await retentionTrimTask?.value
+    /// 等启动维护落定；测试判断最终状态时用。
+    func waitForPendingMaintenance() async {
+        await maintenanceTask?.value
     }
 
     func clearAll() {

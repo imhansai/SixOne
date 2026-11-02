@@ -76,6 +76,12 @@ struct ClipboardHarness {
         )
     }
 
+    /// 模拟一次应用激活：测试里没有真实 NSWorkspace 通知，直接驱动流水线。
+    func activate(_ source: SourceApplication?) {
+        frontmost.source = source
+        manager.noteApplicationActivation(source)
+    }
+
     /// 库里的条目，最新在前。
     func itemsNewestFirst() -> [ClipboardItem] {
         let descriptor = FetchDescriptor<ClipboardItem>(

@@ -15,6 +15,10 @@ final class ClipboardHistoryWriter {
     private let retentionInterval: () -> TimeInterval?
     /// 写盘动作；测试注入失败来验证回滚。
     private let persist: () throws -> Void
+    /// 外部存储（图片/富文本）字节数；内存库恒为 0，测试可注入。
+    private let externalByteCount: @MainActor () async -> Int64
+    /// 当前预算；nil 表示不限制。
+    private let externalByteBudget: @MainActor () -> Int64?
     let events: ClipboardHistoryEventBus
     private let logger = AppLog.logger("ClipboardHistoryWriter")
 
@@ -27,7 +31,9 @@ final class ClipboardHistoryWriter {
         container: ModelContainer,
         events: ClipboardHistoryEventBus,
         retentionInterval: @escaping () -> TimeInterval?,
-        persist: (() throws -> Void)? = nil
+        persist: (() throws -> Void)? = nil,
+        externalByteCount: (@MainActor () async -> Int64)? = nil,
+        externalByteBudget: (@MainActor () -> Int64?)? = nil
     ) {
         let context = container.mainContext
         self.container = container
@@ -35,6 +41,21 @@ final class ClipboardHistoryWriter {
         self.events = events
         self.retentionInterval = retentionInterval
         self.persist = persist ?? { try context.save() }
+        self.externalByteCount = externalByteCount
+            ?? Self.makeExternalByteCount(for: container)
+        self.externalByteBudget = externalByteBudget
+            ?? { HistoryStorageLimit.gigabytes2.bytes }
+    }
+
+    /// 图片与富文本都走 `.externalStorage`，落在库旁的隐藏目录里；内存库没有可统计的文件。
+    private static func makeExternalByteCount(
+        for container: ModelContainer
+    ) -> @MainActor () async -> Int64 {
+        guard let storeURL = container.configurations
+            .first(where: { !$0.isStoredInMemoryOnly })?.url else {
+            return { 0 }
+        }
+        return { await ExternalStorageDirectory.byteCount(forStoreAt: storeURL) }
     }
 
     // MARK: - 写库
@@ -135,6 +156,8 @@ final class ClipboardHistoryWriter {
 
     /// 维护操作的单批条数；改小保留期时不至于一次把整段过期集合读进内存。
     private static let maintenanceBatchSize = 500
+    /// 预算裁剪的单批条数；比保留期小，超一点不至于删掉几百条。
+    private static let budgetTrimBatchSize = 50
 
     /// 分批裁剪：每批保存并让出一拍，避免大批过期条目连续占住主线程。
     /// 部分批次已落盘后才失败也照常广播，界面据实重载。
@@ -161,6 +184,58 @@ final class ClipboardHistoryWriter {
             await Task.yield()
         }
         guard didDelete else { return }
+        events.post(.trimmed)
+    }
+
+    /// 外部存储字节预算：删行即释放库旁文件；至少保留最新一条。
+    func trimToExternalStorageBudget() async {
+        guard let budget = externalByteBudget() else { return }
+        var bytes = await externalByteCount()
+        guard bytes > budget else { return }
+
+        var total = (try? context.fetchCount(FetchDescriptor<ClipboardItem>())) ?? 0
+        guard total > 1 else { return }
+
+        var newestDescriptor = FetchDescriptor<ClipboardItem>(
+            sortBy: [SortDescriptor(\ClipboardItem.recencyID, order: .reverse)]
+        )
+        newestDescriptor.fetchLimit = 1
+        newestDescriptor.propertiesToFetch = [\.id]
+        // 取不到最新一条就不删，避免误删刚复制的内容。
+        guard let newestID = fetchLogged("预算裁剪：查询最新条目", {
+            try context.fetch(newestDescriptor).first?.id
+        }) else { return }
+
+        var didDelete = false
+        var deletedCount = 0
+        while bytes > budget, total > 1 {
+            // 只挑外部存储条目：正文在内联页里，删了文件也不会缩。
+            var descriptor = FetchDescriptor<ClipboardItem>(
+                predicate: #Predicate { $0.imageData != nil || $0.attributedTextData != nil },
+                sortBy: [SortDescriptor(\ClipboardItem.recencyID)]
+            )
+            descriptor.fetchLimit = Self.budgetTrimBatchSize
+            // 只取 id，避免把整批大字段读进内存。
+            descriptor.propertiesToFetch = [\.id]
+            guard let batch = fetchLogged("预算裁剪：查询最旧的外部存储条目", {
+                try context.fetch(descriptor)
+            }), !batch.isEmpty else { break }
+
+            let deletable = batch.filter { $0.id != newestID }
+            guard !deletable.isEmpty else { break }
+            for item in deletable {
+                context.delete(item)
+            }
+            guard save("按外部存储预算裁剪") else { break }
+            total -= deletable.count
+            deletedCount += deletable.count
+            didDelete = true
+            bytes = await externalByteCount()
+            await Task.yield()
+        }
+
+        guard didDelete else { return }
+        logger.notice("外部存储超出预算，已清理 \(deletedCount, privacy: .public) 条最旧记录")
         events.post(.trimmed)
     }
 

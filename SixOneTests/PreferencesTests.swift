@@ -16,6 +16,7 @@ struct PreferencesTests {
         let preferences = Preferences(storage: InMemorySettingsStorage())
 
         #expect(preferences.historyRetention == Preferences.defaultRetention)
+        #expect(preferences.storageLimit == Preferences.defaultStorageLimit)
         #expect(preferences.language == .system)
         #expect(preferences.hotKey == HotKeySettings.default)
         #expect(preferences.ignoredAppsData == nil)
@@ -25,6 +26,7 @@ struct PreferencesTests {
     func readsLegacyKeys() {
         let storage = InMemorySettingsStorage([
             "historyRetention": HistoryRetention.unlimited.rawValue,
+            "historyStorageLimit": HistoryStorageLimit.gigabytes10.rawValue,
             "appLanguage": AppLanguage.english.rawValue,
             "privacyIgnoredApps": Data([1, 2, 3]),
             "globalHotKeyConfigured": false,
@@ -35,6 +37,7 @@ struct PreferencesTests {
         let preferences = Preferences(storage: storage)
 
         #expect(preferences.historyRetention == .unlimited)
+        #expect(preferences.storageLimit == .gigabytes10)
         #expect(preferences.language == .english)
         #expect(preferences.ignoredAppsData == Data([1, 2, 3]))
         #expect(preferences.hotKey == HotKeySettings(
@@ -50,6 +53,7 @@ struct PreferencesTests {
         let preferences = Preferences(storage: storage)
 
         preferences.historyRetention = .oneYear
+        preferences.storageLimit = .megabytes500
         preferences.language = .simplifiedChinese
         preferences.ignoredAppsData = Data([4, 5])
         preferences.hotKey = HotKeySettings(
@@ -60,6 +64,7 @@ struct PreferencesTests {
 
         let reopened = Preferences(storage: storage)
         #expect(reopened.historyRetention == .oneYear)
+        #expect(reopened.storageLimit == .megabytes500)
         #expect(reopened.language == .simplifiedChinese)
         #expect(reopened.ignoredAppsData == Data([4, 5]))
         #expect(reopened.hotKey == HotKeySettings(

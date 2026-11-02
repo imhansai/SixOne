@@ -88,6 +88,8 @@ final class PreviewMetadataModel {
 
     func loadTextStats() async {
         guard item.kind == .text || item.kind == .link, let text = item.text else { return }
+        // 超大正文统计需全量扫描，副标题改显示截断提示。
+        guard !item.exceedsTextPreviewLimit else { return }
         textStats = await textStatsCache.stats(for: item.id, text: text)
     }
 

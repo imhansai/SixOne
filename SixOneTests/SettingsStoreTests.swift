@@ -21,6 +21,7 @@ struct SettingsStoreTests {
         let (store, _) = makeStore()
 
         #expect(store.historyRetention == SettingsStore.defaultRetention)
+        #expect(store.storageLimit == SettingsStore.defaultStorageLimit)
         #expect(store.language == .system)
         #expect(store.ignoredApps.map(\.bundleIdentifier) == [
             "com.apple.Passwords", "com.apple.keychainaccess",
@@ -31,11 +32,13 @@ struct SettingsStoreTests {
     func fallsBackOnGarbage() {
         let (store, _) = makeStore([
             "historyRetention": 99,
+            "historyStorageLimit": 99,
             "appLanguage": "kl",
             "privacyIgnoredApps": Data("not json".utf8),
         ])
 
         #expect(store.historyRetention == SettingsStore.defaultRetention)
+        #expect(store.storageLimit == SettingsStore.defaultStorageLimit)
         #expect(store.language == .system)
         #expect(store.ignoredApps.count == 2, "解码失败回落默认忽略列表")
     }
@@ -43,27 +46,55 @@ struct SettingsStoreTests {
     @Test("写：改档位落盘并回调一次")
     func writesRetentionAndNotifies() {
         let (store, storage) = makeStore()
-        var notified: [HistoryRetention] = []
-        store.observeRetentionChanges { notified.append($0) }
+        var notified = 0
+        store.observeMaintenanceChanges { notified += 1 }
 
         store.historyRetention = .oneYear
 
         #expect(storage.object(forKey: "historyRetention") as? Int == HistoryRetention.oneYear.rawValue)
-        #expect(notified == [.oneYear])
+        #expect(notified == 1)
     }
 
-    @Test("保留时长变化通知每个订阅者都收到")
-    func notifiesEveryRetentionObserver() {
+    @Test("维护设置变化通知每个订阅者都收到")
+    func notifiesEveryMaintenanceObserver() {
         let (store, _) = makeStore()
-        var first: [HistoryRetention] = []
-        var second: [HistoryRetention] = []
-        store.observeRetentionChanges { first.append($0) }
-        store.observeRetentionChanges { second.append($0) }
+        var first = 0
+        var second = 0
+        store.observeMaintenanceChanges { first += 1 }
+        store.observeMaintenanceChanges { second += 1 }
 
         store.historyRetention = .oneYear
+        store.storageLimit = .gigabytes5
 
-        #expect(first == [.oneYear])
-        #expect(second == [.oneYear])
+        #expect(first == 2)
+        #expect(second == 2)
+    }
+
+    @Test("写：存储上限落盘并触发一次维护回调")
+    func writesStorageLimitAndNotifies() {
+        let (store, storage) = makeStore()
+        var notified = 0
+        store.observeMaintenanceChanges { notified += 1 }
+
+        store.storageLimit = .gigabytes5
+
+        #expect(storage.object(forKey: "historyStorageLimit") as? Int
+            == HistoryStorageLimit.gigabytes5.rawValue)
+        #expect(notified == 1)
+    }
+
+    @Test("存储上限相等赋值不落盘、不回调")
+    func equalStorageLimitAssignmentIsIgnored() {
+        let (store, storage) = makeStore()
+        store.storageLimit = .gigabytes5
+        let writesAfterFirst = storage.setCount
+        var notified = 0
+        store.observeMaintenanceChanges { notified += 1 }
+
+        store.storageLimit = .gigabytes5
+
+        #expect(storage.setCount == writesAfterFirst)
+        #expect(notified == 0)
     }
 
     @Test("相等赋值不落盘、不回调：滑块会重复写同一个档位")
@@ -72,7 +103,7 @@ struct SettingsStoreTests {
         store.historyRetention = .sixMonths
         let writesAfterFirst = storage.setCount
         var notified = 0
-        store.observeRetentionChanges { _ in notified += 1 }
+        store.observeMaintenanceChanges { notified += 1 }
 
         store.historyRetention = .sixMonths
         store.historyRetention = .sixMonths

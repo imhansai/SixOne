@@ -24,8 +24,8 @@ struct AppComposition {
         self.settings = settings
 
         let panel = PanelAssembly(modelContainer: modelContainer, settings: settings)
-        settings.observeRetentionChanges { [weak manager = panel.manager] _ in
-            Task { await manager?.trimToRetention() }
+        settings.observeMaintenanceChanges { [weak manager = panel.manager] in
+            Task { await manager?.performMaintenance() }
         }
         self.panel = panel
         self.controller = panel.makeController()

@@ -72,7 +72,8 @@ struct TextPreviewView: NSViewRepresentable {
             attributedTextData: attributedTextData,
             plainText: plainText,
             font: font,
-            showsFormatting: isEditable || showsFormatting
+            showsFormatting: isEditable || showsFormatting,
+            isEditable: isEditable
         )
         if isEditable {
             context.coordinator.beginEditing(in: textView)
@@ -118,7 +119,8 @@ struct TextPreviewView: NSViewRepresentable {
                         attributedTextData: attributedTextData,
                         plainText: plainText,
                         font: font,
-                        showsFormatting: true
+                        showsFormatting: true,
+                        isEditable: true
                     )
                 }
                 context.coordinator.lastShowsFormatting = true
@@ -141,7 +143,8 @@ struct TextPreviewView: NSViewRepresentable {
                         attributedTextData: nil,
                         plainText: textView.string,
                         font: font,
-                        showsFormatting: false
+                        showsFormatting: false,
+                        isEditable: isEditable
                     )
                     context.coordinator.lastShowsFormatting = false
                 }
@@ -165,7 +168,8 @@ struct TextPreviewView: NSViewRepresentable {
                 attributedTextData: attributedTextData,
                 plainText: plainText,
                 font: font,
-                showsFormatting: displaysFormatting
+                showsFormatting: displaysFormatting,
+                isEditable: isEditable
             )
         }
 
@@ -185,7 +189,8 @@ struct TextPreviewView: NSViewRepresentable {
             attributedTextData: attributedTextData,
             plainText: plainText,
             font: font,
-            showsFormatting: displaysFormatting
+            showsFormatting: displaysFormatting,
+            isEditable: isEditable
         )
         textView.scroll(.zero)
     }
@@ -229,10 +234,23 @@ struct TextPreviewView: NSViewRepresentable {
         attributedTextData: Data?,
         plainText: String?,
         font: NSFont,
-        showsFormatting: Bool
+        showsFormatting: Bool,
+        isEditable: Bool
     ) {
         let defaultFont = font
-        if showsFormatting,
+        if !isEditable,
+           TextPreviewLimit.exceeds(plainText: plainText, attributedTextData: attributedTextData) {
+            // 只读态渲染开头一段；完整正文仍在条目里，复制走的是原值。
+            textView.textStorage?.setAttributedString(
+                NSAttributedString(
+                    string: TextPreviewLimit.truncated(plainText ?? ""),
+                    attributes: [
+                        .font: defaultFont,
+                        .foregroundColor: NSColor.textColor,
+                    ]
+                )
+            )
+        } else if showsFormatting,
            let attributedTextData,
            let attributed = NSAttributedString(rtf: attributedTextData, documentAttributes: nil) {
             textView.textStorage?.setAttributedString(attributed)

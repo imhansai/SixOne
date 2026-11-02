@@ -57,8 +57,10 @@ struct PreviewHeaderView: View {
                 Spacer()
 
                 HStack(spacing: ClipboardLayout.headerActionSpacing) {
-                    // 显示格式开关仅只读态出现，编辑态隐去但占位。
-                    if item.kind == .text, item.attributedTextData != nil {
+                    // 显示格式开关仅只读态出现，编辑态隐去但占位；超上限只渲染纯文本，开关无意义。
+                    if item.kind == .text,
+                       item.attributedTextData != nil,
+                       !item.exceedsTextPreviewLimit {
                         formattingToggleButton
                             .opacity(previewState.isEditing ? 0 : 1)
                             .allowsHitTesting(!previewState.isEditing)
@@ -127,11 +129,15 @@ struct PreviewHeaderView: View {
     }
 
     private var editToggleButton: some View {
-        PreviewHeaderActionButton(
+        // 超上限的正文只渲染了开头；编辑会把这截写回条目。
+        let isDisabled = !previewState.isEditing && item.exceedsTextPreviewLimit
+        return PreviewHeaderActionButton(
             systemImage: previewState.isEditing ? "checkmark" : "pencil",
-            help: previewState.isEditing
-                ? Localizer.string("Finish editing and save")
-                : Localizer.string("Edit text")
+            help: isDisabled
+                ? Localizer.string("Content too large to edit")
+                : previewState.isEditing
+                    ? Localizer.string("Finish editing and save")
+                    : Localizer.string("Edit text")
         ) {
             if previewState.isEditing {
                 // 置位「退出即落盘」再退出编辑态。
@@ -140,6 +146,8 @@ struct PreviewHeaderView: View {
                 previewState.startEditing()
             }
         }
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.35 : 1)
     }
 
     private var formattingToggleButton: some View {

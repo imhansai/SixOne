@@ -258,7 +258,7 @@ struct ClipboardCaptureTests {
         let harness = try ClipboardHarness(ignoredApps: [
             IgnoredApplication(bundleIdentifier: "com.example.blocked", displayName: "被忽略的应用", path: "/tmp/Blocked.app"),
         ])
-        harness.frontmost.source = SourceApplication(bundleIdentifier: "com.example.blocked", name: "被忽略的应用")
+        harness.activate(SourceApplication(bundleIdentifier: "com.example.blocked", name: "被忽略的应用"))
 
         harness.pasteboard.simulateCopy(text: "secret")
         await harness.pollAndWait()
@@ -281,7 +281,7 @@ struct ClipboardCaptureTests {
     @Test("「不要记录」独立于来源判定：前台应用不在忽略列表里也照样跳过")
     func concealedWinsOverSourceCheck() async throws {
         let harness = try ClipboardHarness()
-        harness.frontmost.source = SourceApplication(bundleIdentifier: "com.example.browser", name: "浏览器")
+        harness.activate(SourceApplication(bundleIdentifier: "com.example.browser", name: "浏览器"))
 
         harness.pasteboard.simulateConcealedCopy(text: "otpauth://totp/Example:me?secret=ABCD")
         await harness.pollAndWait()
@@ -292,14 +292,14 @@ struct ClipboardCaptureTests {
     @Test("SixOne 自己的写入不改来源角标")
     func keepsSourceForOwnWrites() async throws {
         let harness = try ClipboardHarness()
-        harness.frontmost.source = SourceApplication(bundleIdentifier: "com.example.editor", name: "编辑器")
+        harness.activate(SourceApplication(bundleIdentifier: "com.example.editor", name: "编辑器"))
         harness.pasteboard.simulateCopy(text: "from editor")
         await harness.pollAndWait()
 
-        harness.frontmost.source = SourceApplication(
+        harness.activate(SourceApplication(
             bundleIdentifier: Bundle.main.bundleIdentifier,
             name: "SixOne"
-        )
+        ))
         harness.pasteboard.simulateCopy(text: "from editor")
         await harness.pollAndWait()
 
@@ -569,6 +569,74 @@ struct ClipboardCaptureTests {
 
         #expect(snapshot.items.first?.data(.png) != nil)
         #expect(snapshot.items.first?.data(.tiff) == nil)
+    }
+
+    // MARK: - 来源归属
+
+    @Test("复制后立刻切应用：归属给离开的应用，而不是轮询时的新前台")
+    func attributesCopyToApplicationThatLeft() async throws {
+        let harness = try ClipboardHarness()
+        let appA = SourceApplication(bundleIdentifier: "com.example.A", name: "A")
+        let appB = SourceApplication(bundleIdentifier: "com.example.B", name: "B")
+        harness.activate(appA)
+
+        harness.pasteboard.simulateCopy(text: "from A")
+        // 还没轮询就切到了 B：轮询瞬间读前台会读成 B。
+        harness.activate(appB)
+        await harness.manager.waitForPendingCapture()
+
+        let item = try #require(harness.itemsNewestFirst().first)
+        #expect(item.sourceAppBundleIdentifier == "com.example.A")
+        #expect(item.sourceAppName == "A")
+    }
+
+    @Test("被忽略的应用复制后马上切走：仍然不记录")
+    func ignoresSourceEvenAfterSwitchingAway() async throws {
+        let harness = try ClipboardHarness(ignoredApps: [
+            IgnoredApplication(
+                bundleIdentifier: "com.example.A",
+                displayName: "A",
+                path: "/Applications/A.app"
+            ),
+        ])
+        let appA = SourceApplication(bundleIdentifier: "com.example.A", name: "A")
+        let appB = SourceApplication(bundleIdentifier: "com.example.B", name: "B")
+        harness.activate(appA)
+
+        harness.pasteboard.simulateCopy(text: "secret")
+        harness.activate(appB)
+        await harness.manager.waitForPendingCapture()
+
+        #expect(harness.itemsNewestFirst().isEmpty)
+    }
+
+    @Test("切换后在新应用里复制：归属新应用")
+    func attributesToNewApplicationAfterSwitch() async throws {
+        let harness = try ClipboardHarness()
+        harness.activate(SourceApplication(bundleIdentifier: "com.example.A", name: "A"))
+        harness.activate(SourceApplication(bundleIdentifier: "com.example.B", name: "B"))
+
+        harness.pasteboard.simulateCopy(text: "from B")
+        await harness.pollAndWait()
+
+        let item = try #require(harness.itemsNewestFirst().first)
+        #expect(item.sourceAppBundleIdentifier == "com.example.B")
+        #expect(item.sourceAppName == "B")
+    }
+
+    @Test("唤出面板时的显式归属优先于当前前台")
+    func explicitAttributionWinsOverActiveApplication() async throws {
+        let harness = try ClipboardHarness()
+        let appA = SourceApplication(bundleIdentifier: "com.example.A", name: "A")
+        let appB = SourceApplication(bundleIdentifier: "com.example.B", name: "B")
+        harness.activate(appB)
+
+        harness.pasteboard.simulateCopy(text: "from A before panel")
+        harness.manager.pollPasteboard(attributingTo: appA)
+        await harness.manager.waitForPendingCapture()
+
+        let item = try #require(harness.itemsNewestFirst().first)
+        #expect(item.sourceAppBundleIdentifier == "com.example.A")
     }
 
     // MARK: - 夹具

@@ -24,6 +24,7 @@ final class Preferences {
     /// 保留旧 key 名称，升级后已有配置照常读得到。
     private enum Key {
         static let retention = "historyRetention"
+        static let storageLimit = "historyStorageLimit"
         static let ignoredApps = "privacyIgnoredApps"
         static let hotKeyConfigured = "globalHotKeyConfigured"
         static let hotKeyCode = "globalHotKeyCode"
@@ -31,6 +32,7 @@ final class Preferences {
     }
 
     static let defaultRetention: HistoryRetention = .threeMonths
+    static let defaultStorageLimit: HistoryStorageLimit = .gigabytes2
 
     private let storage: SettingsStorage
 
@@ -45,6 +47,16 @@ final class Preferences {
         }
         set {
             storage.set(newValue.rawValue, forKey: Key.retention)
+        }
+    }
+
+    var storageLimit: HistoryStorageLimit {
+        get {
+            let raw = storage.object(forKey: Key.storageLimit) as? Int
+            return raw.flatMap(HistoryStorageLimit.init(rawValue:)) ?? Self.defaultStorageLimit
+        }
+        set {
+            storage.set(newValue.rawValue, forKey: Key.storageLimit)
         }
     }
 

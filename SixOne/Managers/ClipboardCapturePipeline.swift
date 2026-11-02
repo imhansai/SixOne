@@ -16,6 +16,8 @@ final class ClipboardCapturePipeline {
     private let logger = AppLog.logger("ClipboardCapture")
     private var timer: Timer?
     private var lastChangeCount: Int
+    /// 由应用切换事件维护的前台应用；轮询归属以它为准。
+    private var activeApplication: SourceApplication?
     /// 在途捕获；串行排队保证入库顺序与复制顺序一致。
     private var captureTask: Task<Void, Never>?
 
@@ -32,6 +34,7 @@ final class ClipboardCapturePipeline {
         self.writer = writer
         // 只响应启动后的新复制，避免清空历史后重启又补录残留内容。
         self.lastChangeCount = pasteboard.changeCount
+        self.activeApplication = frontmostApplication()
         if let pollInterval {
             startMonitoring(interval: pollInterval)
         }
@@ -46,11 +49,15 @@ final class ClipboardCapturePipeline {
 
     /// 轮询一次剪贴板；主线程只做 changeCount、隐私判定与读内容，解析交给后台。
     func pollPasteboard() {
+        pollPasteboard(attributingTo: activeApplication)
+    }
+
+    /// 用指定来源认领变化；应用切换与面板唤出时归属明确。
+    func pollPasteboard(attributingTo source: SourceApplication?) {
         let changeCount = pasteboard.changeCount
         guard changeCount != lastChangeCount else { return }
 
         // 来源忽略判定先于读内容：被忽略的应用写进来的字节不进内存。
-        let source = frontmostApplication()
         if isIgnoredSource(source) {
             // 判定期间又变了就不认领，下一轮按新来源重新判。
             if pasteboard.changeCount == changeCount {
@@ -94,6 +101,12 @@ final class ClipboardCapturePipeline {
     /// 内部写回后同步计数，免得轮询把内部拷贝当成新复制。
     func syncLastChangeCount() {
         lastChangeCount = pasteboard.changeCount
+    }
+
+    /// 切应用时先用离开的应用认领待处理变化，再记下新前台应用。
+    func noteActiveApplication(_ application: SourceApplication?) {
+        pollPasteboard(attributingTo: activeApplication)
+        activeApplication = application
     }
 
     private func startMonitoring(interval: TimeInterval) {

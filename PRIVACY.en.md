@@ -81,6 +81,8 @@ The app does **not** use `AXUIElement` to read other apps' interfaces, does not 
 
 **Retention.** Settings → Storage offers 1 month / 3 months / 6 months / 1 year / unlimited (default: 3 months). Expired items are trimmed when a new item is captured, when a repeat copy de-duplicates, at launch, when you change the setting, on an hourly sweep, and when the Mac wakes. The sweep exists because a Mac that stays awake and stops copying would otherwise never trim.
 
+**External-storage budget.** Images and rich text are stored as external-storage files beside the store and have their own ceiling, **2 GB** by default (Settings → Storage offers 500 MB–10 GB or unlimited), checked alongside retention during maintenance. When exceeded, the oldest entries are deleted first; **the newest entry is always kept**, even if it alone exceeds the limit. Plain text is not part of this budget and remains governed by retention alone.
+
 **Clearing.** Settings → Storage → Clear History, or the panel's *More Actions → Clear History*. Both ask for confirmation.
 
 **What clearing does *not* do — please read this part.** SixOne deletes rows through SwiftData and saves, but does not `VACUUM` the database and does not erase SQLite's free pages or the write-ahead log. Deleted content can therefore remain recoverable inside the store file (and in external-storage files for images and rich text) until those pages are reused. If you need data gone for good, delete the store while the app is not running:

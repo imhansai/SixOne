@@ -16,7 +16,7 @@ struct HistoryRetentionTests {
         harness.pasteboard.simulateCopy(text: "fresh")
         await harness.pollAndWait()
 
-        await harness.manager.trimToRetention()
+        await harness.manager.performMaintenance()
 
         #expect(harness.itemsNewestFirst().map(\.text) == ["fresh"])
         #expect(!harness.recorder.events.contains(.trimmed))
@@ -34,7 +34,7 @@ struct HistoryRetentionTests {
         old.lastActivityAt = Date().addingTimeInterval(-40 * 24 * 3600)
         try harness.context.save()
 
-        await harness.manager.trimToRetention()
+        await harness.manager.performMaintenance()
 
         #expect(harness.itemsNewestFirst().map(\.text) == ["recent"])
         #expect(harness.recorder.events.last == .trimmed)
@@ -54,7 +54,7 @@ struct HistoryRetentionTests {
         item.lastActivityAt = Date().addingTimeInterval(-400 * 24 * 3600)
         try harness.context.save()
 
-        await harness.manager.trimToRetention()
+        await harness.manager.performMaintenance()
 
         #expect(harness.itemsNewestFirst().count == 1)
         #expect(!harness.recorder.events.contains(.trimmed))
@@ -73,11 +73,11 @@ struct HistoryRetentionTests {
         }
 
         // 等启动裁剪本身落定，避免用事件轮询去猜它是否还在跑。
-        await harness.manager.waitForPendingRetentionTrim()
+        await harness.manager.waitForPendingMaintenance()
         #expect(harness.itemsNewestFirst().isEmpty)
         #expect(harness.recorder.events == [.trimmed])
 
-        await harness.manager.trimToRetention()
+        await harness.manager.performMaintenance()
         #expect(harness.recorder.events == [.trimmed], "空库再裁剪不应重复广播")
     }
 
@@ -90,7 +90,7 @@ struct HistoryRetentionTests {
             try context.save()
         }
 
-        await harness.manager.waitForPendingRetentionTrim()
+        await harness.manager.waitForPendingMaintenance()
         #expect(harness.itemsNewestFirst().isEmpty)
         #expect(harness.recorder.events == [.trimmed])
     }
