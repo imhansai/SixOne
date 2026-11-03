@@ -74,8 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
     }
 
     @objc func openSettings() {
-        // 不恢复焦点到唤出前的应用，避免与激活设置窗口产生竞态。
-        composition?.controller.hide(restoresPreviousApplication: false)
+        // 先让面板把激活还给唤出前的应用：设置窗口随后才能以常规应用身份重新拿回激活。
+        composition?.controller.hide(restoresPreviousApplication: true)
         guard let composition else { return }
         let container = modelContainer
         let controller = settingsWindowController ?? SettingsWindowController(

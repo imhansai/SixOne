@@ -62,7 +62,9 @@ final class PasteAccessPermission {
     func request() {
         refresh()
         guard !isAuthorized else { return }
-        if hasRequestedAuthorization {
+        // 已拒绝时系统不会再弹授权提示，直接带用户去系统设置。
+        let isDenied = IOHIDCheckAccess(kIOHIDRequestTypePostEvent).rawValue == kIOHIDAccessTypeDenied.rawValue
+        if hasRequestedAuthorization || isDenied {
             openSystemSettings()
         } else {
             requestSystemAuthorization()

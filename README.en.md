@@ -89,7 +89,7 @@ The app uses the Swift 6 language mode (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainAct
 
 ## First run
 
-**After `open …` nothing appears to happen — that is expected.** SixOne is a menu-bar app (`LSUIElement`), so there is no Dock icon and no window. Look for the clipboard icon in the menu bar, or press `⌃⌘V`.
+**After `open …` nothing appears to happen — that is expected.** SixOne runs with the accessory activation policy at runtime, so there is no Dock icon and no window. Look for the clipboard icon in the menu bar, or press `⌃⌘V`.
 
 The first time you press `Return` (or double-click) to paste into another app, macOS asks for **Accessibility** permission: System Settings → Privacy & Security → Accessibility → enable SixOne. Until it is granted, the panel says so rather than failing silently.
 
@@ -113,6 +113,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 | Add / change a panel command with a menu item or shortcut | `PanelMenuCommand` (availability) + `PanelMenuCommandTable` (selector/title/key) + the menu tree in `MainMenuBuilder`. Tests: `PanelMenuCommandTableTests` / `MainMenuBuilderTests` / `MenuKeyEquivalentIndexTests` |
 | Add a "should the panel hide" rule | `PanelFocusPolicy` + `PanelFocusPolicyTests` |
 | Touch panel activation / preview pinch gestures / status-item click | Gesture events only reach the active app: make the panel key and main when summoning, and drop the Settings window from the key/main candidates when hiding; see `PanelWindowLifecycle` and `SettingsWindowController` |
+| Change the Settings window's activation / Dock icon | `SettingsWindowController.showSettings` (switch to `.regular` on open, back to `.accessory` on close) + `AppDelegate.openSettings` (hide the panel and hand activation back first); approach borrowed from Shottr |
 | Change the query pipeline (debounce / clear / alignment) | `PanelSearchSession` + `PanelSearchSessionTests`; the top bar only hands in "the input changed" |
 | Add a context-menu item | `ItemCommand` (title, shortcut, layout) + `ItemCommandTests`, with behavior in `RowMenuBuilder` / `FileGroupPreview` |
 | Add a view-side action (copy, save, copy text) | Emit an intent through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; do not call `ClipboardManager` mutators from views |
@@ -171,6 +172,8 @@ For a security or privacy issue, use GitHub's private reporting (**Security** �
 ## Acknowledgements
 
 The test suite uses [swift-testing](https://github.com/apple/swift-testing) (Apache-2.0 with the Swift Runtime Library Exception). Everything else is Apple's own frameworks: AppKit, SwiftUI, SwiftData, WebKit, Quick Look, and ServiceManagement.
+
+The Settings window's "become a regular app while open, return to a menu-bar app when closed" approach is borrowed from [Shottr](https://shottr.cc/).
 
 ## License
 

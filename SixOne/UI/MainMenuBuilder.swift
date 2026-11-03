@@ -2,7 +2,7 @@
 //  MainMenuBuilder.swift
 //  SixOne
 //
-//  LSUIElement 应用的主菜单只作快捷键命令表：保留需要快捷键的命令，动作走响应链。
+//  菜单栏应用的主菜单只作快捷键命令表：保留需要快捷键的命令，动作走响应链。
 //
 
 import AppKit

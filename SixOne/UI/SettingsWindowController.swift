@@ -60,7 +60,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                 }
             }
         ]
-        // LSUIElement 无 Dock 图标，最小化后难以找回：保留按钮但禁用。
+        // 菜单栏应用无 Dock 图标，最小化后难以找回：保留按钮但禁用。
         window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
 
         window.contentViewController = NSHostingController(rootView: makeRootView())
@@ -85,8 +85,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     /// 显示设置窗口并激活应用。
     func showSettings() {
-        // 协作式激活：只是请求，由系统按上下文裁决。
-        NSApp.activate()
+        if AppDelegate.isRunningUnitTests {
+            NSApp.activate()
+        } else {
+            // 设置窗口期间切常规应用（做法参考 Shottr）：系统设置退出时 macOS 才会把激活交回。
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        showWindow()
+    }
+
+    private func showWindow() {
         settingsWindow.makeKeyAndOrderFront(nil)
         // 清掉 SwiftUI 首帧自动聚焦，避免焦点环闪在开关上。
         settingsWindow.makeFirstResponder(nil)
@@ -116,6 +125,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         navigation.reset()
+        // 恢复菜单栏应用：常规应用身份只在设置窗口打开期间需要。
+        NSApp.setActivationPolicy(.accessory)
     }
 }
 
