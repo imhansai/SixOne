@@ -97,6 +97,14 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         get { lifecycle.setSettingsKeyAndMainSuspended }
         set { lifecycle.setSettingsKeyAndMainSuspended = newValue }
     }
+
+    /// 面板显示/收起；主菜单据此切换模式。
+    var onPanelVisibilityChange: ((Bool) -> Void)? {
+        get { lifecycle.onVisibilityChange }
+        set { lifecycle.onVisibilityChange = newValue }
+    }
+
+    var isPanelVisible: Bool { panelState.isVisible }
     private lazy var previewLauncher = PreviewLauncher(
         manager: manager,
         previewState: previewState,
@@ -303,7 +311,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         }
     }
 
-    func hide(restoresPreviousApplication: Bool = true) {
+    @discardableResult
+    func hide(restoresPreviousApplication: Bool = true) -> Bool {
         lifecycle.hide(restoresPreviousApplication: restoresPreviousApplication)
     }
 

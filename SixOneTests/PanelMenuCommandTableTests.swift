@@ -15,10 +15,11 @@ struct PanelMenuCommandTableTests {
         @objc func openSettingsFromMenu(_ sender: Any?) {}
     }
 
-    private func allItems(in menu: NSMenu) -> [NSMenuItem] {
-        menu.items.flatMap { item in
+    private func visibleItems(in menu: NSMenu) -> [NSMenuItem] {
+        menu.items.flatMap { item -> [NSMenuItem] in
+            guard !item.isHidden else { return [] }
             guard let submenu = item.submenu else { return [item] }
-            return allItems(in: submenu)
+            return [item] + visibleItems(in: submenu)
         }
     }
 
@@ -45,8 +46,9 @@ struct PanelMenuCommandTableTests {
 
     @Test("表项与主菜单的标题、键位、动作一致")
     func matchesMainMenu() {
-        let menu = MainMenuBuilder.makeMainMenu(target: Target())
-        let items = allItems(in: menu)
+        let built = MainMenuBuilder.makeMainMenu(target: Target())
+        built.apply(panelVisible: true)
+        let items = visibleItems(in: built.menu)
 
         for entry in PanelMenuCommandTable.entries {
             let item = items.first { $0.action == entry.selector && !$0.isSeparatorItem }

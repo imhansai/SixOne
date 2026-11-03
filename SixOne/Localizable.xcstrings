@@ -265,6 +265,16 @@
         }
       }
     },
+    "Bring All to Front" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部置于顶层"
+          }
+        }
+      }
+    },
     "Bundle Identifier" : {
       "localizations" : {
         "zh-Hans" : {
@@ -819,6 +829,26 @@
         }
       }
     },
+    "Hide Others" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏其他"
+          }
+        }
+      }
+    },
+    "Hide SixOne" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏 SixOne"
+          }
+        }
+      }
+    },
     "History" : {
       "localizations" : {
         "zh-Hans" : {
@@ -945,6 +975,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS 正在等待你在「登录项」里允许 SixOne 开机启动。"
+          }
+        }
+      }
+    },
+    "Minimize" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小化"
           }
         }
       }
@@ -1350,7 +1390,6 @@
       }
     },
     "Services" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1406,6 +1445,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "快捷键"
+          }
+        }
+      }
+    },
+    "Show All" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部显示"
           }
         }
       }
@@ -1574,7 +1623,6 @@
       }
     },
     "Window" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1605,7 +1653,6 @@
       }
     },
     "Zoom" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

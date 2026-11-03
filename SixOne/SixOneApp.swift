@@ -16,6 +16,7 @@ enum SixOneApp {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
+        // Info.plist 不写 LSUIElement：启动先降为菜单栏应用，设置窗口打开时再临时切常规。
         app.setActivationPolicy(.accessory)
         app.run()
     }

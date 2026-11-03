@@ -16,7 +16,9 @@ struct MenuKeyEquivalentIndexTests {
     }
 
     private func makeIndex() -> MenuKeyEquivalentIndex {
-        MenuKeyEquivalentIndex(menu: MainMenuBuilder.makeMainMenu(target: Target()))
+        let built = MainMenuBuilder.makeMainMenu(target: Target())
+        built.apply(panelVisible: true)
+        return MenuKeyEquivalentIndex(menu: built.menu)
     }
 
     private func event(
@@ -85,6 +87,15 @@ struct MenuKeyEquivalentIndexTests {
 
         #expect(index.command(for: event("c", [])) == nil)
         #expect(index.command(for: event("b", [.command])) == nil)
+    }
+
+    @Test("隐藏菜单项的快捷键不参与匹配")
+    func hiddenItemsAreSkipped() {
+        let index = makeIndex()
+
+        #expect(index.command(for: event("h", [.command])) == nil, "Hide 在面板模式隐藏")
+        #expect(index.command(for: event("m", [.command])) == nil, "Window 菜单在面板模式隐藏")
+        #expect(index.command(for: event("q", [.command])) != nil, "Quit 仍可见")
     }
 
     @Test("命中后 perform 会用菜单项的 target/action")

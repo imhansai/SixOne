@@ -24,6 +24,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let navigation = SettingsNavigation()
     private let settings: SettingsStore
     private let hotKeyManager: HotKeyManager
+    private let activationPolicy: ActivationPolicyControlling
+    private let onVisibilityChange: (Bool) -> Void
     private let loadStorageStats: () async -> HistoryStorageStats
     private let onClearHistory: () -> Void
     private var toolbarObservations: [NSKeyValueObservation] = []
@@ -31,11 +33,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     init(
         settings: SettingsStore,
         hotKeyManager: HotKeyManager,
+        activationPolicy: ActivationPolicyControlling,
+        onVisibilityChange: @escaping (Bool) -> Void,
         loadStorageStats: @escaping () async -> HistoryStorageStats,
         onClearHistory: @escaping () -> Void
     ) {
         self.settings = settings
         self.hotKeyManager = hotKeyManager
+        self.activationPolicy = activationPolicy
+        self.onVisibilityChange = onVisibilityChange
         self.loadStorageStats = loadStorageStats
         self.onClearHistory = onClearHistory
         let window = SettingsWindow(
@@ -48,6 +54,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.titleVisibility = .visible
         window.titlebarSeparatorStyle = .none
         window.isReleasedWhenClosed = false
+        // 设置窗口跟随当前活动 Space，避免留在旧 Space。
+        window.collectionBehavior = [.managed, .moveToActiveSpace]
         self.settingsWindow = window
         super.init(window: window)
         window.delegate = self
@@ -60,9 +68,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                 }
             }
         ]
-        // 菜单栏应用无 Dock 图标，最小化后难以找回：保留按钮但禁用。
-        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
-
         window.contentViewController = NSHostingController(rootView: makeRootView())
         window.setContentSize(Self.contentSize)
         window.center()
@@ -85,17 +90,22 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     /// 显示设置窗口并激活应用。
     func showSettings() {
-        if AppDelegate.isRunningUnitTests {
-            NSApp.activate()
-        } else {
-            // 设置窗口期间切常规应用（做法参考 Shottr）：系统设置退出时 macOS 才会把激活交回。
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        // 菜单先于常规身份就位，菜单栏出现时就是设置模式。
+        onVisibilityChange(true)
+        // 设置窗口期间切常规应用，关闭时恢复菜单栏应用。
+        activationPolicy.beginRegular(self)
+        // 上次收起面板时可能摘掉了 key/main 候选资格。
+        setKeyAndMainSuspended(false)
+        // 窗口先前移，再激活；激活后补一次 makeKey，菜单命令才有窗口目标。
         showWindow()
+        activationPolicy.activateApp()
+        settingsWindow.makeKey()
     }
 
     private func showWindow() {
+        if settingsWindow.isMiniaturized {
+            settingsWindow.deminiaturize(nil)
+        }
         settingsWindow.makeKeyAndOrderFront(nil)
         // 清掉 SwiftUI 首帧自动聚焦，避免焦点环闪在开关上。
         settingsWindow.makeFirstResponder(nil)
@@ -105,6 +115,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func setKeyAndMainSuspended(_ suspended: Bool) {
         settingsWindow.refusesKeyAndMain = suspended
+        // 面板收起后设置窗口仍是可见的，就要把 key 接回来，菜单命令才有目标。
+        guard !suspended, settingsWindow.isVisible else { return }
+        settingsWindow.makeKey()
     }
 
     /// 补齐 SwiftUI 宿主下管不到的工具栏显示模式。
@@ -125,8 +138,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         navigation.reset()
-        // 恢复菜单栏应用：常规应用身份只在设置窗口打开期间需要。
-        NSApp.setActivationPolicy(.accessory)
+        // 先恢复菜单栏应用，避免菜单栏在消失前闪成面板命令表。
+        activationPolicy.endRegular(self)
+        onVisibilityChange(false)
     }
 }
 

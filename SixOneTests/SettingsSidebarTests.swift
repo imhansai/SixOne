@@ -8,6 +8,17 @@ import SwiftUI
 import Testing
 @testable import SixOne
 
+/// 测试宿主里只激活、不切真实激活策略，避免污染后续用例。
+@MainActor
+private final class TestActivationPolicy: ActivationPolicyControlling {
+    func beginRegular(_ holder: AnyObject) {}
+    func endRegular(_ holder: AnyObject) {}
+
+    func activateApp() {
+        NSApp.activate()
+    }
+}
+
 @Suite("设置窗口侧栏")
 @MainActor
 struct SettingsSidebarTests {
@@ -124,6 +135,8 @@ struct SettingsSidebarTests {
         let controller = SettingsWindowController(
             settings: SettingsStore(storage: InMemorySettingsStorage()),
             hotKeyManager: HotKeyManager(onTrigger: {}, storage: InMemorySettingsStorage()),
+            activationPolicy: TestActivationPolicy(),
+            onVisibilityChange: { _ in },
             loadStorageStats: { HistoryStorageStats(itemCount: 0, byteCount: 0) },
             onClearHistory: {}
         )
@@ -147,6 +160,8 @@ struct SettingsSidebarTests {
         let controller = SettingsWindowController(
             settings: SettingsStore(storage: InMemorySettingsStorage()),
             hotKeyManager: HotKeyManager(onTrigger: {}, storage: InMemorySettingsStorage()),
+            activationPolicy: TestActivationPolicy(),
+            onVisibilityChange: { _ in },
             loadStorageStats: { HistoryStorageStats(itemCount: 0, byteCount: 0) },
             onClearHistory: {}
         )

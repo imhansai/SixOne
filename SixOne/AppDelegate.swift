@@ -11,6 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
     /// 组合根；数据层、面板与快捷键都由它持有。
     private var composition: AppComposition?
     private var settingsWindowController: SettingsWindowController?
+    private var appMenu: AppMainMenuController?
+    private lazy var activationPolicy = AppActivationPolicy(isEnabled: !Self.isRunningUnitTests)
+    /// 等待应用退出激活后再显示设置窗口。
+    private var deactivationObserver: NSObjectProtocol?
 
     /// 是否单测宿主；测试宿主与运行中的 SixOne 同容器、同快捷键。
     static var isRunningUnitTests: Bool {
@@ -25,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
         AppModelContainer.make(isStoredInMemoryOnly: Self.isRunningUnitTests)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = MainMenuBuilder.makeMainMenu(target: self)
+        let appMenu = AppMainMenuController(target: self)
+        self.appMenu = appMenu
+        appMenu.install()
         guard !Self.isRunningUnitTests else { return }
 
         let composition = AppComposition(modelContainer: modelContainer)
@@ -54,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
         panelController.onOpenSettings = { [weak self] in
             self?.openSettings()
         }
+        // 面板可见时主菜单退回快捷键命令表，避免应用级快捷键截走面板按键。
+        panelController.onPanelVisibilityChange = { [weak self] visible in
+            self?.appMenu?.setPanelVisible(visible)
+        }
         // 收起面板时摘掉设置窗口的 key/main 候选资格。
         panelController.setSettingsKeyAndMainSuspended = { [weak self] suspended in
             self?.settingsWindowController?.setKeyAndMainSuspended(suspended)
@@ -67,6 +77,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
         false
     }
 
+    /// Dock 图标只在设置窗口打开期间存在；从 Dock / Finder 重开时落到设置。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !Self.isRunningUnitTests else { return true }
+        if !flag {
+            openSettings()
+        }
+        return true
+    }
+
     /// 退出前拦一道未提交的预览编辑；编辑结束后再按一次 ⌘Q 才退出。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard composition?.controller.handleQuitAttempt() == true else { return .terminateNow }
@@ -74,13 +93,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
     }
 
     @objc func openSettings() {
-        // 先让面板把激活还给唤出前的应用：设置窗口随后才能以常规应用身份重新拿回激活。
-        composition?.controller.hide(restoresPreviousApplication: true)
+        guard deactivationObserver == nil else { return }
+        let wasPanelVisible = composition?.controller.isPanelVisible ?? false
+        // 设置窗口已显示时应用已是常规身份，无需交还激活。
+        let settingsVisible = settingsWindowController?.window?.isVisible == true
+        // 激活态下切常规身份会让系统菜单栏留在上一个应用手里；
+        // 先收起面板交还激活，等应用真正退出前台后再显示设置窗口。
+        let handedOff = composition?.controller.hide(
+            restoresPreviousApplication: !settingsVisible
+        ) ?? false
+        guard wasPanelVisible, !settingsVisible, handedOff, NSApp.isActive else {
+            presentSettings()
+            return
+        }
+        // 交还激活是异步的，didResignActive 才是完成信号。
+        deactivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.finishDeactivationWait()
+            }
+        }
+    }
+
+    private func finishDeactivationWait() {
+        if let deactivationObserver {
+            NotificationCenter.default.removeObserver(deactivationObserver)
+        }
+        deactivationObserver = nil
+        presentSettings()
+    }
+
+    private func presentSettings() {
         guard let composition else { return }
         let container = modelContainer
         let controller = settingsWindowController ?? SettingsWindowController(
             settings: composition.settings,
             hotKeyManager: composition.hotKey,
+            activationPolicy: activationPolicy,
+            onVisibilityChange: { [weak self] visible in
+                self?.appMenu?.setSettingsVisible(visible)
+            },
             loadStorageStats: {
                 await HistoryStorageStatsReader.read(container: container)
             },

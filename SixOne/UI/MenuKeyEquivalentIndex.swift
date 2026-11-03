@@ -69,6 +69,8 @@ struct MenuKeyEquivalentIndex {
 
     private mutating func collect(_ menu: NSMenu) {
         for item in menu.items {
+            // 隐藏项（及其子菜单）不参与按键匹配。
+            guard !item.isHidden else { continue }
             if let submenu = item.submenu {
                 collect(submenu)
                 continue

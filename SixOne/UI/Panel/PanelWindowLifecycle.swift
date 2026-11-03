@@ -35,6 +35,8 @@ final class PanelWindowLifecycle {
     }
     /// 收起那一拍摘掉设置窗口的 key/main 候选，收完恢复（未建窗口时无需做事）。
     var setSettingsKeyAndMainSuspended: ((_ suspended: Bool) -> Void)?
+    /// 面板显示/收起时回调。
+    var onVisibilityChange: ((Bool) -> Void)?
 
     /// 上次收起时的界面快照；首次唤出前为 nil。
     private var session: PanelSession?
@@ -130,10 +132,13 @@ final class PanelWindowLifecycle {
         restoreSession(hadUnpolledPasteboardChange: hadUnpolledPasteboardChange)
         panelState.isVisible = true
         installMonitors()
+        onVisibilityChange?(true)
     }
 
-    func hide(restoresPreviousApplication: Bool = true) {
-        guard panel.isVisible || panelState.isVisible else { return }
+    /// 返回是否已请求交还激活（交接由系统异步完成）。
+    @discardableResult
+    func hide(restoresPreviousApplication: Bool = true) -> Bool {
+        guard panel.isVisible || panelState.isVisible else { return false }
         // 收起按自动保存处理，避免未提交编辑随退出丢失；显式取消不会走到这里。
         commitEditingBeforeHiding()
         quickPasteHintState.cancel()
@@ -149,11 +154,17 @@ final class PanelWindowLifecycle {
         panelState.isVisible = false
         store.setListVisible(false)
         removeMonitors()
-        // 仍激活（Esc/⌘W）时把焦点还给原应用；点面板外时其他应用已激活。
-        if restoresPreviousApplication, NSApp.isActive, let previousApplication {
+        // 收起时把焦点还给唤出前的应用；用 WindowServer 状态，NSApp.isActive 会晚一拍。
+        var handedOff = false
+        if restoresPreviousApplication,
+           isAppFrontmost,
+           let previousApplication,
+           previousApplication !== NSRunningApplication.current {
             NSApp.yieldActivation(to: previousApplication)
-            previousApplication.activate()
+            handedOff = previousApplication.activate()
         }
+        onVisibilityChange?(false)
+        return handedOff
     }
 
     /// 先显示再成为 key/main；不当 main 的话激活前移的会是设置窗口。
