@@ -815,6 +815,16 @@
         }
       }
     },
+    "First recorded time: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首次记录时间：%@"
+          }
+        }
+      }
+    },
     "Folder" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1005,6 +1015,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录时自动启动 SixOne"
+          }
+        }
+      }
+    },
+    "Last copied time: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近拷贝时间：%@"
+          }
+        }
+      }
+    },
+    "Last modified: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次修改时间：%@"
           }
         }
       }

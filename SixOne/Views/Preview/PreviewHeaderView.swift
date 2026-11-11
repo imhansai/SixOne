@@ -9,6 +9,7 @@ import SwiftUI
 struct PreviewHeaderView: View {
     let item: ClipboardItem
     let subtitle: String?
+    let subtitleTooltip: String?
     let fileNameTitle: String?
     let linkOrigin: String?
     let fileURL: URL?
@@ -43,8 +44,8 @@ struct PreviewHeaderView: View {
                             }
                         }
                     }
-                    // 副标题始终占位，避免撤行时主标题跳位；编辑态用 opacity 隐去，VoiceOver 一并忽略。
-                    Text(subtitleText ?? " ")
+                    // 副标题为内容摘要；完整信息在 tooltip。
+                    Text(verbatim: subtitleText ?? " ")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -52,6 +53,7 @@ struct PreviewHeaderView: View {
                         .opacity(previewState.isEditing || subtitleText == nil ? 0 : 1)
                         .accessibilityHidden(previewState.isEditing || subtitleText == nil)
                         .allowsHitTesting(false)
+                        .appTooltipIf(subtitleTooltip != nil, text: subtitleTooltip ?? "")
                 }
                 .padding(.leading, ClipboardLayout.previewTitleInset)
                 Spacer()
@@ -315,19 +317,14 @@ private struct PreviewAliasButton: View {
     var body: some View {
         PreviewHeaderActionButton(
             systemImage: "tag",
-            help: help
+            help: Localizer.string(
+                AliasNormalizer.displayable(item.alias) == nil ? "Add Alias" : "Edit Alias"
+            )
         ) {
             context.itemActions?.panelDidRequestEditAlias(
                 id: item.id,
                 currentAlias: AliasNormalizer.displayable(item.alias)
             )
         }
-    }
-
-    private var help: String {
-        guard let alias = AliasNormalizer.displayable(item.alias) else {
-            return Localizer.string("Add Alias")
-        }
-        return String(format: Localizer.string("Alias: %@"), alias)
     }
 }

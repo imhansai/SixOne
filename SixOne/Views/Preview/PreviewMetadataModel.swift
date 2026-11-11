@@ -21,6 +21,14 @@ nonisolated struct PreviewFileMeta: Sendable {
 nonisolated struct PreviewGroupMeta: Sendable {
     let totalSize: Int64
     let missingCount: Int
+    /// 组内文件的最新修改时间。
+    let latestModDate: Date?
+
+    init(totalSize: Int64, missingCount: Int, latestModDate: Date? = nil) {
+        self.totalSize = totalSize
+        self.missingCount = missingCount
+        self.latestModDate = latestModDate
+    }
 }
 
 /// 预览详情的数据补齐：大字段与文件 stat 都不在列表快照里，这里按需读取。
@@ -142,15 +150,25 @@ final class PreviewMetadataModel {
     private nonisolated static func groupMeta(for urls: [URL?]) async -> PreviewGroupMeta {
         var totalSize: Int64 = 0
         var missingCount = 0
+        var latestModDate: Date?
         for url in urls {
             guard let url else {
                 missingCount += 1
                 continue
             }
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+            let values = try? url.resourceValues(
+                forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]
+            )
+            if let modDate = values?.contentModificationDate {
+                latestModDate = max(latestModDate ?? modDate, modDate)
+            }
             guard let size = values?.fileSize, values?.isDirectory != true else { continue }
             totalSize += Int64(size)
         }
-        return PreviewGroupMeta(totalSize: totalSize, missingCount: missingCount)
+        return PreviewGroupMeta(
+            totalSize: totalSize,
+            missingCount: missingCount,
+            latestModDate: latestModDate
+        )
     }
 }

@@ -48,6 +48,7 @@ struct PreviewDetailView: View {
                 PreviewHeaderView(
                     item: item,
                     subtitle: subtitle,
+                    subtitleTooltip: subtitleTooltip,
                     fileNameTitle: fileNameTitle,
                     linkOrigin: linkOrigin,
                     fileURL: fileURL,
@@ -87,6 +88,10 @@ struct PreviewDetailView: View {
                 }
             }
             .padding(isGroupListMode ? 0 : ClipboardLayout.previewInset)
+
+            if isGroupListMode {
+                GroupPreviewFooter(item: item, meta: metadata.groupMeta)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(.rect(cornerRadius: cornerRadius))
@@ -152,7 +157,8 @@ struct PreviewDetailView: View {
         }
     }
 
-    private var subtitle: String? {
+    /// 副标题与 tooltip 首行共用的内容摘要。
+    private var contentSummary: String? {
         switch item.kind {
         case .text, .link:
             if item.exceedsTextPreviewLimit {
@@ -163,14 +169,25 @@ struct PreviewDetailView: View {
         case .image:
             return PreviewSubtitle.image(metadata.image)
         case .file:
-            if item.fileCount > 1 {
-                if isGroupFileView { return PreviewSubtitle.file(metadata.fileMeta) }
-                return PreviewSubtitle.group(count: item.fileCount, meta: metadata.groupMeta)
-            }
-            return PreviewSubtitle.file(metadata.fileMeta)
+            return PreviewSubtitle.fileStats(metadata.fileMeta)
         case .color:
             return ColorPreview.subtitle(forColorData: item.colorData)
         }
+    }
+
+    /// 副标题只显示内容摘要；时间只在 tooltip。
+    private var subtitle: String? { contentSummary }
+
+    /// hover 时先显示原副标题，再分行显示时间；非文件类型没有修改时间。
+    private var subtitleTooltip: String {
+        var parts: [String] = []
+        if let contentSummary { parts.append(contentSummary) }
+        if item.kind == .file, let modDate = metadata.fileMeta?.modDate {
+            parts.append(PreviewSubtitle.lastModifiedLabel(modDate))
+        }
+        parts.append(PreviewSubtitle.firstRecordedTimeLabel(item.firstCapturedAt))
+        parts.append(PreviewSubtitle.lastCopiedTimeLabel(item.lastActivityAt))
+        return parts.joined(separator: "\n")
     }
 
     // MARK: - 打开 / 在访达中显示

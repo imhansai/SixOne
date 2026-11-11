@@ -14,6 +14,26 @@ struct PanelHairlineDivider: View {
     }
 }
 
+/// 面板底部提示条：发丝线 + 11pt 次要文字，列表与预览共用同一高度。
+struct PanelFooterHint<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PanelHairlineDivider()
+            content
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+        }
+    }
+}
+
 /// 面板顶栏外壳：统一高度、内边距、拖拽背景与分隔线。
 struct PanelHeaderChrome<Content: View>: View {
     let content: Content

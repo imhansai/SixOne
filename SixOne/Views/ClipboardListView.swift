@@ -36,8 +36,12 @@ struct ClipboardListView: View {
                 }
                 content
                 if store.hasOlder {
-                    PanelHairlineDivider()
-                    olderRecordsHint
+                    PanelFooterHint {
+                        Text(String(
+                            format: Localizer.string("Showing the latest %@ items. Search to find older ones."),
+                            "\(store.windowLimit)"
+                        ))
+                    }
                 }
             }
             .opacity(previewState.item == nil ? 1 : 0)
@@ -186,14 +190,4 @@ struct ClipboardListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var olderRecordsHint: some View {
-        Text(String(
-            format: Localizer.string("Showing the latest %@ items. Search to find older ones."),
-            "\(store.windowLimit)"
-        ))
-        .font(.system(size: 11))
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-    }
 }
