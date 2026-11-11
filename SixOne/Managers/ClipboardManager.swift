@@ -128,6 +128,11 @@ final class ClipboardManager {
         capturePipeline.pollPasteboard(attributingTo: source)
     }
 
+    /// 本地编辑（如别名输入）期间暂停捕获，避免复制文本进入历史。
+    func setPasteboardCaptureSuspended(_ suspended: Bool) {
+        capturePipeline.setCaptureSuspended(suspended)
+    }
+
     /// 应用切换：先把待认领的变化归给离开的应用；测试直接驱动。
     func noteApplicationActivation(_ application: SourceApplication?) {
         capturePipeline.noteActiveApplication(application)
@@ -239,6 +244,12 @@ final class ClipboardManager {
 
     func update(_ item: ClipboardItem) {
         pasteboardWriter.update(item)
+    }
+
+    /// 设置/清除别名；只动元数据，不改变排序。
+    @discardableResult
+    func setAlias(id: UUID, alias: String?) -> Bool {
+        writer.setAlias(id: id, alias: alias)
     }
 
     /// 编辑保存：写入新正文并触达；链接不留 RTF，正文清空则删除条目。

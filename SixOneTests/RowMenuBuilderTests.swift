@@ -59,6 +59,29 @@ struct RowMenuBuilderTests {
         #expect(deleted == [item.id])
     }
 
+    @Test("别名菜单标题随是否已设置切换")
+    func aliasMenuTitleFollowsState() throws {
+        let harness = try ClipboardHarness()
+        let item = try insert(ClipboardItem(kind: .text, text: "x"), into: harness)
+        let builder = RowMenuBuilder(
+            manager: harness.manager,
+            panelActions: { nil },
+            selectRow: { _ in },
+            copyFeedback: { _ in },
+            copyItem: { _ in },
+            copyItemAsPlainText: { _ in },
+            deleteRow: { _ in }
+        )
+        let anchor = RowInteractionHost.HostView()
+
+        let addMenu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
+        #expect(addMenu.items.contains { $0.title == Localizer.string("Add Alias…") })
+
+        item.alias = "别名"
+        let editMenu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
+        #expect(editMenu.items.contains { $0.title == Localizer.string("Edit Alias…") })
+    }
+
     @Test("源文件还在：分享与打开可用；文件没了：两项一起置灰")
     func reachableFileGatesShareAndOpen() throws {
         let harness = try ClipboardHarness()

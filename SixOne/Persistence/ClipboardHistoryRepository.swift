@@ -13,6 +13,8 @@ nonisolated struct HistoryRow: Identifiable, Sendable, Equatable {
     let id: UUID
     let kind: ClipboardItemKind
     let title: String?
+    /// 非空时替换列表标题。
+    let alias: String?
     let filePath: String?
     let fileCount: Int
     let contentType: String?
@@ -27,7 +29,7 @@ nonisolated extension HistoryRow {
     /// 取窗与单行刷新共用的取列清单，避免一处加列、另一处漏加。
     static var readProperties: [PartialKeyPath<ClipboardItem>] {
         [
-            \.id, \.kindRaw, \.titleSnapshot, \.thumbnailData, \.thumbnailVersion,
+            \.id, \.kindRaw, \.titleSnapshot, \.alias, \.thumbnailData, \.thumbnailVersion,
             \.filePath, \.filePaths, \.contentType, \.sourceAppBundleIdentifier, \.lastActivityAt,
         ]
     }
@@ -38,6 +40,7 @@ nonisolated extension HistoryRow {
             id: item.id,
             kind: item.kind,
             title: item.titleSnapshot,
+            alias: item.alias,
             filePath: item.filePath,
             fileCount: item.allFilePaths.count,
             contentType: item.contentType,
@@ -55,6 +58,9 @@ nonisolated protocol ClipboardHistoryRepository: Sendable {
 
     /// 按 id 取行快照，用于触达置顶与缩略图更新后的原位刷新。
     func row(id: UUID) async throws -> HistoryRow?
+
+    /// 单条是否仍命中当前查询，用于搜索态别名变更时避免整窗重查。
+    func rowMatches(id: UUID, query: String) async throws -> Bool
 
     /// 条目是否还在库里，用于校验预览/选中是否失效。
     func itemExists(id: UUID) async throws -> Bool
@@ -89,6 +95,24 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
         return try context.fetch(descriptor).first.map(HistoryRow.init)
     }
 
+    /// 与 `searchPredicate` 保持一致，只查这一条。
+    func rowMatches(id: UUID, query: String) async throws -> Bool {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<ClipboardItem>(
+            predicate: #Predicate { item in
+                item.id == id && (
+                    item.searchText?.localizedStandardContains(query) ?? false
+                        || item.titleSnapshot?.localizedStandardContains(query) ?? false
+                        || item.alias?.localizedStandardContains(query) ?? false
+                        || item.filePathsSearchText?.localizedStandardContains(query) ?? false
+                )
+            }
+        )
+        descriptor.fetchLimit = 1
+        descriptor.propertiesToFetch = [\.id]
+        return try !context.fetch(descriptor).isEmpty
+    }
+
     func itemExists(id: UUID) async throws -> Bool {
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<ClipboardItem>(
@@ -101,11 +125,12 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
 
     // MARK: - 查询谓词
 
-    /// 搜索匹配正文、标题快照与文件路径；路径列汇总了组内全部文件名。
+    /// 搜索匹配正文、标题快照、别名与文件路径；路径列汇总了组内全部文件名。
     nonisolated private static func searchPredicate(query: String) -> Predicate<ClipboardItem> {
         #Predicate<ClipboardItem> { item in
             item.searchText?.localizedStandardContains(query) ?? false
                 || item.titleSnapshot?.localizedStandardContains(query) ?? false
+                || item.alias?.localizedStandardContains(query) ?? false
                 || item.filePathsSearchText?.localizedStandardContains(query) ?? false
         }
     }

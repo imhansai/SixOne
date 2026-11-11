@@ -152,6 +152,18 @@ final class ClipboardHistoryWriter {
         return true
     }
 
+    /// 写别名：只改元数据，不触达置顶、不刷新内容快照。返回是否落盘。
+    @discardableResult
+    func setAlias(id: UUID, alias: String?) -> Bool {
+        guard let item = fetchAliasItem(id: id) else { return false }
+        let normalized = ClipboardItem.normalizedAlias(alias)
+        guard item.alias != normalized else { return true }
+        item.alias = normalized
+        guard save("设置别名") else { return false }
+        events.post(.rowUpdated(id: id))
+        return true
+    }
+
     // MARK: - 维护
 
     /// 维护操作的单批条数；改小保留期时不至于一次把整段过期集合读进内存。
@@ -291,13 +303,21 @@ final class ClipboardHistoryWriter {
         return fetchLogged("按 id 取完整条目") { try context.fetch(descriptor).first }
     }
 
+    /// 别名读写只取 id 与 alias，避免把路径、书签等列读进内存。
+    private func fetchAliasItem(id: UUID) -> ClipboardItem? {
+        var descriptor = FetchDescriptor<ClipboardItem>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        descriptor.propertiesToFetch = [\.id, \.alias]
+        return fetchLogged("按 id 取别名") { try context.fetch(descriptor).first }
+    }
+
     /// 按 id 取轻量条目：本次取数不读大字段。
     /// `propertiesToFetch` 只是部分取数，访问未列出的列仍会补取；要正文或位图走 `fetchFullItem`。
     func fetchLightItem(id: UUID) -> ClipboardItem? {
         var descriptor = FetchDescriptor<ClipboardItem>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         descriptor.propertiesToFetch = [
-            \.id, \.kindRaw, \.titleSnapshot, \.filePath, \.filePaths,
+            \.id, \.kindRaw, \.titleSnapshot, \.alias, \.filePath, \.filePaths,
             \.securityScopeBookmark, \.securityScopeBookmarks,
         ]
         return fetchLogged("按 id 取轻量条目") { try context.fetch(descriptor).first }

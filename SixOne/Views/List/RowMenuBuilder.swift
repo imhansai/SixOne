@@ -69,7 +69,7 @@ struct RowMenuBuilder {
         canOpenExternally: Bool
     ) -> NSMenuItem {
         let item = menuItem(
-            command.title,
+            command.title(alias: row.alias),
             target: anchor,
             keyEquivalent: command.keyEquivalent ?? "",
             modifiers: command.modifiers,
@@ -95,6 +95,11 @@ struct RowMenuBuilder {
         case .copyAsPlainText:
             copyItemAsPlainText(row.id)
             copyFeedback(row.id)
+        case .editAlias:
+            actions?.panelDidRequestEditAlias(
+                id: row.id,
+                currentAlias: AliasNormalizer.displayable(row.alias)
+            )
         case .share:
             actions?.panelDidRequestShare(id: row.id, anchorView: anchor)
         case .open:

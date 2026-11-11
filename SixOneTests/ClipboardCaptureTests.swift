@@ -38,6 +38,24 @@ struct ClipboardCaptureTests {
         #expect(harness.recorder.events.isEmpty)
     }
 
+    @Test("暂停捕获期间复制不产生条目，恢复后也不补录")
+    func suspendsCaptureDuringAliasEditing() async throws {
+        let harness = try ClipboardHarness()
+        harness.manager.setPasteboardCaptureSuspended(true)
+
+        harness.pasteboard.simulateCopy(text: "别名文本")
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().isEmpty)
+
+        harness.manager.setPasteboardCaptureSuspended(false)
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().isEmpty, "暂停期间的复制在恢复后不该补录")
+
+        harness.pasteboard.simulateCopy(text: "正常复制")
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().map(\.text) == ["正常复制"])
+    }
+
     @Test("changeCount 没变时什么都不做")
     func ignoresUnchangedPasteboard() async throws {
         let harness = try ClipboardHarness()

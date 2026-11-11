@@ -81,6 +81,24 @@ struct SchemaMigrationTests {
         #expect(withoutThumbnail.thumbnailVersion == nil)
     }
 
+    @Test("V3 库升级到 V4：原有内容保留，别名为空")
+    func migratesV3ToV4() throws {
+        let fixture = try MigrationFixture()
+        defer { fixture.cleanUp() }
+        let seeded = try fixture.seedV3Store()
+
+        let container = AppModelContainer.make(
+            isStoredInMemoryOnly: false,
+            storeURL: fixture.storeURL
+        )
+        let items = try container.mainContext.fetch(FetchDescriptor<ClipboardItem>())
+        #expect(items.count == 1)
+
+        let item = try #require(items.first { $0.id == seeded })
+        #expect(item.text == "v3 text")
+        #expect(item.alias == nil)
+    }
+
     @Test("全新库按当前版本创建，写入后重新打开仍在")
     func freshStoreUsesCurrentSchema() throws {
         let fixture = try MigrationFixture()
@@ -171,6 +189,22 @@ private struct MigrationFixture {
 
         try context.save()
         return (withThumbnail.id, plain.id)
+    }
+
+    /// 用冻结的 V3 schema 建库，验证新增别名字段的轻量迁移。
+    func seedV3Store() throws -> UUID {
+        let schema = Schema(versionedSchema: SixOneSchemaV3.self)
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+
+        let item = SixOneSchemaV3.ClipboardItem(kind: .text, text: "v3 text")
+        item.refreshTitleSnapshot()
+        item.refreshContentKey()
+        context.insert(item)
+
+        try context.save()
+        return item.id
     }
 
     func seedCurrentStore() throws {

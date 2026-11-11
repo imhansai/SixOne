@@ -15,13 +15,15 @@ struct PreviewHeaderTitleTests {
         _ item: ClipboardItem,
         isEditing: Bool = false,
         fileName: String? = nil,
-        linkOrigin: String? = nil
+        linkOrigin: String? = nil,
+        isGroupFileView: Bool = false
     ) -> String {
         PreviewHeaderTitle.mainTitle(
             for: item,
             isEditing: isEditing,
             fileNameTitle: fileName,
-            linkOrigin: linkOrigin
+            linkOrigin: linkOrigin,
+            isGroupFileView: isGroupFileView
         )
     }
 
@@ -66,6 +68,30 @@ struct PreviewHeaderTitleTests {
     func editingUsesEditTitle() {
         let item = ClipboardItem(kind: .text, text: "内容")
         #expect(title(item, isEditing: true) == Localizer.string("Edit"))
+    }
+
+    @Test("别名替换各类型的内容标题，编辑态仍然显示「编辑」")
+    func aliasReplacesContentTitle() {
+        let text = ClipboardItem(kind: .text, text: "很难记住的正文")
+        text.alias = "工作邮箱"
+        #expect(title(text) == "工作邮箱")
+        #expect(title(text, isEditing: true) == Localizer.string("Edit"))
+
+        let file = ClipboardItem(kind: .file, filePath: "/tmp/a.txt")
+        file.alias = "季度报告"
+        #expect(title(file, fileName: "a.txt") == "季度报告")
+
+        let link = ClipboardItem(kind: .link, text: "https://example.com/path")
+        link.alias = "官网"
+        #expect(title(link, linkOrigin: "https://example.com") == "官网")
+    }
+
+    @Test("文件组内单文件仍显示当前文件名，而不是组别名")
+    func groupFileViewKeepsFileName() {
+        let group = ClipboardItem(kind: .file, filePaths: ["/tmp/a.txt", "/tmp/b.txt"])
+        group.alias = "季度报告"
+        #expect(title(group, fileName: "b.txt", isGroupFileView: true) == "b.txt")
+        #expect(title(group) == "季度报告")
     }
 }
 

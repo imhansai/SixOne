@@ -87,6 +87,13 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         rowDelays[id] = delay
     }
 
+    func rowMatches(id: UUID, query: String) async throws -> Bool {
+        if isFailing {
+            throw FakeHistoryError.readFailed
+        }
+        return rowsByQuery[query]?.contains { $0.id == id } ?? false
+    }
+
     func row(id: UUID) async throws -> HistoryRow? {
         if let delay = rowDelays[id] {
             try? await Task.sleep(for: delay)
@@ -128,11 +135,12 @@ enum FakeHistoryError: Error {
 
 extension HistoryRow {
     /// 只带标题的测试行。
-    static func stub(title: String) -> HistoryRow {
+    static func stub(title: String, id: UUID = UUID(), alias: String? = nil) -> HistoryRow {
         HistoryRow(
-            id: UUID(),
+            id: id,
             kind: .text,
             title: title,
+            alias: alias,
             filePath: nil,
             fileCount: 0,
             contentType: nil,

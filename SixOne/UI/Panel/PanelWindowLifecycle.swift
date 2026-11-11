@@ -139,6 +139,18 @@ final class PanelWindowLifecycle {
     @discardableResult
     func hide(restoresPreviousApplication: Bool = true) -> Bool {
         guard panel.isVisible || panelState.isVisible else { return false }
+        // 延后一拍结束挂着的 sheet：按钮点击可能已让它进入关闭动画，避免覆盖已选结果。
+        if panel.attachedSheet != nil {
+            DispatchQueue.main.async { [weak panel] in
+                guard let panel, let sheet = panel.attachedSheet, sheet.isVisible else { return }
+                // 别名编辑按自动保存处理，与预览正文编辑一致；确认框按取消。
+                let response: NSApplication.ModalResponse =
+                    sheet.identifier == AliasEditor.sheetIdentifier
+                        ? .alertFirstButtonReturn
+                        : .cancel
+                panel.endSheet(sheet, returnCode: response)
+            }
+        }
         // 收起按自动保存处理，避免未提交编辑随退出丢失；显式取消不会走到这里。
         commitEditingBeforeHiding()
         quickPasteHintState.cancel()

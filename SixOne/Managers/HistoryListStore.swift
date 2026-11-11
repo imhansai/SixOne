@@ -267,6 +267,26 @@ final class HistoryListStore {
             }
         case .thumbnailUpdated(let id):
             await reloadRow(id: id)
+        case .rowUpdated(let id):
+            guard isSearching else {
+                await reloadRow(id: id)
+                return
+            }
+            let wasPresent = rows.contains { $0.id == id }
+            let stillMatches: Bool
+            do {
+                stillMatches = try await repository.rowMatches(id: id, query: query)
+            } catch {
+                logger.error("校验搜索结果失败：\(error.localizedDescription, privacy: .public)")
+                startWindowLoad()
+                return
+            }
+            if wasPresent == stillMatches {
+                if wasPresent { await reloadRow(id: id) }
+            } else {
+                // 命中集合变了：需要补位或按排序插入，整窗重查最稳。
+                startWindowLoad()
+            }
         case .deleted(let id):
             removeRow(id: id)
         }

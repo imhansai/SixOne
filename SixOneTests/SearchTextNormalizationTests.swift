@@ -35,3 +35,40 @@ struct SearchTextNormalizationTests {
         #expect(item.searchText == "第一行 第二行")
     }
 }
+
+@Suite("别名归一化")
+struct AliasNormalizationTests {
+    @Test("空白折叠为单个空格，并去掉首尾")
+    func collapsesWhitespace() {
+        #expect(ClipboardItem.normalizedAlias("  工作\n\t邮箱  ") == "工作 邮箱")
+    }
+
+    @Test("全空白与 nil 视为未设置")
+    func blankBecomesNil() {
+        #expect(ClipboardItem.normalizedAlias(" \n\t") == nil)
+        #expect(ClipboardItem.normalizedAlias(nil) == nil)
+    }
+
+    @Test("纯零宽字符视为未设置")
+    func invisibleOnlyBecomesNil() {
+        #expect(ClipboardItem.normalizedAlias("\u{200B}\u{FEFF}\u{200D}") == nil)
+    }
+
+    @Test("超长别名按上限截断")
+    func truncatesToLimit() {
+        let long = String(repeating: "a", count: AliasNormalizer.maxLength + 20)
+        #expect(ClipboardItem.normalizedAlias(long)?.count == AliasNormalizer.maxLength)
+    }
+
+    @Test("空串按未设置处理")
+    func emptyIsUnset() {
+        #expect(AliasNormalizer.displayable("") == nil)
+        #expect(AliasNormalizer.displayable(nil) == nil)
+        #expect(AliasNormalizer.displayable("x") == "x")
+    }
+
+    @Test("纯占位字符视为未设置")
+    func blankPlaceholdersBecomeNil() {
+        #expect(ClipboardItem.normalizedAlias("\u{2800}\u{3164}") == nil)
+    }
+}

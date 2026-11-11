@@ -13,6 +13,8 @@ enum ClipboardHistoryEvent: Equatable {
     case touched(id: UUID, isExternal: Bool = false)
     /// 缩略图生成完成，原位刷新不改顺序。
     case thumbnailUpdated(id: UUID)
+    /// 条目元数据变化（如别名），原位刷新不改顺序。
+    case rowUpdated(id: UUID)
     case deleted(id: UUID)
     /// 批量裁剪，列表可能仍有剩余。
     case trimmed

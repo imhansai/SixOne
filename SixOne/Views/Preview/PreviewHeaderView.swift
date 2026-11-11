@@ -70,6 +70,12 @@ struct PreviewHeaderView: View {
                     } else if item.kind == .file, fileURL != nil {
                         openWithMenu
                     }
+                    // 别名按钮只在该条目自己的预览里出现；编辑或组内单文件态隐去但占位。
+                    PreviewAliasButton(item: item)
+                        .opacity(previewState.isEditing || isGroupFileView ? 0 : 1)
+                        .allowsHitTesting(!previewState.isEditing && !isGroupFileView)
+                        .disabled(previewState.isEditing || isGroupFileView)
+                        .accessibilityHidden(previewState.isEditing || isGroupFileView)
                     if item.kind == .text || item.kind == .link {
                         editToggleButton
                     }
@@ -85,7 +91,8 @@ struct PreviewHeaderView: View {
             for: item,
             isEditing: previewState.isEditing,
             fileNameTitle: fileNameTitle,
-            linkOrigin: linkOrigin
+            linkOrigin: linkOrigin,
+            isGroupFileView: isGroupFileView
         )
     }
 
@@ -99,9 +106,10 @@ struct PreviewHeaderView: View {
         )
     }
 
-    /// 文本尾部截断；文件名与链接中间截断。
+    /// 别名是用户写的短语，尾部截断；文件名与链接中间截断。
     private var titleTruncationMode: Text.TruncationMode {
-        item.kind == .text ? .tail : .middle
+        if AliasNormalizer.displayable(item.alias) != nil, !isGroupFileView { return .tail }
+        return item.kind == .text ? .tail : .middle
     }
 
     /// 只读态关闭预览；编辑态取消编辑；组内单文件态退回组列表。
@@ -222,6 +230,8 @@ struct PreviewGroupHeaderView: View {
 
     private var groupActions: some View {
         HStack(spacing: ClipboardLayout.headerActionSpacing) {
+            PreviewAliasButton(item: item)
+
             PreviewHeaderActionButton(
                 systemImage: "square.and.arrow.up",
                 help: Localizer.string("Share")
@@ -294,5 +304,30 @@ struct PreviewGroupHeaderView: View {
 
     private var groupSizeText: String? {
         PreviewSubtitle.groupSize(meta: groupMeta)
+    }
+}
+
+private struct PreviewAliasButton: View {
+    let item: ClipboardItem
+
+    @Environment(PanelContext.self) private var context
+
+    var body: some View {
+        PreviewHeaderActionButton(
+            systemImage: "tag",
+            help: help
+        ) {
+            context.itemActions?.panelDidRequestEditAlias(
+                id: item.id,
+                currentAlias: AliasNormalizer.displayable(item.alias)
+            )
+        }
+    }
+
+    private var help: String {
+        guard let alias = AliasNormalizer.displayable(item.alias) else {
+            return Localizer.string("Add Alias")
+        }
+        return String(format: Localizer.string("Alias: %@"), alias)
     }
 }

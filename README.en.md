@@ -22,7 +22,7 @@ A short clip: open the panel, preview and zoom an image, copy its source path, t
 
 ## Status
 
-**1.0.0, source release.** No prebuilt binaries. The store is versioned (schema **V3**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading.
+**1.0.0, source release.** No prebuilt binaries. The store is versioned (schema **V4**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading.
 
 **Non-goals:** cloud sync, accounts, multi-device history, an iOS client, auto-update. SixOne is deliberately a local-only, single-Mac tool.
 
@@ -119,7 +119,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 | Add a view-side action (copy, save, copy text) | Emit an intent through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; do not call `ClipboardManager` mutators from views |
 | Add a setting | Add a typed accessor to `Preferences`, then `SettingsStore` + the matching pane (`Views/Settings/*SettingsView.swift`) |
 | Change the global hotkey (registration / key events) | `HotKeyManager` + `HotKeyRegistering` (registration, can fail) / `HotKeyEventMonitoring` (per-instance dispatch) + `HotKeyManagerTests` |
-| Add / change a model field | Copy `Persistence/Schema/SixOneSchemaV3.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
+| Add / change a model field | Copy the current `Persistence/Schema/SixOneSchemaV4.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
 | Change a fetch path | Decide "need the whole item" vs "only identity/paths": `ClipboardManager.fetchFullItem` / `fetchLightItem`; the list window uses `ClipboardHistoryRepository.latest` on the background actor |
 | Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name; the fallback may only touch `SixOne.store` |
 | Change how a file is reached after the fact (moved / renamed / after a restart) | `SecurityScopedFileAccess`: bookmark first, original path as fallback, at most 100 bookmarks per copy. Covered by `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |

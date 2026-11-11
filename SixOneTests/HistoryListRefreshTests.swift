@@ -222,6 +222,87 @@ struct HistoryListRefreshTests {
         #expect(store.rows.map(\.id) == [second.id, first.id])
     }
 
+    @Test("别名变化原位刷新行，不改顺序")
+    func refreshesRowInPlaceForAlias() async {
+        let first = HistoryRow.stub(title: "A")
+        let second = HistoryRow.stub(title: "B")
+        let repository = FakeHistoryRepository(rowsByQuery: ["": [first, second]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        await store.loadLatestAndWait()
+        let aliased = HistoryRow.stub(title: first.title ?? "", id: first.id, alias: "别名")
+        await repository.setRows([aliased, second], for: "")
+        events.post(.rowUpdated(id: first.id))
+
+        #expect(await repository.waitUntilRowsReturned(1))
+        #expect(store.rows.map(\.id) == [first.id, second.id])
+        #expect(store.rows.first?.alias == "别名")
+    }
+
+    @Test("搜索态下别名仍匹配：原位刷新，不整窗重查")
+    func refreshesRowInPlaceForAliasWhileSearching() async {
+        let row = HistoryRow.stub(title: "A")
+        let repository = FakeHistoryRepository(rowsByQuery: ["词": [row]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        store.setSearchQuery("词")
+        await store.waitForPendingLoad()
+        let queriesBefore = await repository.requestedQueries.count
+        let aliased = HistoryRow.stub(title: "A", id: row.id, alias: "别名")
+        await repository.setRows([aliased], for: "词")
+
+        events.post(.rowUpdated(id: row.id))
+        await store.waitForPendingEvents()
+        await store.waitForPendingLoad()
+
+        #expect(await repository.requestedQueries.count == queriesBefore, "仍匹配时不该整窗重查")
+        #expect(await repository.waitUntilRowsReturned(1))
+        #expect(store.rows.first?.alias == "别名")
+    }
+
+    @Test("搜索态下别名导致不再匹配：整窗重查")
+    func reloadsWindowWhenAliasLeavesResults() async {
+        let row = HistoryRow.stub(title: "A")
+        let repository = FakeHistoryRepository(rowsByQuery: ["词": [row]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        store.setSearchQuery("词")
+        await store.waitForPendingLoad()
+        let queriesBefore = await repository.requestedQueries.count
+
+        await repository.setRows([], for: "词")
+        events.post(.rowUpdated(id: row.id))
+        await store.waitForPendingEvents()
+        await store.waitForPendingLoad()
+
+        #expect(await repository.requestedQueries.count == queriesBefore + 1)
+        #expect(store.rows.isEmpty)
+    }
+
+    @Test("搜索态下窗口外条目因别名进入结果：整窗重查")
+    func reloadsWindowWhenAliasJoinsResults() async {
+        let visible = HistoryRow.stub(title: "A")
+        let edited = HistoryRow.stub(title: "B")
+        let repository = FakeHistoryRepository(rowsByQuery: ["词": [visible]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+
+        store.setSearchQuery("词")
+        await store.waitForPendingLoad()
+        let queriesBefore = await repository.requestedQueries.count
+
+        await repository.setRows([visible, edited], for: "词")
+        events.post(.rowUpdated(id: edited.id))
+        await store.waitForPendingEvents()
+        await store.waitForPendingLoad()
+
+        #expect(await repository.requestedQueries.count == queriesBefore + 1)
+        #expect(store.rows.map(\.id) == [visible.id, edited.id])
+    }
+
     @Test("新增条目增量插入，不重取整窗")
     func insertsNewRowIncrementally() async {
         let first = HistoryRow.stub(title: "A")

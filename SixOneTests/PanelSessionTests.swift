@@ -97,6 +97,7 @@ struct PanelSessionTests {
             id: id,
             kind: .text,
             title: "行",
+            alias: nil,
             filePath: nil,
             fileCount: 0,
             contentType: nil,

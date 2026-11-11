@@ -215,12 +215,52 @@
         }
       }
     },
+    "Add Alias" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加别名"
+          }
+        }
+      }
+    },
+    "Add Alias…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加别名…"
+          }
+        }
+      }
+    },
     "Add from Applications…" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "从“应用程序”添加…"
+          }
+        }
+      }
+    },
+    "Alias" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别名"
+          }
+        }
+      }
+    },
+    "Alias: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别名：%@"
           }
         }
       }
@@ -661,6 +701,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编辑"
+          }
+        }
+      }
+    },
+    "Edit Alias" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑别名"
+          }
+        }
+      }
+    },
+    "Edit Alias…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑别名…"
           }
         }
       }
@@ -1259,6 +1319,16 @@
         }
       }
     },
+    "Remove Alias" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除别名"
+          }
+        }
+      }
+    },
     "Remove Selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1528,6 +1598,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文本"
+          }
+        }
+      }
+    },
+    "The alias replaces the title, can be found with search, and is limited to %@ characters." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别名会替换标题，也可以用来搜索，最多 %@ 个字符。"
           }
         }
       }

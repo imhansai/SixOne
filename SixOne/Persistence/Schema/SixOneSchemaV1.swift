@@ -2,8 +2,8 @@
 //  SixOneSchemaV1.swift
 //  SixOne
 //
-//  V1 已冻结：不要再改这里的字段或索引。当前版本见 `SixOneSchemaV2`，
-//  两者之间的迁移由 `SixOneMigrationPlan` 负责。
+//  V1 已冻结：不要再改这里的字段或索引。当前版本见 `SixOneSchemaV4`，
+//  各版本之间的迁移由 `SixOneMigrationPlan` 负责。
 //
 
 import Foundation
@@ -286,4 +286,4 @@ nonisolated enum SixOneSchemaV1: VersionedSchema {
     }
 }
 
-// 类型别名在 `SixOneSchemaV2.swift`；V1 只供迁移使用。
+// 类型别名在 `SixOneSchemaV4.swift`；V1 只供迁移使用。

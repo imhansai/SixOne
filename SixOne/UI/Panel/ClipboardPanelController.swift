@@ -276,6 +276,10 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         itemActions.refreshThumbnail(id: id)
     }
 
+    func panelDidRequestEditAlias(id: UUID, currentAlias: String?) {
+        itemActions.requestEditAlias(id: id, currentAlias: currentAlias)
+    }
+
     func panelDidRequestSearchCancel() {
         if searchState.text.isEmpty {
             searchState.resignFocus()

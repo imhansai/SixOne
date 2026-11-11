@@ -69,6 +69,36 @@ struct ClipboardHistoryWriterTests {
         #expect(rows.map(\.id) == [item.id])
     }
 
+    @Test("设置别名：归一化落库、广播原位刷新、不改排序键")
+    func setAliasPersistsWithoutReordering() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = ClipboardItem(kind: .text, text: "名字难记")
+        item.refreshTitleSnapshot()
+        item.refreshContentKey()
+        context.insert(item)
+        try context.save()
+
+        let events = ClipboardHistoryEventBus()
+        let recorder = Recorder()
+        events.observe { [recorder] in recorder.events.append($0) }
+        let writer = ClipboardHistoryWriter(
+            container: container,
+            events: events,
+            retentionInterval: { nil }
+        )
+
+        let originalRecency = item.recencyID
+        #expect(writer.setAlias(id: item.id, alias: "  工作\n邮箱  "))
+        #expect(item.alias == "工作 邮箱")
+        #expect(item.recencyID == originalRecency, "设置别名不该改变排序")
+        #expect(recorder.events == [.rowUpdated(id: item.id)])
+
+        #expect(writer.setAlias(id: item.id, alias: "   "))
+        #expect(item.alias == nil)
+        #expect(recorder.events.last == .rowUpdated(id: item.id))
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([ClipboardItem.self])
         return try ModelContainer(

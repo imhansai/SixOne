@@ -51,18 +51,20 @@ enum PreviewHeaderTitle {
         for item: ClipboardItem,
         isEditing: Bool,
         fileNameTitle: String?,
-        linkOrigin: String?
+        linkOrigin: String?,
+        isGroupFileView: Bool = false
     ) -> String {
         if isEditing { return Localizer.string("Edit") }
         switch item.kind {
         case .text, .color:
-            // 文本取首行、颜色取色值，比类别名更能辨认。
             return item.displayTitle
         case .image, .file:
-            return fileNameTitle ?? item.displayTitle
+            // 组内单文件先显示当前文件名，避免组别名盖掉正在看的文件。
+            if isGroupFileView, let fileNameTitle { return fileNameTitle }
+            return AliasNormalizer.displayable(item.alias) ?? fileNameTitle ?? item.displayTitle
         case .link:
-            // 无 host 的链接（mailto: 等）用地址本身。
-            return linkOrigin ?? item.displayTitle
+            // 有 host 时用来源，否则用地址本身。
+            return AliasNormalizer.displayable(item.alias) ?? linkOrigin ?? item.displayTitle
         }
     }
 }

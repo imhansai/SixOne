@@ -36,6 +36,7 @@ struct ClipboardHistoryRepositoryTests {
                 filePaths: ["/tmp/a.txt", "/tmp/b.txt", "/tmp/c.txt"]
             )
             files.refreshTitleSnapshot()
+            files.alias = "季度文件"
             context.insert(files)
             return [files]
         }
@@ -46,6 +47,26 @@ struct ClipboardHistoryRepositoryTests {
         #expect(row.filePath == "/tmp/a.txt")
         #expect(row.title?.hasPrefix("a.txt") == true)
         #expect(row.title?.contains("2") == true)
+        #expect(row.alias == "季度文件")
+    }
+
+    @Test("搜索命中别名，正文与别名互不影响")
+    func searchMatchesAlias() async throws {
+        let env = try Env { context in
+            let item = ClipboardItem(kind: .text, text: "正文里没有那个词")
+            item.alias = "工作邮箱"
+            context.insert(item)
+            return [item]
+        }
+
+        let byAlias = try await env.repository.latest(query: "邮箱", limit: 10)
+        #expect(byAlias.map(\.id) == [env.items[0].id])
+
+        let byContent = try await env.repository.latest(query: "正文", limit: 10)
+        #expect(byContent.map(\.id) == [env.items[0].id])
+
+        let byNothing = try await env.repository.latest(query: "别名之外", limit: 10)
+        #expect(byNothing.isEmpty)
     }
 
     @Test("搜索命中正文、标题与文件路径")

@@ -9,7 +9,7 @@ import Testing
 @Suite("条目动作词汇表")
 @MainActor
 struct ItemCommandTests {
-    @Test("文本条目：粘贴 / 纯文本粘贴 / 拷贝 / 纯文本拷贝 / 删除")
+    @Test("文本条目：粘贴 / 纯文本粘贴 / 拷贝 / 纯文本拷贝 / 别名 / 删除")
     func textRowLayout() {
         #expect(ItemCommand.rowMenuLayout(for: .text) == [
             .command(.paste),
@@ -17,15 +17,19 @@ struct ItemCommandTests {
             .command(.copy),
             .command(.copyAsPlainText),
             .separator,
+            .command(.editAlias),
+            .separator,
             .command(.delete),
         ])
     }
 
-    @Test("图片条目：没有纯文本版本，多出分享与打开")
+    @Test("图片条目：没有纯文本版本，多出别名、分享与打开")
     func imageRowLayout() {
         #expect(ItemCommand.rowMenuLayout(for: .image) == [
             .command(.paste),
             .command(.copy),
+            .separator,
+            .command(.editAlias),
             .separator,
             .command(.share),
             .command(.open),
@@ -47,6 +51,8 @@ struct ItemCommandTests {
             .command(.copy),
             .command(.copyAsPlainText),
             .separator,
+            .command(.editAlias),
+            .separator,
             .command(.share),
             .command(.open),
             .separator,
@@ -62,6 +68,8 @@ struct ItemCommandTests {
             .command(.copy),
             .command(.copyAsPlainText),
             .separator,
+            .command(.editAlias),
+            .separator,
             .command(.delete),
         ])
     }
@@ -76,6 +84,13 @@ struct ItemCommandTests {
                 #expect(command.keyEquivalent != nil)
             }
         }
+    }
+
+    @Test("别名动作标题随是否已设置切换")
+    func aliasTitleFollowsState() {
+        #expect(ItemCommand.editAlias.title(alias: nil) == Localizer.string("Add Alias…"))
+        #expect(ItemCommand.editAlias.title(alias: "别名") == Localizer.string("Edit Alias…"))
+        #expect(ItemCommand.copy.title(alias: nil) == ItemCommand.copy.title)
     }
 
     @Test("只有整条文件动作需要「文件还在」这一前提")

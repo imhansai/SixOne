@@ -16,6 +16,8 @@ final class ClipboardCapturePipeline {
     private let logger = AppLog.logger("ClipboardCapture")
     private var timer: Timer?
     private var lastChangeCount: Int
+    /// 本地编辑（如别名输入）期间暂停捕获。
+    private var isCaptureSuspended = false
     /// 由应用切换事件维护的前台应用；轮询归属以它为准。
     private var activeApplication: SourceApplication?
     /// 在途捕获；串行排队保证入库顺序与复制顺序一致。
@@ -47,6 +49,18 @@ final class ClipboardCapturePipeline {
     /// 剪贴板已变化但还没被轮询认领：复制后马上唤出面板时，事件还在流水线里。
     var hasUnpolledPasteboardChange: Bool { pasteboard.changeCount != lastChangeCount }
 
+    /// 暂停/恢复捕获：暂停期间的复制只推进 changeCount，不入库也不补录。
+    func setCaptureSuspended(_ suspended: Bool) {
+        if suspended {
+            // 先认领打开编辑前已经发生的外部复制，避免误伤。
+            pollPasteboard(attributingTo: activeApplication)
+        }
+        isCaptureSuspended = suspended
+        if !suspended {
+            lastChangeCount = pasteboard.changeCount
+        }
+    }
+
     /// 轮询一次剪贴板；主线程只做 changeCount、隐私判定与读内容，解析交给后台。
     func pollPasteboard() {
         pollPasteboard(attributingTo: activeApplication)
@@ -56,6 +70,10 @@ final class ClipboardCapturePipeline {
     func pollPasteboard(attributingTo source: SourceApplication?) {
         let changeCount = pasteboard.changeCount
         guard changeCount != lastChangeCount else { return }
+        if isCaptureSuspended {
+            lastChangeCount = changeCount
+            return
+        }
 
         // 来源忽略判定先于读内容：被忽略的应用写进来的字节不进内存。
         if isIgnoredSource(source) {

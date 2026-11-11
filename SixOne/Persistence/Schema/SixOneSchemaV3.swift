@@ -2,8 +2,8 @@
 //  SixOneSchemaV3.swift
 //  SixOne
 //
-//  当前模型定义（V3）。V3 在 V2 上给 `id` 加索引，并记录缩略图生成版本；
-//  V2 → V3 只做轻量结构迁移，旧缩略图由列表惰性重算。V1/V2 已冻结，改字段从 V3 复制出新版本。
+//  V3 已冻结：V3 在 V2 上给 `id` 加索引，并记录缩略图生成版本；不要再改这里的字段或索引。
+//  当前版本见 `SixOneSchemaV4`。
 //
 
 import Foundation
@@ -230,6 +230,3 @@ nonisolated enum SixOneSchemaV3: VersionedSchema {
         }
     }
 }
-
-/// 当前版本：业务代码只认这个名字；升级 schema 时改这里，不要改已冻结的旧版本。
-typealias ClipboardItem = SixOneSchemaV3.ClipboardItem

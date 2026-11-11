@@ -67,10 +67,18 @@ struct ClipboardRowView: View {
     }
 
     private var titleTooltipDetail: String? {
-        guard row.kind == .file || row.kind == .image,
-              let path = row.filePath,
-              !path.isEmpty else { return nil }
-        return path
+        let filePathDetail: String? = {
+            guard row.kind == .file || row.kind == .image,
+                  let path = row.filePath,
+                  !path.isEmpty else { return nil }
+            return path
+        }()
+        // 别名替换标题后，tooltip 改为交代原标题/路径；文件组保留整组身份。
+        if AliasNormalizer.displayable(row.alias) != nil {
+            if case .fileGroup = rowType { return fallbackTitle }
+            return filePathDetail ?? row.title
+        }
+        return filePathDetail
     }
 
     private enum RowType {
@@ -102,8 +110,9 @@ struct ClipboardRowView: View {
         }
     }
 
-    /// 行标题：文件组按当前语言现算（快照会锁住旧文案），其余优先用快照。
+    /// 行标题：别名优先；文件组按当前语言现算（快照会锁住旧文案），其余优先用快照。
     private var titleText: String {
+        if let alias = AliasNormalizer.displayable(row.alias) { return alias }
         if case .fileGroup = rowType { return fallbackTitle }
         if let title = row.title, !title.isEmpty {
             return title
@@ -145,7 +154,15 @@ struct ClipboardRowView: View {
     private var accessibilityDetail: String {
         var resource = typeLabelKey
         resource.locale = RuntimeLanguage.shared.locale
-        return "\(String(localized: resource)), \(copyTime)"
+        let typeAndTime = "\(String(localized: resource)), \(copyTime)"
+        // 别名替换标题后补上原标题；文件组用当前语言现算，避免旧快照。
+        guard AliasNormalizer.displayable(row.alias) != nil else { return typeAndTime }
+        let originalTitle: String? = {
+            if case .fileGroup = rowType { return fallbackTitle }
+            return row.title
+        }()
+        guard let originalTitle, !originalTitle.isEmpty else { return typeAndTime }
+        return "\(originalTitle), \(typeAndTime)"
     }
 
     private var typeLabelKey: LocalizedStringResource {

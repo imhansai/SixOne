@@ -184,6 +184,21 @@ final class PanelItemActions {
         manager.refreshThumbnail(id: id)
     }
 
+    func requestEditAlias(id: UUID, currentAlias: String?) {
+        // 编辑期间暂停捕获，避免复制别名文本进入历史。
+        manager.setPasteboardCaptureSuspended(true)
+        AliasEditor.present(
+            on: panel,
+            currentAlias: currentAlias,
+            onSave: { [weak self] alias in
+                self?.manager.setAlias(id: id, alias: alias)
+            },
+            onClose: { [weak self] in
+                self?.manager.setPasteboardCaptureSuspended(false)
+            }
+        )
+    }
+
     func pasteAsPlainTextForCurrentItem() {
         guard let item = currentItem, item.kind.hasPlainText,
               let full = fullItem(id: item.id) else { return }

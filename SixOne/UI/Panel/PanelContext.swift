@@ -20,6 +20,8 @@ protocol ItemActionHandling: AnyObject {
     func panelDidRequestCopyText(_ text: String)
     /// 旧尺寸缩略图按当前尺寸重算。
     func panelDidRequestThumbnailRefresh(id: UUID)
+    /// 添加或编辑条目别名；`currentAlias` 由调用方提供，避免再次查库。
+    func panelDidRequestEditAlias(id: UUID, currentAlias: String?)
 }
 
 /// 预览编辑：退出、取消与保存。

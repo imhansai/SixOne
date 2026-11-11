@@ -66,6 +66,43 @@ nonisolated enum SearchSnapshotter {
     ]
 }
 
+nonisolated enum AliasNormalizer {
+    /// 别名长度上限；弹窗与归一化共用。
+    static let maxLength = 100
+
+    /// 空白折叠为单个空格、去掉首尾，超长截断；只有不可见字符视为未设置。
+    static func normalized(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let collapsed = raw.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard collapsed.unicodeScalars.contains(where: isVisible) else { return nil }
+        return String(collapsed.prefix(maxLength))
+    }
+
+    /// 空串按未设置处理，兼容非归一化写入。
+    static func displayable(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private static func isVisible(_ scalar: Unicode.Scalar) -> Bool {
+        let properties = scalar.properties
+        guard !properties.isWhitespace, !blankScalars.contains(scalar) else { return false }
+        switch properties.generalCategory {
+        case .format, .control, .nonspacingMark, .spacingMark, .enclosingMark:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// 常见“占位但不可见”的字符。
+    private static let blankScalars: Set<Unicode.Scalar> = [
+        Unicode.Scalar(0x2800)!, Unicode.Scalar(0x3164)!, Unicode.Scalar(0xFFA0)!,
+        Unicode.Scalar(0x115F)!, Unicode.Scalar(0x1160)!,
+        Unicode.Scalar(0x17B4)!, Unicode.Scalar(0x17B5)!,
+    ]
+}
+
 nonisolated enum ItemTitleFormatter {
     @MainActor
     static func title(

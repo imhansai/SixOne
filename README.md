@@ -22,7 +22,7 @@ macOS 菜单栏剪贴板历史工具。按 `⌃⌘V`（默认）唤出浮层面�
 
 ## 项目状态
 
-**1.0.0，源码发布。** 不提供预编译包。库已版本化（当前 schema **V3**），由 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移，改 schema 不再需要清空历史。迁移单向：回退旧版本前先备份库文件。
+**1.0.0，源码发布。** 不提供预编译包。库已版本化（当前 schema **V4**），由 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移，改 schema 不再需要清空历史。迁移单向：回退旧版本前先备份库文件。
 
 **非目标：** 云同步、账号体系、多设备历史、iOS 客户端、自动更新。SixOne 只在本机、只服务单台 Mac。
 
@@ -119,7 +119,7 @@ open build/Build/Products/Debug/SixOne.app
 | 加一个视图侧动作（复制、保存编辑、复制文字） | 经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 发意图，落到 `PanelActionHandler`；不要在视图里调 `ClipboardManager` 的写方法 |
 | 加一个设置项 | 在 `Preferences` 加类型化访问器，再改 `SettingsStore` 与对应面板（`Views/Settings/*SettingsView.swift`） |
 | 改全局快捷键（注册 / 按键事件） | `HotKeyManager` + `HotKeyRegistering`（注册，会失败）/ `HotKeyEventMonitoring`（按键分发）+ `HotKeyManagerTests` |
-| 加 / 改一个模型字段 | 从 `Persistence/Schema/SixOneSchemaV3.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
+| 加 / 改一个模型字段 | 从当前版本的 `Persistence/Schema/SixOneSchemaV4.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
 | 动取数路径 | 先分清「要整条」还是「只要身份 / 路径」：`ClipboardManager.fetchFullItem` / `fetchLightItem`；列表取窗走后台 actor 上的 `ClipboardHistoryRepository.latest` |
 | 改库文件位置或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名，兜底只允许动 `SixOne.store` |
 | 改「事后怎么找回文件」（移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark。用例：`ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |

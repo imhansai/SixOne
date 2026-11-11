@@ -13,6 +13,7 @@ enum ItemCommand: String, CaseIterable {
     case pasteAsPlainText
     case copy
     case copyAsPlainText
+    case editAlias
     case share
     case open
     case revealInFinder
@@ -25,6 +26,7 @@ enum ItemCommand: String, CaseIterable {
         case .pasteAsPlainText: Localizer.string("Paste as Plain Text")
         case .copy: Localizer.string("Copy")
         case .copyAsPlainText: Localizer.string("Copy as Plain Text")
+        case .editAlias: Localizer.string("Edit Alias…")
         case .share: Localizer.string("Share")
         case .open: Localizer.string("Open")
         case .revealInFinder: Localizer.string("Reveal in Finder")
@@ -37,7 +39,7 @@ enum ItemCommand: String, CaseIterable {
         switch self {
         case .paste, .pasteAsPlainText: "v"
         case .copy, .copyAsPlainText: "c"
-        case .preview, .share, .open, .revealInFinder, .delete: nil
+        case .preview, .editAlias, .share, .open, .revealInFinder, .delete: nil
         }
     }
 
@@ -45,7 +47,7 @@ enum ItemCommand: String, CaseIterable {
         switch self {
         case .pasteAsPlainText, .copyAsPlainText: [.command, .shift]
         case .paste, .copy: .command
-        case .preview, .share, .open, .revealInFinder, .delete: []
+        case .preview, .editAlias, .share, .open, .revealInFinder, .delete: []
         }
     }
 
@@ -65,6 +67,12 @@ enum ItemMenuEntry: Equatable {
 }
 
 extension ItemCommand {
+    /// 菜单标题；别名动作随是否已设置切换。
+    func title(alias: String?) -> String {
+        guard self == .editAlias else { return title }
+        return Localizer.string(AliasNormalizer.displayable(alias) == nil ? "Add Alias…" : "Edit Alias…")
+    }
+
     /// 列表行菜单布局：有纯文本形态的条目多两条 ⇧ 备用项，链接/图片/文件多分享与打开。
     static func rowMenuLayout(for kind: ClipboardItemKind) -> [ItemMenuEntry] {
         var entries: [ItemMenuEntry] = []
@@ -72,6 +80,8 @@ extension ItemCommand {
         if kind.hasPlainText { entries.append(.command(.pasteAsPlainText)) }
         entries.append(.command(.copy))
         if kind.hasPlainText { entries.append(.command(.copyAsPlainText)) }
+        entries.append(.separator)
+        entries.append(.command(.editAlias))
         if kind != .text && kind != .color {
             entries.append(.separator)
             entries.append(.command(.share))
