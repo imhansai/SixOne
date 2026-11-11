@@ -37,11 +37,19 @@ enum PreviewSubtitle {
         return ByteCountFormatting.string(fromByteCount: meta.totalSize)
     }
 
-    static func fileStats(_ meta: PreviewFileMeta?) -> String? {
+    /// 文件取大小；文件夹与访达空格预览一致，取递归总大小 · 项目数，统计完成前回落到类别名。
+    static func fileStats(_ meta: PreviewFileMeta?, folderStats: FolderStats?) -> String? {
         guard let meta else { return nil }
-        return meta.isDirectory
-            ? Localizer.string("Folder")
-            : ByteCountFormatting.string(fromByteCount: meta.size ?? 0)
+        guard meta.isDirectory else {
+            return ByteCountFormatting.string(fromByteCount: meta.size ?? 0)
+        }
+        guard let folderStats else { return Localizer.string("Folder") }
+        let sizeText = ByteCountFormatting.string(fromByteCount: folderStats.totalSize)
+        let countText = String(
+            format: Localizer.string("%@ items"),
+            groupedCount(folderStats.itemCount)
+        )
+        return "\(sizeText) · \(countText)"
     }
 
     static func lastModifiedLabel(_ date: Date) -> String {

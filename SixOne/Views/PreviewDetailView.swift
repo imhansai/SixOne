@@ -96,9 +96,9 @@ struct PreviewDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(.rect(cornerRadius: cornerRadius))
         .task(id: metadataTaskID) {
-            metadata.refreshFileMetadata(fileURL: fileURL, groupURLs: groupURLs)
             refreshPathBarReachability()
             revealGroupFilePosition()
+            await metadata.refreshFileMetadata(fileURL: fileURL, groupURLs: groupURLs)
         }
         .task(id: item.id) {
             await metadata.loadImageIfNeeded()
@@ -169,7 +169,7 @@ struct PreviewDetailView: View {
         case .image:
             return PreviewSubtitle.image(metadata.image)
         case .file:
-            return PreviewSubtitle.fileStats(metadata.fileMeta)
+            return PreviewSubtitle.fileStats(metadata.fileMeta, folderStats: metadata.folderStats)
         case .color:
             return ColorPreview.subtitle(forColorData: item.colorData)
         }

@@ -18,6 +18,12 @@ nonisolated struct PreviewFileMeta: Sendable {
     let isDirectory: Bool
 }
 
+/// 文件夹内容的递归统计，对应访达空格预览的「大小 · 项目数」。
+nonisolated struct FolderStats: Sendable, Equatable {
+    let totalSize: Int64
+    let itemCount: Int
+}
+
 nonisolated struct PreviewGroupMeta: Sendable {
     let totalSize: Int64
     let missingCount: Int
@@ -44,6 +50,7 @@ final class PreviewMetadataModel {
     private(set) var imageData: Data?
     private(set) var imageLoadFailed = false
     private(set) var fileMeta: PreviewFileMeta?
+    private(set) var folderStats: FolderStats?
     private(set) var groupMeta: PreviewGroupMeta?
     private(set) var textStats: TextStats?
     /// 编辑保存后自增，驱动文本统计重新读取。
@@ -106,8 +113,8 @@ final class PreviewMetadataModel {
         statsRevision += 1
     }
 
-    /// 读取并缓存文件元数据；组元数据后台计算，避免上百文件 stat 卡主线程。
-    func refreshFileMetadata(fileURL: URL?, groupURLs: [URL?]) {
+    /// 读取并缓存文件元数据；目录统计与组元数据后台计算，避免卡主线程。
+    func refreshFileMetadata(fileURL: URL?, groupURLs: [URL?]) async {
         guard item.kind == .file else { return }
         if item.fileCount > 1 {
             if groupMeta == nil {
@@ -118,14 +125,18 @@ final class PreviewMetadataModel {
                     self.groupMeta = meta
                 }
             }
-            refreshGroupFileMeta(groupURLs: groupURLs)
+            await refreshGroupFileMeta(groupURLs: groupURLs)
             return
         }
-        guard let fileURL, fileMeta == nil else { return }
-        fileMeta = Self.fileMeta(at: fileURL)
+        guard let fileURL else { return }
+        if fileMeta == nil {
+            fileMeta = Self.fileMeta(at: fileURL)
+        }
+        await loadFolderStatsIfNeeded(url: fileURL)
     }
 
-    private func refreshGroupFileMeta(groupURLs: [URL?]) {
+    private func refreshGroupFileMeta(groupURLs: [URL?]) async {
+        folderStats = nil
         guard let index = previewState.groupFileIndex,
               groupURLs.indices.contains(index),
               let url = groupURLs[index] else {
@@ -133,6 +144,15 @@ final class PreviewMetadataModel {
             return
         }
         fileMeta = Self.fileMeta(at: url)
+        await loadFolderStatsIfNeeded(url: url)
+    }
+
+    private func loadFolderStatsIfNeeded(url: URL) async {
+        guard folderStats == nil, fileMeta?.isDirectory == true else { return }
+        let itemID = item.id
+        let stats = await Self.computeFolderStats(at: url)
+        guard !Task.isCancelled, let stats, previewState.item?.id == itemID else { return }
+        folderStats = stats
     }
 
     private static func fileMeta(at url: URL) -> PreviewFileMeta {
@@ -144,6 +164,40 @@ final class PreviewMetadataModel {
             modDate: values?.contentModificationDate,
             isDirectory: values?.isDirectory ?? false
         )
+    }
+
+    /// 递归枚举目录，累加普通文件大小并统计项目数；在后台线程执行，关闭预览时随之取消。
+    nonisolated static func computeFolderStats(at url: URL) async -> FolderStats? {
+        let scan = Task.detached(priority: .utility) {
+            scanFolder(at: url)
+        }
+        return await withTaskCancellationHandler {
+            await scan.value
+        } onCancel: {
+            scan.cancel()
+        }
+    }
+
+    private nonisolated static func scanFolder(at url: URL) -> FolderStats? {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey]
+        // 无权限的子目录跳过，其余继续统计。
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: Array(keys),
+            options: [],
+            errorHandler: { _, _ in true }
+        ) else { return nil }
+        var totalSize: Int64 = 0
+        var itemCount = 0
+        for case let child as URL in enumerator {
+            // 预览关闭或切换条目时任务被取消，大目录不必扫完。
+            guard !Task.isCancelled else { return nil }
+            itemCount += 1
+            guard let values = try? child.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else { continue }
+            totalSize += Int64(values.fileSize ?? 0)
+        }
+        return FolderStats(totalSize: totalSize, itemCount: itemCount)
     }
 
     /// 组元数据：按解析后 URL 统计非目录文件大小，避免移动后少算。
