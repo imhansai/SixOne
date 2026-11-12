@@ -28,7 +28,8 @@ struct PanelFooterHint<Content: View>: View {
             content
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
+                // 与路径行同高，避免切换时跳动。
+                .frame(maxWidth: .infinity, minHeight: ClipboardLayout.pathBarHeight)
                 .padding(.vertical, 6)
         }
     }

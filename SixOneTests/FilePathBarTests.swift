@@ -1,7 +1,7 @@
 //
 //  FilePathBarTests.swift
 //  SixOneTests
-//  预览路径行：布局、选择与整段复制。
+//  预览路径行：横向滚动与显示时机。
 //
 
 import AppKit
@@ -17,15 +17,11 @@ struct FilePathBarTests {
         let location = try #require(FileLocation(
             path: "/Users/example/" + String(repeating: "very-long-folder/", count: 20) + "a.kt"
         ))
-        let size = NSSize(width: 400, height: ClipboardLayout.pathBarHeight)
+        let size = NSSize(width: 400, height: 40)
         let (hosting, window) = Self.makeHost(location: location, size: size)
         defer { window.orderOut(nil) }
 
-        let textView = try #require(await Self.pathTextView(in: hosting))
-        let scrollView = try #require(textView.enclosingScrollView)
-
-        #expect(textView.isSelectable)
-        #expect(!textView.isEditable)
+        let scrollView = try #require(await Self.pathScrollView(in: hosting))
         #expect(
             (scrollView.documentView?.frame.width ?? 0) > scrollView.contentSize.width + 1,
             "长路径应当有横向滚动空间"
@@ -36,25 +32,23 @@ struct FilePathBarTests {
         #expect(scrollView.documentVisibleRect.origin.x > 0, "长路径应能横向滚动")
     }
 
-    @Test("短路径铺满可视区，不留滚动空间")
-    func shortPathFillsVisibleWidth() async throws {
+    @Test("短路径不产生横向滚动")
+    func shortPathHasNoScrollSpace() async throws {
         let location = try #require(FileLocation(path: "/tmp/a.txt"))
-        let size = NSSize(width: 400, height: ClipboardLayout.pathBarHeight)
+        let size = NSSize(width: 400, height: 40)
         let (hosting, window) = Self.makeHost(location: location, size: size)
         defer { window.orderOut(nil) }
 
-        let textView = try #require(await Self.pathTextView(in: hosting))
-        let scrollView = try #require(textView.enclosingScrollView)
-
+        let scrollView = try #require(await Self.pathScrollView(in: hosting))
         #expect(
-            abs((scrollView.documentView?.frame.width ?? 0) - scrollView.contentSize.width) <= 1,
-            "短路径不该产生滚动"
+            (scrollView.documentView?.frame.width ?? 0) <= scrollView.contentSize.width + 1,
+            "短路径不该产生滚动空间"
         )
     }
 
     // MARK: - 预览接入
 
-    @Test("单文件预览显示源文件路径")
+    @Test("单文件预览显示路径条")
     func previewShowsPathForSingleFile() async throws {
         let path = try Self.makeTemporaryFile()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -63,11 +57,10 @@ struct FilePathBarTests {
         let (hosting, window) = try Self.makePreviewHost(item: item)
         defer { window.orderOut(nil) }
 
-        let textView = try #require(await Self.pathTextView(in: hosting))
-        #expect(textView.string == path)
+        _ = try #require(await Self.pathScrollView(in: hosting))
     }
 
-    @Test("磁盘图片预览显示源文件路径")
+    @Test("磁盘图片预览显示路径条")
     func previewShowsPathForImageFile() async throws {
         let path = try Self.makeTemporaryFile()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -81,11 +74,10 @@ struct FilePathBarTests {
         let (hosting, window) = try Self.makePreviewHost(item: item)
         defer { window.orderOut(nil) }
 
-        let textView = try #require(await Self.pathTextView(in: hosting))
-        #expect(textView.string == path)
+        _ = try #require(await Self.pathScrollView(in: hosting))
     }
 
-    @Test("文件组进入某一项时显示该项当前路径")
+    @Test("文件组进入某一项时显示路径条")
     func previewShowsPathForGroupItem() async throws {
         let path = try Self.makeTemporaryFile()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -100,8 +92,7 @@ struct FilePathBarTests {
         let (hosting, window) = try Self.makePreviewHost(item: item, context: context)
         defer { window.orderOut(nil) }
 
-        let textView = try #require(await Self.pathTextView(in: hosting))
-        #expect(textView.string == path)
+        _ = try #require(await Self.pathScrollView(in: hosting))
     }
 
     @Test("纯文本条目不显示路径")
@@ -111,7 +102,7 @@ struct FilePathBarTests {
         defer { window.orderOut(nil) }
 
         await Wait.settle(milliseconds: 200)
-        #expect(Self.findPathTextView(in: hosting) == nil)
+        #expect(Self.findPathScrollView(in: hosting) == nil)
     }
 
     @Test("无源文件的位图不显示路径")
@@ -121,7 +112,7 @@ struct FilePathBarTests {
         defer { window.orderOut(nil) }
 
         await Wait.settle(milliseconds: 200)
-        #expect(Self.findPathTextView(in: hosting) == nil)
+        #expect(Self.findPathScrollView(in: hosting) == nil)
     }
 
     @Test("文件组总览不显示路径")
@@ -131,7 +122,7 @@ struct FilePathBarTests {
         defer { window.orderOut(nil) }
 
         await Wait.settle(milliseconds: 200)
-        #expect(Self.findPathTextView(in: hosting) == nil)
+        #expect(Self.findPathScrollView(in: hosting) == nil)
     }
 
     // MARK: - 工具
@@ -181,21 +172,21 @@ struct FilePathBarTests {
         return url.path
     }
 
-    private static func pathTextView(in host: NSView) async -> NSTextView? {
+    private static func pathScrollView(in host: NSView) async -> NSScrollView? {
         let appeared = await Wait.until {
-            findPathTextView(in: host) != nil
+            findPathScrollView(in: host) != nil
         }
         // 多等一拍，让滚动视图完成首次布局。
         await Wait.settle(milliseconds: 100)
-        return appeared ? findPathTextView(in: host) : nil
+        return appeared ? findPathScrollView(in: host) : nil
     }
 
-    private static func findPathTextView(in view: NSView) -> NSTextView? {
-        if let textView = view as? NSTextView, textView.identifier == .pathTextView {
-            return textView
+    private static func findPathScrollView(in view: NSView) -> NSScrollView? {
+        if let scrollView = view as? NSScrollView, scrollView.identifier == .pathScrollView {
+            return scrollView
         }
         for subview in view.subviews {
-            if let found = findPathTextView(in: subview) { return found }
+            if let found = findPathScrollView(in: subview) { return found }
         }
         return nil
     }

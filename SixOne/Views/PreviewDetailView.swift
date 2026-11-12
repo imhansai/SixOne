@@ -57,40 +57,36 @@ struct PreviewDetailView: View {
                 )
             }
 
-            VStack(spacing: ClipboardLayout.pathBarSpacing) {
-                ZStack {
-                    content
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // 只裁到内容区，避免图片/QuickLook/PDF 画出边界盖住顶栏。
-                .clipped()
-                .overlay(alignment: .bottom) {
-                    if showsGroupFilePosition, let position = groupFilePosition {
-                        GroupFilePositionBadge(position: position.position, total: position.total)
-                            .padding(.bottom, 8)
-                            .transition(.opacity)
-                            .task(id: groupPositionRevealID) {
-                                try? await Task.sleep(for: .seconds(PanelTiming.groupPositionHint))
-                                guard !Task.isCancelled else { return }
-                                withAnimation(.easeIn(duration: 0.25)) {
-                                    showsGroupFilePosition = false
-                                }
+            ZStack {
+                content
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 只裁到内容区，避免图片/QuickLook/PDF 画出边界盖住顶栏。
+            .clipped()
+            .overlay(alignment: .bottom) {
+                if showsGroupFilePosition, let position = groupFilePosition {
+                    GroupFilePositionBadge(position: position.position, total: position.total)
+                        .padding(.bottom, 8)
+                        .transition(.opacity)
+                        .task(id: groupPositionRevealID) {
+                            try? await Task.sleep(for: .seconds(PanelTiming.groupPositionHint))
+                            guard !Task.isCancelled else { return }
+                            withAnimation(.easeIn(duration: 0.25)) {
+                                showsGroupFilePosition = false
                             }
-                    }
-                }
-
-                if let pathBarLocation {
-                    FilePathBar(
-                        location: pathBarLocation,
-                        isReachable: pathBarReachable,
-                        onCopy: { context.copyText($0) }
-                    )
+                        }
                 }
             }
             .padding(isGroupListMode ? 0 : ClipboardLayout.previewInset)
 
             if isGroupListMode {
                 GroupPreviewFooter(item: item, meta: metadata.groupMeta)
+            } else if let pathBarLocation {
+                FilePathBar(
+                    location: pathBarLocation,
+                    isReachable: pathBarReachable,
+                    onCopy: { context.copyText($0) }
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

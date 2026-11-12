@@ -16,145 +16,57 @@ struct FilePathBar: View {
     let onCopy: (String) -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            if !isReachable {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .help(String(
-                        format: Localizer.string("File no longer exists: %@"),
-                        location.name
-                    ))
-                    .accessibilityHidden(true)
-            }
+        PanelFooterHint {
+            HStack(spacing: 8) {
+                if !isReachable {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .help(String(
+                            format: Localizer.string("File no longer exists: %@"),
+                            location.name
+                        ))
+                        .accessibilityHidden(true)
+                }
 
-            SelectablePathText(text: location.path)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(verbatim: location.path)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .textSelection(.enabled)
+                        .accessibilityLabel(Text(verbatim: Localizer.string("Path")))
+                        .background(PathScrollMarker())
+                }
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
 
-            CopyTextButton(
-                text: location.path,
-                help: Localizer.string("Copy Path"),
-                onCopy: onCopy
-            )
+                CopyTextButton(
+                    text: location.path,
+                    help: Localizer.string("Copy Path"),
+                    onCopy: onCopy
+                )
+            }
+            .padding(.horizontal, ClipboardLayout.previewInset)
         }
-        .frame(height: ClipboardLayout.pathBarHeight)
     }
 }
 
 extension NSUserInterfaceItemIdentifier {
-    static let pathTextView = NSUserInterfaceItemIdentifier("SixOne.PathTextView")
+    static let pathScrollView = NSUserInterfaceItemIdentifier("SixOne.PathScrollView")
 }
 
-/// 可选择、可横向滚动的单行路径。
-struct SelectablePathText: NSViewRepresentable {
-    let text: String
+/// 标记底层 NSScrollView，供测试定位。
+private struct PathScrollMarker: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { MarkerView() }
 
-    @Environment(\.self) private var environment
+    func updateNSView(_ nsView: NSView, context: Context) {}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = PathScrollView()
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasHorizontalScroller = false
-        scrollView.hasVerticalScroller = false
-        scrollView.verticalScrollElasticity = .none
-        scrollView.horizontalScrollElasticity = .allowed
-
-        let textView = NSTextView()
-        textView.identifier = .pathTextView
-        configure(textView)
-        textView.string = text
-        context.coordinator.textView = textView
-        scrollView.documentView = textView
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = context.coordinator.textView else { return }
-        textView.textColor = resolvedTextColor
-        guard textView.string != text else { return }
-        textView.string = text
-        textView.setSelectedRange(NSRange(location: 0, length: 0))
-        scrollView.contentView.scroll(to: .zero)
-        scrollView.reflectScrolledClipView(scrollView.contentView)
-        scrollView.needsLayout = true
-    }
-
-    private func configure(_ textView: NSTextView) {
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.isRichText = false
-        textView.usesFontPanel = false
-        textView.usesFindBar = false
-        textView.drawsBackground = false
-        textView.isVerticallyResizable = false
-        textView.isHorizontallyResizable = true
-        textView.autoresizingMask = []
-        textView.allowsUndo = false
-        textView.isAutomaticLinkDetectionEnabled = false
-        textView.textContainerInset = NSSize(width: 0, height: 2)
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = false
-        textView.textContainer?.heightTracksTextView = false
-        textView.textContainer?.maximumNumberOfLines = 1
-        textView.textContainer?.containerSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        textView.minSize = NSSize(width: 0, height: ClipboardLayout.pathBarHeight)
-        textView.maxSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: ClipboardLayout.pathBarHeight
-        )
-        textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        textView.textColor = resolvedTextColor
-        textView.setAccessibilityLabel(Localizer.string("Path"))
-    }
-
-    /// 与副标题的 SwiftUI `.secondary` 对齐；玻璃层的 Vibrant 外观会把 AppKit 次要色解析成不透明灰。
-    private var resolvedTextColor: NSColor {
-        let resolved = Color.secondary.resolve(in: environment)
-        return NSColor(
-            srgbRed: Self.sRGBComponent(resolved.linearRed),
-            green: Self.sRGBComponent(resolved.linearGreen),
-            blue: Self.sRGBComponent(resolved.linearBlue),
-            alpha: CGFloat(resolved.opacity)
-        )
-    }
-
-    private static func sRGBComponent(_ linear: Float) -> CGFloat {
-        let value = CGFloat(linear)
-        return value <= 0.0031308
-            ? 12.92 * value
-            : 1.055 * pow(value, 1 / 2.4) - 0.055
-    }
-
-    final class Coordinator {
-        var textView: NSTextView?
+    final class MarkerView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            enclosingScrollView?.identifier = .pathScrollView
+        }
     }
 }
-
-/// 短路径铺满，长路径横向滚动。
-final class PathScrollView: NSScrollView {
-    override func layout() {
-        super.layout()
-        guard let textView = documentView as? NSTextView,
-              let container = textView.textContainer,
-              let layoutManager = textView.layoutManager else { return }
-        layoutManager.ensureLayout(for: container)
-        let usedWidth = layoutManager.usedRect(for: container).width
-        let width = max(
-            ceil(usedWidth) + textView.textContainerInset.width * 2 + 1,
-            contentSize.width
-        )
-        let height = max(contentSize.height, ClipboardLayout.pathBarHeight)
-        let target = NSSize(width: width, height: height)
-        guard textView.frame.size != target else { return }
-        textView.frame = NSRect(origin: .zero, size: target)
-    }
-}
-
