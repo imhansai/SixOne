@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct CopyTextButton: View {
+    var size: CGFloat = 20
     let text: String
     let help: String
     let onCopy: (String) -> Void
@@ -28,7 +29,7 @@ struct CopyTextButton: View {
             Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(didCopy ? Color.green : (isHovering ? Color.primary : Color.secondary))
-                .frame(width: 20, height: 20)
+                .frame(width: size, height: size)
                 .background(
                     Circle().fill(Color.primary.opacity(isHovering && !didCopy ? 0.10 : 0))
                 )

@@ -42,7 +42,9 @@ struct FilePathBar: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
 
+                // 贴合 11pt 行高，避免底部条变高。
                 CopyTextButton(
+                    size: 14,
                     text: location.path,
                     help: Localizer.string("Copy Path"),
                     onCopy: onCopy
