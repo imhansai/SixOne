@@ -56,6 +56,27 @@ struct ClipboardCaptureTests {
         #expect(harness.itemsNewestFirst().map(\.text) == ["正常复制"])
     }
 
+    @Test("暂停捕获可嵌套：全部恢复前仍不记录")
+    func nestedSuspension() async throws {
+        let harness = try ClipboardHarness()
+        harness.manager.setPasteboardCaptureSuspended(true)
+        harness.manager.setPasteboardCaptureSuspended(true)
+
+        harness.pasteboard.simulateCopy(text: "面板内复制")
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().isEmpty)
+
+        harness.manager.setPasteboardCaptureSuspended(false)
+        harness.pasteboard.simulateCopy(text: "仍在暂停")
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().isEmpty)
+
+        harness.manager.setPasteboardCaptureSuspended(false)
+        harness.pasteboard.simulateCopy(text: "恢复后记录")
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().map(\.text) == ["恢复后记录"])
+    }
+
     @Test("changeCount 没变时什么都不做")
     func ignoresUnchangedPasteboard() async throws {
         let harness = try ClipboardHarness()

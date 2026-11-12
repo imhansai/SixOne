@@ -128,7 +128,7 @@ final class ClipboardManager {
         capturePipeline.pollPasteboard(attributingTo: source)
     }
 
-    /// 本地编辑（如别名输入）期间暂停捕获，避免复制文本进入历史。
+    /// 面板可见或本地编辑期间暂停捕获，避免内部复制进入历史。
     func setPasteboardCaptureSuspended(_ suspended: Bool) {
         capturePipeline.setCaptureSuspended(suspended)
     }

@@ -120,6 +120,8 @@ final class PanelWindowLifecycle {
         // 此刻前台仍是原应用：先认领唤出前那次复制，归属不会被面板激活改掉。
         let hadUnpolledPasteboardChange = manager.hasUnpolledPasteboardChange
         manager.pollPasteboard(attributingTo: previousApplication.map(SourceApplication.init))
+        // 面板内的复制/剪切不进入历史。
+        manager.setPasteboardCaptureSuspended(true)
         positionPanel(anchor: anchor)
         present()
         noticeState.message = nil
@@ -166,6 +168,7 @@ final class PanelWindowLifecycle {
         panelState.isVisible = false
         store.setListVisible(false)
         removeMonitors()
+        manager.setPasteboardCaptureSuspended(false)
         // 收起时把焦点还给唤出前的应用；用 WindowServer 状态，NSApp.isActive 会晚一拍。
         var handedOff = false
         if restoresPreviousApplication,
