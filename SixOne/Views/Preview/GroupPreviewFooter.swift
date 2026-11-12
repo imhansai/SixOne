@@ -12,18 +12,22 @@ struct GroupPreviewFooter: View {
 
     var body: some View {
         PanelFooterHint {
-            Text(visibleLine)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, ClipboardLayout.previewInset)
-                .appTooltip(tooltip)
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(visibleLine)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .textSelection(.enabled)
+                    .frame(minWidth: ClipboardLayout.previewContentWidth, alignment: .center)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, ClipboardLayout.previewInset)
+            .appTooltip(tooltip)
         }
     }
 
+    /// 别名在前，时间信息随后。
     private var visibleLine: String {
-        aliasSegment ?? timeSegments.joined(separator: " · ")
+        ([aliasSegment] + timeSegments).compactMap { $0 }.joined(separator: " · ")
     }
 
     private var tooltip: String {
