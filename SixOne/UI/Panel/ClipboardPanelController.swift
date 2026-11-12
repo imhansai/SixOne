@@ -506,16 +506,6 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             return false
         }
 
-        // 文本预览的 ⌘V 保持 NSTextView 默认行为；PDF/Web 等非文本预览才回落到粘贴条目。
-        if let command,
-           command.action == #selector(NSText.paste(_:)),
-           previewState.item != nil,
-           !isTextEditing,
-           !(panel.firstResponder is PreviewTextView) {
-            itemActions.pasteSelectedItem()
-            return true
-        }
-
         if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
             return true
         }

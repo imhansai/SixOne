@@ -15,6 +15,7 @@ struct GroupPreviewFooter: View {
             Text(visibleLine)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, ClipboardLayout.previewInset)
                 .appTooltip(tooltip)

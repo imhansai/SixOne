@@ -72,6 +72,24 @@ struct PanelCommandAvailabilityTests {
         #expect(value.isEnabled(.paste))
     }
 
+    @Test("Copy / Paste：预览中不作用于预览项，只作用于组内聚焦文件")
+    func copyAndPasteInPreview() {
+        var value = availability(selection: .text, previewing: true)
+        #expect(!value.isEnabled(.copy), "预览项本身不算选中条目")
+        #expect(!value.isEnabled(.paste), "预览项本身不算粘贴目标")
+
+        value.focusedGroupFileIndex = 2
+        #expect(value.isEnabled(.copy), "组内聚焦文件仍可复制")
+        #expect(value.isEnabled(.paste), "组内聚焦文件仍可粘贴")
+    }
+
+    @Test("纯文本复制 / 粘贴：预览中不可用")
+    func plainTextDisabledInPreview() {
+        let value = availability(selection: .text, previewing: true)
+        #expect(!value.isEnabled(.copyAsPlainText))
+        #expect(!value.isEnabled(.pasteAsPlainText))
+    }
+
     @Test("纯文本拷贝 / 粘贴：只对文本、链接、颜色有意义")
     func plainTextKinds() {
         for kind in [ClipboardItemKind.text, .link, .color] {

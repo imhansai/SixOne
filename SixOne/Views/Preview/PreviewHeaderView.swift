@@ -72,12 +72,14 @@ struct PreviewHeaderView: View {
                     } else if item.kind == .file, fileURL != nil {
                         openWithMenu
                     }
-                    // 别名按钮只在该条目自己的预览里出现；编辑或组内单文件态隐去但占位。
-                    PreviewAliasButton(item: item)
-                        .opacity(previewState.isEditing || isGroupFileView ? 0 : 1)
-                        .allowsHitTesting(!previewState.isEditing && !isGroupFileView)
-                        .disabled(previewState.isEditing || isGroupFileView)
-                        .accessibilityHidden(previewState.isEditing || isGroupFileView)
+                    // 组内单文件态不占位，编辑态隐去但占位。
+                    if !isGroupFileView {
+                        PreviewAliasButton(item: item)
+                            .opacity(previewState.isEditing ? 0 : 1)
+                            .allowsHitTesting(!previewState.isEditing)
+                            .disabled(previewState.isEditing)
+                            .accessibilityHidden(previewState.isEditing)
+                    }
                     if item.kind == .text || item.kind == .link {
                         editToggleButton
                     }

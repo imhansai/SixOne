@@ -49,6 +49,8 @@ extension NSUserInterfaceItemIdentifier {
 struct SelectablePathText: NSViewRepresentable {
     let text: String
 
+    @Environment(\.self) private var environment
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -73,6 +75,7 @@ struct SelectablePathText: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
+        textView.textColor = resolvedTextColor
         guard textView.string != text else { return }
         textView.string = text
         textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -108,8 +111,26 @@ struct SelectablePathText: NSViewRepresentable {
             height: ClipboardLayout.pathBarHeight
         )
         textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        textView.textColor = .secondaryLabelColor
+        textView.textColor = resolvedTextColor
         textView.setAccessibilityLabel(Localizer.string("Path"))
+    }
+
+    /// 与副标题的 SwiftUI `.secondary` 对齐；玻璃层的 Vibrant 外观会把 AppKit 次要色解析成不透明灰。
+    private var resolvedTextColor: NSColor {
+        let resolved = Color.secondary.resolve(in: environment)
+        return NSColor(
+            srgbRed: Self.sRGBComponent(resolved.linearRed),
+            green: Self.sRGBComponent(resolved.linearGreen),
+            blue: Self.sRGBComponent(resolved.linearBlue),
+            alpha: CGFloat(resolved.opacity)
+        )
+    }
+
+    private static func sRGBComponent(_ linear: Float) -> CGFloat {
+        let value = CGFloat(linear)
+        return value <= 0.0031308
+            ? 12.92 * value
+            : 1.055 * pow(value, 1 / 2.4) - 0.055
     }
 
     final class Coordinator {

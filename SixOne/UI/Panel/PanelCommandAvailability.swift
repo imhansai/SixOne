@@ -47,10 +47,13 @@ struct PanelCommandAvailability: Equatable {
 
         switch command {
         case .copy, .paste:
-            return hasSelection || focusedGroupFileIndex != nil
+            // 预览项不算选中条目；文本选区由第一响应者处理。
+            return focusedGroupFileIndex != nil || (!isPreviewing && hasSelection)
         case .copyAsPlainText, .pasteAsPlainText:
-            // 文件组里聚焦的是文件，没有「整组纯文本」。
-            return focusedGroupFileIndex == nil && (selectionKind?.hasPlainText ?? false)
+            // 文件组里聚焦的是文件，没有「整组纯文本」；预览项同样不算选中。
+            return !isPreviewing
+                && focusedGroupFileIndex == nil
+                && (selectionKind?.hasPlainText ?? false)
         case .delete:
             return hasSelection
         case .preview:
