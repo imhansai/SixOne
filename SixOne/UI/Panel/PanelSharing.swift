@@ -28,10 +28,16 @@ final class PanelSharing {
         switch item.kind {
         case .file where item.fileCount > 1:
             let files = manager.startScopedShareURLs(for: item)
-            guard !files.isEmpty else { return }
+            guard !files.isEmpty else {
+                noticeState.showInaccessibleFile(item.displayTitle)
+                return
+            }
             present(files, relativeTo: anchorView.bounds, of: anchorView)
         case .file, .image:
-            guard let file = manager.startScopedShareURL(for: item) else { return }
+            guard let file = manager.startScopedShareURL(for: item) else {
+                noticeState.showInaccessibleFile(item.displayTitle)
+                return
+            }
             present([file], relativeTo: anchorView.bounds, of: anchorView)
         case .link:
             guard let text = item.text,

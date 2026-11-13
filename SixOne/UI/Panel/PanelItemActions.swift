@@ -81,6 +81,20 @@ final class PanelItemActions {
         openExternally(full)
     }
 
+    func openInShottr(id: UUID) {
+        guard let item = fullItem(id: id), ShottrIntegration.canOpen(item) else { return }
+        guard ShottrIntegration.applicationURL != nil else {
+            noticeState.message = Localizer.string("Cannot open Shottr")
+            return
+        }
+        manager.copy(item)
+        guard ShottrIntegration.loadFromClipboard() else {
+            noticeState.message = Localizer.string("Cannot open Shottr")
+            return
+        }
+        handOff()
+    }
+
     func revealCurrentItem() {
         guard let item = currentItem else { return }
         if item.kind == .file, item.fileCount > 1 {
@@ -112,7 +126,12 @@ final class PanelItemActions {
             return
         }
 
-        guard let url = manager.fileURL(for: item) else {
+        let scopedSource = previewState.item?.id == item.id ? previewState.scopedFileURL?.url : nil
+        guard let url = manager.openTarget(
+            for: item,
+            scopedSourceURL: scopedSource,
+            preferredFileURL: scopedSource
+        ) else {
             // 文件条目是不存在了，图片条目是取不到内容。
             if item.kind == .file {
                 noticeState.showMissingFile(item.displayTitle)

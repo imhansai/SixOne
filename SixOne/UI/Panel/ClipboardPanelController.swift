@@ -217,6 +217,10 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         itemActions.requestOpen(id: id)
     }
 
+    func panelDidRequestOpenInShottr(id: UUID) {
+        itemActions.openInShottr(id: id)
+    }
+
     var canRequestSettings: Bool { onOpenSettings != nil }
 
     func panelDidRequestSettings() {

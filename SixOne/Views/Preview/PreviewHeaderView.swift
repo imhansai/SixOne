@@ -12,7 +12,10 @@ struct PreviewHeaderView: View {
     let subtitleTooltip: String?
     let fileNameTitle: String?
     let linkOrigin: String?
-    let fileURL: URL?
+    /// 打开方式枚举用的文件（源文件或占位）。
+    let openWithEnumerationURL: URL?
+    let resolveOpenWithURL: () -> URL?
+    let resolveRevealURL: () -> URL?
     let linkURL: URL?
     let isGroupFileView: Bool
 
@@ -69,8 +72,13 @@ struct PreviewHeaderView: View {
                     }
                     if item.kind == .link, linkURL != nil {
                         openLinkButton
-                    } else if item.kind == .file, fileURL != nil {
-                        openWithMenu
+                    } else if let openWithEnumerationURL {
+                        openWithMenu(openWithEnumerationURL)
+                            // 编辑中导出的是旧内容，暂不显示。
+                            .opacity(previewState.isEditing ? 0 : 1)
+                            .allowsHitTesting(!previewState.isEditing)
+                            .disabled(previewState.isEditing)
+                            .accessibilityHidden(previewState.isEditing)
                     }
                     // 组内单文件态不占位，编辑态隐去但占位。
                     if !isGroupFileView {
@@ -174,16 +182,21 @@ struct PreviewHeaderView: View {
         }
     }
 
-    @ViewBuilder
-    private var openWithMenu: some View {
-        if let fileURL {
-            PreviewOpenWithMenu(
-                fileURL: fileURL,
-                onHandOff: { shellActions?.panelDidHandOffToExternalApp() }
-            )
-            // 组内切换文件时重建，重新枚举打开方式。
-            .id(fileURL)
-        }
+    private func openWithMenu(_ url: URL) -> some View {
+        PreviewOpenWithMenu(
+            enumerationURL: url,
+            resolveOpenURL: resolveOpenWithURL,
+            resolveRevealURL: resolveRevealURL,
+            onOpenInShottr: shottrAction,
+            onHandOff: { shellActions?.panelDidHandOffToExternalApp() }
+        )
+        // 文件类型决定应用列表，占位路径变化不必重建。
+        .id(url.pathExtension)
+    }
+
+    private var shottrAction: (() -> Void)? {
+        guard ShottrIntegration.canOpen(item) else { return nil }
+        return { context.itemActions?.panelDidRequestOpenInShottr(id: item.id) }
     }
 
     @ViewBuilder

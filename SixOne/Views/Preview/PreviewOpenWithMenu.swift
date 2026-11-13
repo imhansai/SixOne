@@ -10,32 +10,36 @@ import SwiftUI
 
 /// 仿 QuickLook 菜单；应用列表仅首次出现时查询，避免反复枚举 LaunchServices。
 struct PreviewOpenWithMenu: View {
-    let fileURL: URL
+    let enumerationURL: URL
+    let resolveOpenURL: () -> URL?
+    let resolveRevealURL: () -> URL?
+    let onOpenInShottr: (() -> Void)?
     let onHandOff: () -> Void
 
     @State private var defaultApp: URL?
     @State private var availableApps: [URL] = []
 
     var body: some View {
-        Menu {
+        let apps = menuApps
+        return Menu {
             if let defaultApp {
                 Button(String(format: Localizer.string("Open in %@"), defaultApp.displayName)) {
                     openIn(defaultApp)
                 }
                 Divider()
-                ForEach(availableApps.filter { $0 != defaultApp }, id: \.self) { app in
+                ForEach(apps.filter { $0 != defaultApp }, id: \.self) { app in
                     Button(app.displayName) {
                         openIn(app)
                     }
                 }
                 Divider()
             } else {
-                ForEach(availableApps, id: \.self) { app in
+                ForEach(apps, id: \.self) { app in
                     Button(app.displayName) {
                         openIn(app)
                     }
                 }
-                if !availableApps.isEmpty {
+                if !apps.isEmpty {
                     Divider()
                 }
             }
@@ -53,16 +57,34 @@ struct PreviewOpenWithMenu: View {
         }
     }
 
+    /// Shottr 未注册当前格式时，补进列表并改走剪贴板。
+    private var shottrViaClipboard: URL? {
+        guard onOpenInShottr != nil,
+              let shottr = ShottrIntegration.applicationURL,
+              !availableApps.contains(shottr) else { return nil }
+        return shottr
+    }
+
+    private var menuApps: [URL] {
+        guard let shottr = shottrViaClipboard else { return availableApps }
+        return [shottr] + availableApps
+    }
+
     private func loadApps() {
         if defaultApp == nil {
-            defaultApp = NSWorkspace.shared.urlForApplication(toOpen: fileURL)
+            defaultApp = NSWorkspace.shared.urlForApplication(toOpen: enumerationURL)
         }
         if availableApps.isEmpty {
-            availableApps = NSWorkspace.shared.urlsForApplications(toOpen: fileURL)
+            availableApps = NSWorkspace.shared.urlsForApplications(toOpen: enumerationURL)
         }
     }
 
     private func openIn(_ app: URL) {
+        if app == shottrViaClipboard, let onOpenInShottr {
+            onOpenInShottr()
+            return
+        }
+        guard let fileURL = resolveOpenURL() else { return }
         if let defaultApp, app == defaultApp {
             NSWorkspace.shared.open(fileURL)
         } else {
@@ -77,7 +99,8 @@ struct PreviewOpenWithMenu: View {
     }
 
     private func revealInFinder() {
-        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        guard let url = resolveRevealURL() else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
         onHandOff()
     }
 }

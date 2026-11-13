@@ -185,6 +185,16 @@ final class ClipboardHistoryWriter {
         return fetchLogged("按 id 取轻量条目") { try context.fetch(descriptor).first }
     }
 
+    func hasText(id: UUID) -> Bool {
+        var descriptor = FetchDescriptor<ClipboardItem>(
+            predicate: #Predicate { $0.id == id && $0.text != nil }
+        )
+        descriptor.fetchLimit = 1
+        descriptor.propertiesToFetch = [\.id]
+        let found = fetchLogged("文本存在性探测") { try context.fetch(descriptor) } ?? []
+        return !found.isEmpty
+    }
+
     func hasInlineImage(id: UUID) -> Bool {
         var descriptor = FetchDescriptor<ClipboardItem>(
             predicate: #Predicate { $0.id == id && $0.imageData != nil }

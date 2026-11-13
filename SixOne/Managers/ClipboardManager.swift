@@ -330,6 +330,26 @@ final class ClipboardManager {
         fileAccess.fileURL(for: item, allowTemporaryCopy: allowTemporaryCopy)
     }
 
+    func openTarget(
+        for item: ClipboardItem,
+        scopedSourceURL: URL?,
+        preferredFileURL: URL?
+    ) -> URL? {
+        fileAccess.openTarget(
+            for: item,
+            scopedSourceURL: scopedSourceURL,
+            preferredFileURL: preferredFileURL
+        )
+    }
+
+    func openWithEnumerationURL(for item: ClipboardItem, scopedSourceURL: URL?) -> URL? {
+        fileAccess.openWithEnumerationURL(for: item, scopedSourceURL: scopedSourceURL)
+    }
+
+    func openWithURL(for item: ClipboardItem) -> URL? {
+        fileAccess.openWithURL(for: item)
+    }
+
     /// 菜单能否「打开 / 分享」：只读轻量列，不把 imageData 读进内存。
     func canOpenExternally(id: UUID) -> Bool {
         fileAccess.canOpenExternally(id: id)

@@ -123,6 +123,17 @@ struct PasteboardWriteBackTests {
         #expect(harness.recorder.events.last == .deleted(id: id))
     }
 
+    @Test("编辑保存后，已持有的条目实例同步更新")
+    func editedTextUpdatesHeldInstance() throws {
+        let harness = try ClipboardHarness()
+        let item = try insert(ClipboardItem(kind: .text, text: "旧内容"), into: harness)
+        let held = try #require(harness.manager.fetchFullItem(id: item.id))
+
+        harness.manager.updateEditedText(id: item.id, text: "新内容", richText: nil)
+
+        #expect(held.text == "新内容")
+    }
+
     @Test("链接条目：写回 URL 类型与纯文本")
     func writesLink() throws {
         let harness = try ClipboardHarness()

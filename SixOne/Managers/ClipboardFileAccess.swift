@@ -2,7 +2,7 @@
 //  ClipboardFileAccess.swift
 //  SixOne
 //
-//  条目关联文件的解析与导出：bookmark 优先、原路径兜底，图片另存临时文件。
+//  条目关联文件的解析与导出：bookmark 优先、原路径兜底，图片与文本另存临时文件。
 //
 
 import Foundation
@@ -37,12 +37,11 @@ final class ClipboardFileAccess {
     func startScopedShareURL(for item: ClipboardItem) -> ScopedFileURL? {
         switch item.kind {
         case .file, .image:
-            if let bookmark = item.securityScopeBookmark,
-               let url = SecurityScopedFileAccess.startAccess(bookmark: bookmark) {
-                return ScopedFileURL(url: url, needsStop: true)
-            }
-            if let path = item.filePath, FileManager.default.fileExists(atPath: path) {
-                return ScopedFileURL(url: URL(fileURLWithPath: path), needsStop: false)
+            if let scoped = SecurityScopedFileAccess.startScopedURL(
+                bookmark: item.securityScopeBookmark,
+                path: item.filePath
+            ) {
+                return scoped
             }
             guard item.kind == .image else { return nil }
             return writeTemporaryImageFile(for: item).map {
@@ -76,8 +75,78 @@ final class ClipboardFileAccess {
             guard allowTemporaryCopy else { return nil }
             return writeTemporaryImageFile(for: item)
         case .link:
-            guard let text = item.text, let url = URL(string: text), url.scheme != nil else { return nil }
-            return url
+            return externalLinkURL(for: item)
+        case .color:
+            return nil
+        }
+    }
+
+    /// 打开方式的后备落点：文本与内联图片落成临时文件。
+    func openWithURL(for item: ClipboardItem) -> URL? {
+        switch item.kind {
+        case .text:
+            return writeTemporaryTextFile(for: item)
+        case .file:
+            return resolvedFileURL(for: item)
+        case .image:
+            return writeTemporaryImageFile(for: item) ?? resolvedFileURL(for: item)
+        case .link:
+            return externalLinkURL(for: item)
+        case .color:
+            return nil
+        }
+    }
+
+    private func externalLinkURL(for item: ClipboardItem) -> URL? {
+        guard let text = item.text, let url = URL(string: text), url.scheme != nil else { return nil }
+        return url
+    }
+
+    /// 打开方式枚举用的文件：源文件可读就用它，否则用 0 字节占位文件。
+    func openWithEnumerationURL(for item: ClipboardItem, scopedSourceURL: URL?) -> URL? {
+        switch item.kind {
+        case .image:
+            if let source = accessibleSourceURL(for: item, scopedURL: scopedSourceURL) {
+                return source
+            }
+            guard let data = item.imageData else { return nil }
+            return writeTemporaryPlaceholder(
+                fileExtension: PasteboardFormat.fileExtension(ofBitmap: data),
+                date: item.lastActivityAt
+            )
+        case .text:
+            return writeTemporaryPlaceholder(
+                fileExtension: textExportFileExtension(for: item),
+                date: item.lastActivityAt
+            )
+        case .file, .link, .color:
+            return nil
+        }
+    }
+
+    /// 可安全交给外部应用的源文件。
+    func accessibleSourceURL(for item: ClipboardItem, scopedURL: URL?) -> URL? {
+        if let scopedURL { return scopedURL }
+        guard let path = item.filePath,
+              FileManager.default.isReadableFile(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// 统一的打开落点：源文件可安全访问时优先，否则按类型回退。
+    func openTarget(
+        for item: ClipboardItem,
+        scopedSourceURL: URL?,
+        preferredFileURL: URL?
+    ) -> URL? {
+        switch item.kind {
+        case .image:
+            return accessibleSourceURL(for: item, scopedURL: scopedSourceURL) ?? openWithURL(for: item)
+        case .text:
+            return openWithURL(for: item)
+        case .file:
+            return preferredFileURL ?? fileURL(for: item)
+        case .link:
+            return fileURL(for: item)
         case .color:
             return nil
         }
@@ -89,7 +158,7 @@ final class ClipboardFileAccess {
         guard let item = writer.fetchLightItem(id: id) else { return false }
         switch item.kind {
         case .text:
-            return false
+            return writer.hasText(id: id)
         case .file:
             return resolvedFileURL(for: item) != nil
         case .image:
@@ -109,15 +178,38 @@ final class ClipboardFileAccess {
         var data = item.imageData
         if data == nil { data = writer.fetchFullItem(id: item.id)?.imageData }
         guard let data else { return nil }
+        return writeTemporaryExport(
+            data: data,
+            fileExtension: PasteboardFormat.fileExtension(ofBitmap: data),
+            date: item.lastActivityAt
+        )
+    }
 
-        let ext = PasteboardFormat.fileExtension(ofBitmap: data)
+    private func writeTemporaryTextFile(for item: ClipboardItem) -> URL? {
+        let fileExtension = textExportFileExtension(for: item)
+        if let rtf = item.attributedTextData {
+            return writeTemporaryExport(data: rtf, fileExtension: fileExtension, date: item.lastActivityAt)
+        }
+        guard let text = item.text else { return nil }
+        return writeTemporaryExport(data: Data(text.utf8), fileExtension: fileExtension, date: item.lastActivityAt)
+    }
+
+    private func textExportFileExtension(for item: ClipboardItem) -> String {
+        item.attributedTextData != nil ? "rtf" : "txt"
+    }
+
+    private func writeTemporaryPlaceholder(fileExtension: String, date: Date) -> URL? {
+        writeTemporaryExport(data: Data(), fileExtension: fileExtension, date: date)
+    }
+
+    private func writeTemporaryExport(data: Data, fileExtension: String, date: Date) -> URL? {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("sixone-export/\(UUID().uuidString)", isDirectory: true)
         guard (try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)) != nil else {
             return nil
         }
         let url = directory.appendingPathComponent(
-            "\(Self.exportNameFormatter.string(from: item.lastActivityAt)).\(ext)"
+            "\(Self.exportNameFormatter.string(from: date)).\(fileExtension)"
         )
         guard (try? data.write(to: url)) != nil else { return nil }
         return url

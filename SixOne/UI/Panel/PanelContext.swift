@@ -11,6 +11,8 @@ protocol ItemActionHandling: AnyObject {
     func panelDidPasteAsPlainText(id: UUID)
     func panelDidRequestDelete(id: UUID)
     func panelDidRequestOpen(id: UUID)
+    /// 复制图片并交给 Shottr 从剪贴板加载。
+    func panelDidRequestOpenInShottr(id: UUID)
     func panelDidRequestShare(id: UUID, anchorView: NSView)
     /// 复制指定条目回剪贴板；反馈由调用方负责。
     func panelDidRequestCopy(id: UUID)

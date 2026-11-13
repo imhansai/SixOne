@@ -365,6 +365,16 @@
         }
       }
     },
+    "Cannot open Shottr" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开 Shottr"
+          }
+        }
+      }
+    },
     "Chinese (Simplified)" : {
       "localizations" : {
         "zh-Hans" : {

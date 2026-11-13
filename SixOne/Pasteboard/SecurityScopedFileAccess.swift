@@ -105,9 +105,9 @@ nonisolated enum SecurityScopedFileAccess {
         return url
     }
 
-    /// 原路径兜底；不持有访问权。
+    /// 原路径兜底；读不到数据视为不可用。
     private static func plainURL(path: String?) -> URL? {
-        guard let path, FileManager.default.fileExists(atPath: path) else { return nil }
+        guard let path, FileManager.default.isReadableFile(atPath: path) else { return nil }
         return URL(fileURLWithPath: path)
     }
 
