@@ -36,7 +36,7 @@ struct FilePathBar: View {
                         .lineLimit(1)
                         .fixedSize()
                         .textSelection(.enabled)
-                        .accessibilityLabel(Text(verbatim: Localizer.string("Path")))
+                        // 别加 accessibilityLabel：与 textSelection 组合会让 AX 查询递归爆栈。
                         .background(PathScrollMarker())
                 }
                 .fixedSize(horizontal: false, vertical: true)

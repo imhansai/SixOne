@@ -1269,16 +1269,6 @@
         }
       }
     },
-    "Path" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "路径"
-          }
-        }
-      }
-    },
     "Press Shortcut…" : {
       "localizations" : {
         "zh-Hans" : {
