@@ -116,10 +116,14 @@ struct HistoryListScrollCommand: Equatable {
     var isSelectionAlreadyAtEndpoint: Bool = false
 }
 
-/// 删除后接替选中的目标。
+/// 删除前的行号；补位后同一下标即接替行。
 struct PendingDeletionSelection: Equatable {
     let deletedID: UUID
+    let deletedIndex: Int
+    /// 删除时的下一条；行序变化时优先用它。
     let replacementID: UUID?
+    /// 删除时的查询词；换词后不再接替。
+    let query: String
 }
 
 /// 键盘导航状态：选中、待滚动行与列表发布的首个完整可见行。
@@ -175,10 +179,17 @@ final class NavigationState {
         pendingRevealItemID = nil
     }
 
-    func requestSelectionAfterDeletion(deletedID: UUID, replacementID: UUID?) {
+    func requestSelectionAfterDeletion(
+        deletedID: UUID,
+        deletedIndex: Int,
+        replacementID: UUID? = nil,
+        query: String = ""
+    ) {
         pendingDeletionSelection = PendingDeletionSelection(
             deletedID: deletedID,
-            replacementID: replacementID
+            deletedIndex: deletedIndex,
+            replacementID: replacementID,
+            query: query
         )
     }
 

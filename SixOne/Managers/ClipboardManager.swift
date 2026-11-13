@@ -192,15 +192,21 @@ final class ClipboardManager {
     private var isMaintaining = false
     private var maintenanceTask: Task<Void, Never>?
 
-    /// 同一时刻只跑一轮维护；面板可见时挂起，收起后补跑。
+    /// 同一时刻只跑一轮维护。
     func performMaintenance() async {
         guard canRunMaintenance() else {
             isMaintenanceDeferred = true
             return
         }
-        guard !isMaintaining else { return }
+        guard !isMaintaining else {
+            isMaintenanceDeferred = true
+            return
+        }
         isMaintaining = true
-        defer { isMaintaining = false }
+        defer {
+            isMaintaining = false
+            if isMaintenanceDeferred { runDeferredMaintenanceIfNeeded() }
+        }
 
         let retention = await maintenance.trimToRetention(interval: settings.historyRetention.interval)
         let budget = await maintenance.trimToExternalStorageBudget(limit: settings.storageLimit.bytes)
@@ -212,7 +218,7 @@ final class ClipboardManager {
         }
     }
 
-    /// 面板收起时补跑挂起的维护。
+    /// 补跑挂起的维护；面板可见时会再次挂起。
     func runDeferredMaintenanceIfNeeded() {
         guard isMaintenanceDeferred else { return }
         isMaintenanceDeferred = false

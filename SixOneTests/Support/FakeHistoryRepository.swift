@@ -63,6 +63,21 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         return Array((rowsByQuery[query] ?? []).prefix(limit))
     }
 
+    func rows(after cursor: UUID, query: String, limit: Int) async throws -> [HistoryRow] {
+        requestedQueries.append(query)
+        requestedLimits.append(limit)
+        if let delay = delaysByQuery[query] {
+            try? await Task.sleep(for: delay)
+        }
+        if isFailing {
+            throw FakeHistoryError.readFailed
+        }
+        returnedQueries.append(query)
+        let all = rowsByQuery[query] ?? []
+        guard let index = all.firstIndex(where: { $0.recencyID == cursor }) else { return [] }
+        return Array(all[(index + 1)...].prefix(limit))
+    }
+
     /// 等该查询返回过结果（超时返回 false），避免断言因查询未发起而恒真。
     func waitUntilReturned(_ query: String, timeout: Duration = .seconds(5)) async -> Bool {
         let deadline = ContinuousClock.now + timeout
@@ -138,6 +153,7 @@ extension HistoryRow {
     static func stub(title: String, id: UUID = UUID(), alias: String? = nil) -> HistoryRow {
         HistoryRow(
             id: id,
+            recencyID: id,
             kind: .text,
             title: title,
             alias: alias,

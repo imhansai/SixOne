@@ -342,6 +342,135 @@ struct HistoryListRefreshTests {
         #expect(store.rows.map(\.id) == [second.id])
     }
 
+    @Test("删除中间行后从更旧条目补位，窗口保持满额")
+    func backfillsAfterDeletingMiddleRow() async throws {
+        let harness = try Harness(itemCount: 1005)
+        await harness.store.loadLatestAndWait()
+        #expect(harness.store.rows.count == harness.store.windowLimit)
+        #expect(harness.store.rows.last?.id == harness.itemIDs[5])
+
+        try harness.delete(harness.itemIDs[500])
+        await settle(harness.store)
+
+        #expect(harness.store.rows.count == harness.store.windowLimit, "删除后窗口缩水了")
+        #expect(harness.store.hasOlder)
+        #expect(harness.store.rows.last?.id == harness.itemIDs[4], "没有补进更旧的条目")
+    }
+
+    @Test("删除窗口最后一行也补位，列表不缩短")
+    func backfillsAfterDeletingLastVisibleRow() async throws {
+        let harness = try Harness(itemCount: 1005)
+        await harness.store.loadLatestAndWait()
+        let last = try #require(harness.store.rows.last)
+        #expect(last.id == harness.itemIDs[5])
+
+        try harness.delete(last.id)
+        await settle(harness.store)
+
+        #expect(harness.store.rows.count == harness.store.windowLimit)
+        #expect(harness.store.rows.last?.id == harness.itemIDs[4])
+        #expect(harness.store.hasOlder)
+    }
+
+    @Test("库里没有更旧条目时删除后不再补位")
+    func shrinksWhenNoOlderRows() async throws {
+        let harness = try Harness(itemCount: 1000)
+        await harness.store.loadLatestAndWait()
+        #expect(!harness.store.hasOlder)
+
+        try harness.delete(harness.itemIDs[500])
+        await settle(harness.store)
+
+        #expect(harness.store.rows.count == harness.store.windowLimit - 1)
+        #expect(!harness.store.hasOlder)
+    }
+
+    @Test("补位到库底后 hasOlder 归零，列表停在真实条数")
+    func clearsOlderFlagWhenBackfillExhaustsLibrary() async throws {
+        let harness = try Harness(itemCount: 1001)
+        await harness.store.loadLatestAndWait()
+        #expect(harness.store.hasOlder)
+
+        try harness.delete(harness.itemIDs[500])
+        await settle(harness.store)
+
+        #expect(harness.store.rows.count == harness.store.windowLimit)
+        #expect(harness.store.rows.last?.id == harness.itemIDs[0])
+        #expect(!harness.store.hasOlder)
+    }
+
+    @Test("连续删除逐次补位，窗口始终满额")
+    func keepsWindowFullAcrossConsecutiveDeletions() async throws {
+        let harness = try Harness(itemCount: 1003)
+        await harness.store.loadLatestAndWait()
+        #expect(harness.store.rows.last?.id == harness.itemIDs[3])
+
+        for step in 1...3 {
+            let target = try #require(harness.store.rows.last)
+            try harness.delete(target.id)
+            await settle(harness.store)
+            #expect(
+                harness.store.rows.count == harness.store.windowLimit,
+                "第 \(step) 次删除后窗口缩水了"
+            )
+        }
+
+        #expect(harness.store.rows.last?.id == harness.itemIDs[0])
+        #expect(!harness.store.hasOlder)
+    }
+
+    @Test("搜索态删除同样从命中结果补位")
+    func backfillsWhileSearching() async throws {
+        let harness = try Harness(itemCount: 1005)
+        harness.store.setSearchQuery("条目")
+        await harness.store.waitForPendingLoad()
+        #expect(harness.store.hasOlder)
+        let last = try #require(harness.store.rows.last)
+
+        try harness.delete(last.id)
+        await settle(harness.store)
+
+        #expect(harness.store.rows.count == harness.store.windowLimit)
+        #expect(harness.store.rows.last?.id == harness.itemIDs[4])
+    }
+
+    @Test("换词加载未落定时删除：不拿旧行补新词")
+    func deletionDuringQuerySwitchWaitsForNewWindow() async {
+        let first = HistoryRow.stub(title: "旧一")
+        let second = HistoryRow.stub(title: "旧二")
+        let matches = [HistoryRow.stub(title: "新一"), HistoryRow.stub(title: "新二")]
+        let repository = FakeHistoryRepository(rowsByQuery: ["": [first, second], "词": matches])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+        await store.loadLatestAndWait()
+        await repository.setQueryDelay(.milliseconds(100), for: "词")
+
+        store.setSearchQuery("词")
+        events.post(.deleted(id: first.id))
+        await store.waitForPendingEvents()
+        await store.waitForPendingLoad()
+
+        #expect(store.rows.map(\.title) == ["新一", "新二"], "旧窗口混进了新词结果")
+    }
+
+    @Test("换词加载未落定时触达：不作用在旧结果上")
+    func touchDuringQuerySwitchWaitsForNewWindow() async {
+        let old = HistoryRow.stub(title: "旧一")
+        let match = HistoryRow.stub(title: "新一")
+        let repository = FakeHistoryRepository(rowsByQuery: ["": [old], "词": [match]])
+        let events = ClipboardHistoryEventBus()
+        let store = HistoryListStore(repository: repository, events: events)
+        await store.loadLatestAndWait()
+        await repository.setQueryDelay(.milliseconds(100), for: "词")
+
+        store.setSearchQuery("词")
+        events.post(.touched(id: old.id))
+        await store.waitForPendingEvents()
+        await store.waitForPendingLoad()
+
+        #expect(store.rows.map(\.title) == ["新一"], "旧搜索结果混进了新查询")
+    }
+
     /// 等事件链路走完：先等串行事件链，再等它挂起的加载；固定轮询或 sleep 都等不准。
     private func settle(_ store: HistoryListStore) async {
         await store.waitForPendingEvents()
@@ -386,6 +515,16 @@ struct HistoryListRefreshTests {
             try context.save()
             events.post(.inserted(id: item.id))
             return item.id
+        }
+
+        func delete(_ id: UUID) throws {
+            let descriptor = FetchDescriptor<ClipboardItem>(
+                predicate: #Predicate { $0.id == id }
+            )
+            guard let item = try context.fetch(descriptor).first else { return }
+            context.delete(item)
+            try context.save()
+            events.post(.deleted(id: id))
         }
 
         func touch(_ id: UUID) throws {

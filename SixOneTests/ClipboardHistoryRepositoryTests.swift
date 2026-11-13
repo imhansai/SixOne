@@ -28,6 +28,56 @@ struct ClipboardHistoryRepositoryTests {
         #expect(all.map(\.id) == Array(env.items.map(\.id).reversed()))
     }
 
+    @Test("游标补位：取比指定行更旧的 N 条，按 recencyID 倒序")
+    func rowsAfterCursorFollowRecencyOrder() async throws {
+        let env = try Env { context in
+            (0..<5).map { index in
+                let item = ClipboardItem(kind: .text, text: "条目 \(index)")
+                context.insert(item)
+                return item
+            }
+        }
+
+        let latestTwo = try await env.repository.latest(query: "", limit: 2)
+        #expect(latestTwo.map(\.id) == [env.items[4].id, env.items[3].id])
+        #expect(latestTwo.last?.recencyID == env.items[3].recencyID)
+
+        let older = try await env.repository.rows(
+            after: env.items[2].recencyID,
+            query: "",
+            limit: 2
+        )
+        #expect(older.map(\.id) == [env.items[1].id, env.items[0].id])
+
+        let exhausted = try await env.repository.rows(
+            after: env.items[0].recencyID,
+            query: "",
+            limit: 2
+        )
+        #expect(exhausted.isEmpty)
+    }
+
+    @Test("游标补位遵循搜索谓词，只返回命中的更旧条目")
+    func rowsAfterCursorHonorsSearchPredicate() async throws {
+        let env = try Env { context in
+            (0..<6).map { index in
+                let item = ClipboardItem(
+                    kind: .text,
+                    text: index.isMultiple(of: 2) ? "命中 \(index)" : "其他 \(index)"
+                )
+                context.insert(item)
+                return item
+            }
+        }
+
+        let rows = try await env.repository.rows(
+            after: env.items[4].recencyID,
+            query: "命中",
+            limit: 5
+        )
+        #expect(rows.map(\.id) == [env.items[2].id, env.items[0].id])
+    }
+
     @Test("行快照带上渲染需要的列，文件组个数与路径都在")
     func rowCarriesRenderingColumns() async throws {
         let env = try Env { context in

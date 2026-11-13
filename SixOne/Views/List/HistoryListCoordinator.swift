@@ -93,16 +93,24 @@ final class HistoryListCoordinator {
 
     /// 被删行离开窗口后，把选中接到接替行。
     private func applyPendingDeletionSelection() {
-        guard let pending = navigationState.pendingDeletionSelection,
-              !store.rows.contains(where: { $0.id == pending.deletedID }) else { return }
+        guard let pending = navigationState.pendingDeletionSelection else { return }
+        guard pending.query == store.query else {
+            // 换词后的结果与删除时的行无关。
+            navigationState.clearPendingDeletionSelection()
+            return
+        }
+        guard !store.rows.contains(where: { $0.id == pending.deletedID }) else { return }
         navigationState.clearPendingDeletionSelection()
-        guard let replacementID = pending.replacementID else {
+        guard !store.rows.isEmpty else {
             clearSelection()
             return
         }
-        navigationState.selectedItemID = replacementID
+        let row = pending.replacementID.flatMap { id in
+            store.rows.first(where: { $0.id == id })
+        } ?? store.rows[min(pending.deletedIndex, store.rows.count - 1)]
+        navigationState.selectedItemID = row.id
         navigationState.isSelectionActive = true
-        navigationState.requestScroll(toRow: replacementID)
+        navigationState.requestScroll(toRow: row.id)
     }
 
     /// 选中行已不在窗口内时摘掉选中，避免键盘导航复用失效锚点。

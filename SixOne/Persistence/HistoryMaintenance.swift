@@ -19,7 +19,7 @@ actor HistoryMaintenance {
     private let persist: @Sendable (ModelContext) throws -> Void
     private let logger = AppLog.logger("HistoryMaintenance")
 
-    private static let retentionBatchSize = 500
+    private static let batchSize = 500
     private static let budgetBatchSize = 50
 
     init(
@@ -42,7 +42,7 @@ actor HistoryMaintenance {
             var descriptor = FetchDescriptor<ClipboardItem>(
                 predicate: #Predicate { $0.lastActivityAt < cutoff }
             )
-            descriptor.fetchLimit = Self.retentionBatchSize
+            descriptor.fetchLimit = Self.batchSize
             let batch: [ClipboardItem]
             do {
                 batch = try context.fetch(descriptor)
@@ -64,21 +64,22 @@ actor HistoryMaintenance {
         return MaintenanceResult(deletedCount: deleted)
     }
 
-    /// 外部存储超预算时从最旧条目删起，始终保留最新一条；nil 表示不限。
+    /// 超预算时从最旧条目删起，保留最新一条；nil 不限。
     func trimToExternalStorageBudget(limit: Int64?) async -> MaintenanceResult {
         guard let limit else { return MaintenanceResult() }
         var bytes = await externalByteCount()
         guard bytes > limit else { return MaintenanceResult() }
 
         let context = ModelContext(container)
-        guard let total = itemCount(in: context), total > 1,
-              let newestID = newestItemID(in: context) else {
+        guard let total = itemCount(in: context), total > 1 else {
             return MaintenanceResult()
         }
 
         var remaining = total
         var deleted = 0
         while bytes > limit, remaining > 1 {
+            // 每批重取最新一条：裁剪期间可能有新复制写入。
+            guard let newestID = newestItemID(in: context) else { break }
             var descriptor = FetchDescriptor<ClipboardItem>(
                 predicate: #Predicate { $0.imageData != nil || $0.attributedTextData != nil },
                 sortBy: [SortDescriptor(\.recencyID)]
@@ -121,7 +122,7 @@ actor HistoryMaintenance {
                 if let cursor {
                     descriptor.predicate = #Predicate { $0.recencyID > cursor }
                 }
-                descriptor.fetchLimit = Self.retentionBatchSize
+                descriptor.fetchLimit = Self.batchSize
                 let batch = try context.fetch(descriptor)
                 guard !batch.isEmpty else { break }
                 for item in batch {

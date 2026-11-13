@@ -161,7 +161,8 @@ struct RowClickGestureContinuityTests {
         var updated = rows
         let old = updated[0]
         updated[0] = HistoryRow(
-            id: old.id, kind: old.kind, title: "标题已更新", alias: old.alias,
+            id: old.id, recencyID: old.recencyID,
+            kind: old.kind, title: "标题已更新", alias: old.alias,
             filePath: old.filePath, fileCount: old.fileCount, contentType: old.contentType,
             thumbnailData: old.thumbnailData,
             thumbnailVersion: old.thumbnailVersion,

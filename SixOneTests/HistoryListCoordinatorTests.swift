@@ -36,7 +36,7 @@ struct HistoryListCoordinatorTests {
         #expect(fixture.context.navigationState.isSelectionActive)
     }
 
-    @Test("删除行移除后才把选中接到相邻行")
+    @Test("删除行移除后才把选中接到同一下标的相邻行")
     func appliesDeletionReplacementAfterRemoval() async throws {
         let fixture = try await makeFixture()
         let deleted = fixture.rows[1]
@@ -45,7 +45,7 @@ struct HistoryListCoordinatorTests {
         fixture.context.navigationState.isSelectionActive = true
         fixture.context.navigationState.requestSelectionAfterDeletion(
             deletedID: deleted.id,
-            replacementID: replacement.id
+            deletedIndex: 1
         )
 
         // 被删行还在窗口里：选中先不动。
@@ -63,6 +63,89 @@ struct HistoryListCoordinatorTests {
             fixture.context.navigationState.takePendingScrollCommands().map(\.target)
                 == [.row(replacement.id)]
         )
+    }
+
+    @Test("行序变化后仍按原下一条接替选中")
+    func selectsOriginalReplacementAfterReorder() async throws {
+        let fixture = try await makeFixture()
+        let deleted = fixture.rows[1]
+        let replacement = fixture.rows[2]
+        fixture.context.navigationState.selectedItemID = deleted.id
+        fixture.context.navigationState.isSelectionActive = true
+        fixture.context.navigationState.requestSelectionAfterDeletion(
+            deletedID: deleted.id,
+            deletedIndex: 1,
+            replacementID: replacement.id
+        )
+
+        // 排队中的置顶改变了行序，原下一条已不在同一行号。
+        await fixture.repository.setRows([replacement, fixture.rows[0]], for: "")
+        await fixture.store.loadLatestAndWait()
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.selectedItemID == replacement.id)
+    }
+
+    @Test("换搜索词后丢弃待接替选中")
+    func dropsPendingSelectionAfterQueryChange() async throws {
+        let fixture = try await makeFixture()
+        let deleted = fixture.rows[1]
+        fixture.context.navigationState.selectedItemID = deleted.id
+        fixture.context.navigationState.isSelectionActive = true
+        fixture.context.navigationState.requestSelectionAfterDeletion(
+            deletedID: deleted.id,
+            deletedIndex: 1,
+            replacementID: fixture.rows[2].id,
+            query: ""
+        )
+
+        let match = HistoryRow.stub(title: "命中")
+        await fixture.repository.setRows([match], for: "abc")
+        fixture.store.setSearchQuery("abc")
+        await fixture.store.waitForPendingLoad()
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.pendingDeletionSelection == nil)
+        #expect(fixture.context.navigationState.selectedItemID == nil)
+    }
+
+    @Test("删除末行后选中补位进来的新末行")
+    func selectsBackfilledRowAfterDeletingLastRow() async throws {
+        let fixture = try await makeFixture()
+        let deleted = fixture.rows[2]
+        let backfilled = HistoryRow.stub(title: "补位行")
+        fixture.context.navigationState.selectedItemID = deleted.id
+        fixture.context.navigationState.isSelectionActive = true
+        fixture.context.navigationState.requestSelectionAfterDeletion(
+            deletedID: deleted.id,
+            deletedIndex: 2
+        )
+
+        // store 删除末行后从库里补了一条，窗口仍是三行。
+        await fixture.repository.setRows([fixture.rows[0], fixture.rows[1], backfilled], for: "")
+        await fixture.store.loadLatestAndWait()
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.selectedItemID == backfilled.id)
+        #expect(fixture.context.navigationState.isSelectionActive)
+    }
+
+    @Test("没有补位时删除末行退到上一条")
+    func fallsBackToPreviousRowWithoutBackfill() async throws {
+        let fixture = try await makeFixture()
+        let deleted = fixture.rows[2]
+        fixture.context.navigationState.selectedItemID = deleted.id
+        fixture.context.navigationState.isSelectionActive = true
+        fixture.context.navigationState.requestSelectionAfterDeletion(
+            deletedID: deleted.id,
+            deletedIndex: 2
+        )
+
+        await fixture.repository.setRows([fixture.rows[0], fixture.rows[1]], for: "")
+        await fixture.store.loadLatestAndWait()
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.selectedItemID == fixture.rows[1].id)
     }
 
     @Test("窗口外预览条目被删除后关闭预览")

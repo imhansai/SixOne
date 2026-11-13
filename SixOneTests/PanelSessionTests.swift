@@ -95,6 +95,7 @@ struct PanelSessionTests {
     private func row(_ id: UUID) -> HistoryRow {
         HistoryRow(
             id: id,
+            recencyID: id,
             kind: .text,
             title: "行",
             alias: nil,

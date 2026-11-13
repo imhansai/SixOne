@@ -237,21 +237,25 @@ final class PanelItemActions {
 
     private func confirmDelete(id: UUID) {
         confirmationState.pendingDeletionID = nil
-        guard let item = manager.fetchLightItem(id: id) else { return }
-        let wasSelected = cursor.selectedItemID == item.id
-        let wasInWindow = store.rows.contains { $0.id == item.id }
-        let replacementID = PanelSelectionCursor.replacementID(afterDeleting: item.id, in: store.rows)
-        guard manager.delete(id: item.id) else { return }
+        guard manager.fetchLightItem(id: id) != nil else { return }
+        let wasSelected = cursor.selectedItemID == id
+        let deletedIndex = wasSelected ? store.rows.firstIndex(where: { $0.id == id }) : nil
+        let replacementID = deletedIndex.flatMap { index in
+            index + 1 < store.rows.count ? store.rows[index + 1].id : nil
+        }
+        guard manager.delete(id: id) else { return }
         guard wasSelected else { return }
-        guard wasInWindow else {
+        guard let deletedIndex else {
             cursor.selectedItemID = nil
             navigationState.isSelectionActive = false
             return
         }
-        // 等被删行移除后再切选中。
+        // 等被删行移除、补位落定后再切选中。
         navigationState.requestSelectionAfterDeletion(
-            deletedID: item.id,
-            replacementID: replacementID
+            deletedID: id,
+            deletedIndex: deletedIndex,
+            replacementID: replacementID,
+            query: store.rowsQuery
         )
     }
 

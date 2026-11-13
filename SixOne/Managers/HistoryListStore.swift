@@ -30,6 +30,8 @@ final class HistoryListStore {
     /// 收起期间来过新的复制；唤出时据此放弃旧滚动锚点，停到新的顶部。
     private var receivedNewContentWhileHidden = false
     private(set) var query = ""
+    /// `rows` 对应的查询词；换词加载落定前沿用旧值。
+    private(set) var rowsQuery = ""
     var isSearching: Bool { !query.isEmpty }
     private var generation = 0
     private var loadTask: Task<Void, Never>?
@@ -104,6 +106,7 @@ final class HistoryListStore {
             }
             self.didFailToLoad = false
             self.rows = window.rows
+            self.rowsQuery = query
             self.hasOlder = window.hasOlder
             self.dataRevision &+= 1
         }
@@ -204,9 +207,45 @@ final class HistoryListStore {
         invalidatePendingLoad()
     }
 
-    private func removeRow(id: UUID) {
+    /// 删一行并按需补位；与删除同一次赋值，列表不会闪缩。
+    private func deleteRowAndBackfill(id: UUID) async {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-        rows.remove(at: index)
+        guard rowsQuery == query else {
+            // 换词后的新窗口未落定：交给整窗加载，避免用旧行补新词。
+            startWindowLoad()
+            return
+        }
+        var updated = rows
+        updated.remove(at: index)
+
+        if updated.isEmpty, hasOlder {
+            // 窗口删空但库里还有更旧的：整窗重取。
+            startWindowLoad()
+            return
+        }
+        if hasOlder, let cursor = updated.last?.recencyID {
+            let needed = windowLimit - updated.count
+            let generation = self.generation
+            let revision = dataRevision
+            let fetched: [HistoryRow]?
+            do {
+                fetched = try await repository.rows(after: cursor, query: query, limit: needed + 1)
+            } catch {
+                logger.error("补位读取失败：\(error.localizedDescription, privacy: .public)")
+                fetched = nil
+            }
+            guard generation == self.generation else { return }
+            guard revision == dataRevision else {
+                // await 期间整窗加载已落定：以新窗口为准，重取一窗。
+                startWindowLoad()
+                return
+            }
+            if let fetched {
+                updated.append(contentsOf: fetched.prefix(needed))
+                hasOlder = fetched.count > needed
+            }
+        }
+        rows = updated
         dataRevision &+= 1
         invalidatePendingLoad()
     }
@@ -238,7 +277,7 @@ final class HistoryListStore {
             } else if isListVisible, topVisibleIndex > ClipboardLayout.viewportRowCount {
                 // 用户在深浏览：不在背后换窗口，回顶部再补。
                 needsTopRefresh = true
-            } else if rows.isEmpty || isLoading {
+            } else if rows.isEmpty || isLoading || rowsQuery != query {
                 // 初始窗口还没落定：重取一窗，避免只插入一行就丢掉了其余行。
                 startWindowLoad()
             } else {
@@ -259,6 +298,8 @@ final class HistoryListStore {
             if isExternal, !isListVisible { receivedNewContentWhileHidden = true }
             if isSearching {
                 startWindowLoad()
+            } else if rowsQuery != query {
+                startWindowLoad()
             } else if rows.contains(where: { $0.id == id }) {
                 await moveRowToTop(id: id)
             } else {
@@ -266,8 +307,16 @@ final class HistoryListStore {
                 startWindowLoad()
             }
         case .thumbnailUpdated(let id):
+            if rowsQuery != query {
+                startWindowLoad()
+                return
+            }
             await reloadRow(id: id)
         case .rowUpdated(let id):
+            if rowsQuery != query {
+                startWindowLoad()
+                return
+            }
             guard isSearching else {
                 await reloadRow(id: id)
                 return
@@ -288,7 +337,7 @@ final class HistoryListStore {
                 startWindowLoad()
             }
         case .deleted(let id):
-            removeRow(id: id)
+            await deleteRowAndBackfill(id: id)
         }
     }
 
