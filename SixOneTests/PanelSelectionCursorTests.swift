@@ -138,6 +138,16 @@ struct PanelSelectionCursorTests {
         #expect(env.navigation.takePendingScrollCommands().isEmpty)
     }
 
+    @Test("删除后接替选中：下一条优先，末条取上一条")
+    func deletionReplacement() {
+        let rows = ["第一", "第二", "第三"].map { HistoryRow(ClipboardItem(kind: .text, text: $0)) }
+        #expect(PanelSelectionCursor.replacementID(afterDeleting: rows[0].id, in: rows) == rows[1].id)
+        #expect(PanelSelectionCursor.replacementID(afterDeleting: rows[1].id, in: rows) == rows[2].id)
+        #expect(PanelSelectionCursor.replacementID(afterDeleting: rows[2].id, in: rows) == rows[1].id)
+        #expect(PanelSelectionCursor.replacementID(afterDeleting: UUID(), in: rows) == nil)
+        #expect(PanelSelectionCursor.replacementID(afterDeleting: rows[0].id, in: []) == nil)
+    }
+
     // MARK: - 夹具
 
     private static func threeTextItems() -> [ClipboardItem] {

@@ -112,10 +112,11 @@ struct PanelCommandAvailabilityTests {
         #expect(!value.isEnabled(.pasteAsPlainText))
     }
 
-    @Test("Delete：只作用于整条选中")
+    @Test("Delete：只作用于列表里的整条选中")
     func delete() {
         #expect(availability(selection: .text).isEnabled(.delete))
         #expect(!availability(selection: nil).isEnabled(.delete))
+        #expect(!availability(selection: .text, previewing: true).isEnabled(.delete))
     }
 
     @Test("Preview：有选中或已开预览时可用；编辑中不可用")

@@ -28,6 +28,13 @@ final class PanelSelectionCursor {
         self.previewLauncher = previewLauncher
     }
 
+    /// 删除后接替选中的行：优先下一条，删末条时取上一条。
+    static func replacementID(afterDeleting id: UUID, in rows: [HistoryRow]) -> UUID? {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return nil }
+        if index + 1 < rows.count { return rows[index + 1].id }
+        return index > 0 ? rows[index - 1].id : nil
+    }
+
     // MARK: - 在列表里移动
 
     /// 键盘 ↑/↓ 移动选中项并同步高亮与滚动，到边界停住。

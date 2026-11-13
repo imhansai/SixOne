@@ -103,6 +103,14 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.escape, [], context) == .standard)
     }
 
+    @Test("预览中 ⌘⌫ 吞掉，删除只在列表进行")
+    func deleteInPreview() {
+        let preview = PanelKeyContext(previewKind: .text)
+        #expect(route(PanelKeyCode.delete, .command, preview) == .panel(.consume))
+        #expect(route(PanelKeyCode.delete, [], preview) == .standard)
+        #expect(route(PanelKeyCode.delete, .command) == .standard)
+    }
+
     @Test("只读文本预览聚焦：查找、全选、有选区的 ⌘C 放行")
     func previewTextFocused() {
         var context = PanelKeyContext(previewKind: .text, hasPreviewTextSelection: true)

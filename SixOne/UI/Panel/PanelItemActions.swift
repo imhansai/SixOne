@@ -215,7 +215,8 @@ final class PanelItemActions {
     }
 
     func deleteSelectedItem() {
-        guard let item = currentItem else { return }
+        // 删除只在列表进行。
+        guard previewState.item == nil, let item = currentItem else { return }
         requestDelete(id: item.id)
     }
 
@@ -237,14 +238,21 @@ final class PanelItemActions {
     private func confirmDelete(id: UUID) {
         confirmationState.pendingDeletionID = nil
         guard let item = manager.fetchLightItem(id: id) else { return }
+        let wasSelected = cursor.selectedItemID == item.id
+        let wasInWindow = store.rows.contains { $0.id == item.id }
+        let replacementID = PanelSelectionCursor.replacementID(afterDeleting: item.id, in: store.rows)
         guard manager.delete(id: item.id) else { return }
-        if previewState.item?.id == item.id {
-            previewState.close()
-        }
-        if cursor.selectedItemID == item.id {
+        guard wasSelected else { return }
+        guard wasInWindow else {
             cursor.selectedItemID = nil
             navigationState.isSelectionActive = false
+            return
         }
+        // 等被删行移除后再切选中。
+        navigationState.requestSelectionAfterDeletion(
+            deletedID: item.id,
+            replacementID: replacementID
+        )
     }
 
     func requestClearHistory() {
@@ -256,8 +264,11 @@ final class PanelItemActions {
             message: Localizer.string("This deletes all clipboard history. It cannot be undone."),
             actionTitle: Localizer.string("Clear History"),
             onAction: { [weak self] in
-                self?.manager.clearAll()
-                self?.confirmationState.isClearingHistory = false
+                guard let self else { return }
+                Task {
+                    await manager.clearAll()
+                    confirmationState.isClearingHistory = false
+                }
             },
             onCancel: { [weak self] in self?.confirmationState.isClearingHistory = false }
         )

@@ -12,7 +12,7 @@ struct SettingsDetailView: View {
     let settings: SettingsStore
     let hotKeyManager: HotKeyManager
     let loadStorageStats: () async -> HistoryStorageStats
-    let onClearHistory: () -> Void
+    let onClearHistory: () async -> Void
 
     var body: some View {
         Form {

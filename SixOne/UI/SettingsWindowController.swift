@@ -27,7 +27,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let activationPolicy: ActivationPolicyControlling
     private let onVisibilityChange: (Bool) -> Void
     private let loadStorageStats: () async -> HistoryStorageStats
-    private let onClearHistory: () -> Void
+    private let onClearHistory: () async -> Void
     private var toolbarObservations: [NSKeyValueObservation] = []
 
     init(
@@ -36,7 +36,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         activationPolicy: ActivationPolicyControlling,
         onVisibilityChange: @escaping (Bool) -> Void,
         loadStorageStats: @escaping () async -> HistoryStorageStats,
-        onClearHistory: @escaping () -> Void
+        onClearHistory: @escaping () async -> Void
     ) {
         self.settings = settings
         self.hotKeyManager = hotKeyManager
@@ -150,7 +150,7 @@ private struct SettingsRootView: View {
     let settings: SettingsStore
     let hotKeyManager: HotKeyManager
     let loadStorageStats: () async -> HistoryStorageStats
-    let onClearHistory: () -> Void
+    let onClearHistory: () async -> Void
 
     var body: some View {
         let language = RuntimeLanguage.shared

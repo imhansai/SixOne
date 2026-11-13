@@ -140,7 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
                 await HistoryStorageStatsReader.read(container: container)
             },
             onClearHistory: { [weak self] in
-                self?.composition?.panel.manager.clearAll()
+                guard let manager = self?.composition?.panel.manager else { return }
+                await manager.clearAll()
             }
         )
         settingsWindowController = controller

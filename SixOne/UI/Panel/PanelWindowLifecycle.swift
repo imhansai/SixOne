@@ -169,6 +169,7 @@ final class PanelWindowLifecycle {
         store.setListVisible(false)
         removeMonitors()
         manager.setPasteboardCaptureSuspended(false)
+        manager.runDeferredMaintenanceIfNeeded()
         // 收起时把焦点还给唤出前的应用；用 WindowServer 状态，NSApp.isActive 会晚一拍。
         var handedOff = false
         if restoresPreviousApplication,

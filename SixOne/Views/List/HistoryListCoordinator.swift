@@ -85,9 +85,24 @@ final class HistoryListCoordinator {
     // MARK: - 数据变化
 
     func handleDataRevisionChange() {
+        applyPendingDeletionSelection()
         discardOrphanedSelection()
         discardDeletedPreview()
         revealTouchedItemIfNeeded()
+    }
+
+    /// 被删行离开窗口后，把选中接到接替行。
+    private func applyPendingDeletionSelection() {
+        guard let pending = navigationState.pendingDeletionSelection,
+              !store.rows.contains(where: { $0.id == pending.deletedID }) else { return }
+        navigationState.clearPendingDeletionSelection()
+        guard let replacementID = pending.replacementID else {
+            clearSelection()
+            return
+        }
+        navigationState.selectedItemID = replacementID
+        navigationState.isSelectionActive = true
+        navigationState.requestScroll(toRow: replacementID)
     }
 
     /// 选中行已不在窗口内时摘掉选中，避免键盘导航复用失效锚点。

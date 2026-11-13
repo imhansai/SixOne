@@ -26,6 +26,7 @@ struct PanelAssembly {
         let repository = SwiftDataHistoryRepository(container: modelContainer)
         let store = HistoryListStore(repository: repository, events: events)
         let context = PanelContext(manager: manager, store: store, caches: caches)
+        manager.canRunMaintenance = { [weak context] in !(context?.panelState.isVisible ?? false) }
 
         self.events = events
         self.manager = manager

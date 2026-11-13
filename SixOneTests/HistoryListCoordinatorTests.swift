@@ -36,6 +36,35 @@ struct HistoryListCoordinatorTests {
         #expect(fixture.context.navigationState.isSelectionActive)
     }
 
+    @Test("删除行移除后才把选中接到相邻行")
+    func appliesDeletionReplacementAfterRemoval() async throws {
+        let fixture = try await makeFixture()
+        let deleted = fixture.rows[1]
+        let replacement = fixture.rows[2]
+        fixture.context.navigationState.selectedItemID = deleted.id
+        fixture.context.navigationState.isSelectionActive = true
+        fixture.context.navigationState.requestSelectionAfterDeletion(
+            deletedID: deleted.id,
+            replacementID: replacement.id
+        )
+
+        // 被删行还在窗口里：选中先不动。
+        fixture.coordinator.handleDataRevisionChange()
+        #expect(fixture.context.navigationState.selectedItemID == deleted.id)
+
+        // 模拟 store 已移除该行。
+        await fixture.repository.setRows([fixture.rows[0], fixture.rows[2]], for: "")
+        await fixture.store.loadLatestAndWait()
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.selectedItemID == replacement.id)
+        #expect(fixture.context.navigationState.isSelectionActive)
+        #expect(
+            fixture.context.navigationState.takePendingScrollCommands().map(\.target)
+                == [.row(replacement.id)]
+        )
+    }
+
     @Test("窗口外预览条目被删除后关闭预览")
     func closesDeletedPreview() async throws {
         let fixture = try await makeFixture()

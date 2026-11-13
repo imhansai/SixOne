@@ -20,33 +20,33 @@ struct StorageBudgetTests {
         #expect(url.path == "/tmp/sixone/.SixOne_SUPPORT/_EXTERNAL_DATA")
     }
 
-    @Test("未超预算：不删条目、不广播")
+    @Test("未超预算：不删条目")
     func keepsEverythingUnderBudget() async throws {
         let fixture = try BudgetFixture(imageCount: 20, textCount: 0, byteBudget: 20_000)
 
-        await fixture.writer.trimToExternalStorageBudget()
+        let result = await fixture.trim()
 
+        #expect(result.deletedCount == 0)
         #expect(fixture.remainingCount == 20)
-        #expect(fixture.recorder.events.isEmpty)
     }
 
     @Test("超预算：从最旧的外部存储条目开始删，最新一条永远保留")
     func trimsOldestFirstAndKeepsNewest() async throws {
         let fixture = try BudgetFixture(imageCount: 200, textCount: 0, byteBudget: 10_000)
 
-        await fixture.writer.trimToExternalStorageBudget()
+        let result = await fixture.trim()
 
         // 每条 100 字节：删两批 50 条后正好落到预算内。
+        #expect(result.deletedCount == 100)
         #expect(fixture.remainingCount == 100)
         #expect(fixture.contains(id: fixture.newestID))
-        #expect(fixture.recorder.events == [.trimmed])
     }
 
     @Test("只删外部存储条目：纯文本历史不受影响")
     func leavesTextOnlyRowsAlone() async throws {
         let fixture = try BudgetFixture(imageCount: 10, textCount: 10, byteBudget: 0)
 
-        await fixture.writer.trimToExternalStorageBudget()
+        _ = await fixture.trim()
 
         #expect(fixture.imageCount == 0)
         #expect(fixture.textCount == 10)
@@ -56,7 +56,7 @@ struct StorageBudgetTests {
     func neverDeletesNewestEvenWhenOverBudget() async throws {
         let fixture = try BudgetFixture(imageCount: 5, textCount: 0, byteBudget: 0)
 
-        await fixture.writer.trimToExternalStorageBudget()
+        _ = await fixture.trim()
 
         #expect(fixture.remainingCount == 1)
         #expect(fixture.contains(id: fixture.newestID))
@@ -66,10 +66,10 @@ struct StorageBudgetTests {
     func unlimitedBudgetKeepsEverything() async throws {
         let fixture = try BudgetFixture(imageCount: 5, textCount: 0, byteBudget: nil)
 
-        await fixture.writer.trimToExternalStorageBudget()
+        let result = await fixture.trim()
 
+        #expect(result.deletedCount == 0)
         #expect(fixture.remainingCount == 5)
-        #expect(fixture.recorder.events.isEmpty)
     }
 }
 
@@ -77,9 +77,9 @@ struct StorageBudgetTests {
 private struct BudgetFixture {
     let container: ModelContainer
     let context: ModelContext
-    let recorder: EventRecorder
-    let writer: ClipboardHistoryWriter
+    let maintenance: HistoryMaintenance
     let newestID: UUID
+    let byteBudget: Int64?
 
     init(imageCount: Int, textCount: Int, byteBudget: Int64?) throws {
         let schema = Schema([ClipboardItem.self])
@@ -88,9 +88,6 @@ private struct BudgetFixture {
             configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
         )
         let context = container.mainContext
-        let events = ClipboardHistoryEventBus()
-        let recorder = EventRecorder()
-        events.observe { [recorder] event in recorder.record(event) }
 
         var newestID = UUID()
         for index in 0..<imageCount {
@@ -107,21 +104,23 @@ private struct BudgetFixture {
 
         self.container = container
         self.context = context
-        self.recorder = recorder
         self.newestID = newestID
-        self.writer = ClipboardHistoryWriter(
+        self.byteBudget = byteBudget
+        self.maintenance = HistoryMaintenance(
             container: container,
-            events: events,
-            retentionInterval: { nil },
-            externalByteCount: {
+            externalByteCount: { [container] in
                 // 每条外部存储条目按 100 字节计，便于断言批次行为。
+                let context = ModelContext(container)
                 let count = (try? context.fetchCount(FetchDescriptor<ClipboardItem>(
                     predicate: #Predicate { $0.imageData != nil || $0.attributedTextData != nil }
                 ))) ?? 0
                 return Int64(count) * 100
-            },
-            externalByteBudget: { byteBudget }
+            }
         )
+    }
+
+    func trim() async -> MaintenanceResult {
+        await maintenance.trimToExternalStorageBudget(limit: byteBudget)
     }
 
     var remainingCount: Int {

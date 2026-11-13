@@ -81,6 +81,26 @@ struct HistoryRetentionTests {
         #expect(harness.recorder.events == [.trimmed], "空库再裁剪不应重复广播")
     }
 
+    @Test("面板可见时维护挂起，收起后补跑")
+    func defersWhilePanelVisible() async throws {
+        let harness = try ClipboardHarness(retention: .oneMonth)
+        await harness.manager.waitForPendingMaintenance()
+
+        let expired = ClipboardItem(kind: .text, text: "old")
+        expired.lastActivityAt = Date().addingTimeInterval(-40 * 24 * 3600)
+        harness.context.insert(expired)
+        try harness.context.save()
+
+        harness.manager.canRunMaintenance = { false }
+        await harness.manager.performMaintenance()
+        #expect(harness.itemsNewestFirst().map(\.text) == ["old"])
+
+        harness.manager.canRunMaintenance = { true }
+        harness.manager.runDeferredMaintenanceIfNeeded()
+        #expect(await Wait.until { harness.recorder.events.contains(.trimmed) })
+        #expect(harness.itemsNewestFirst().isEmpty)
+    }
+
     @Test("启动时就按当前保留时长裁一次")
     func trimsOnLaunch() async throws {
         let harness = try ClipboardHarness(retention: .oneMonth) { context in

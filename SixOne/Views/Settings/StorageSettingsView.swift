@@ -11,7 +11,7 @@ import SwiftUI
 struct StorageSettingsView: View {
     let settings: SettingsStore
     let loadStats: () async -> HistoryStorageStats
-    let onClearHistory: () -> Void
+    let onClearHistory: () async -> Void
 
     @Environment(\.locale) private var locale
     /// nil = 还没读到（首次加载、无磁盘占用、读库失败）。
@@ -112,8 +112,10 @@ struct StorageSettingsView: View {
             message: Localizer.string("This deletes all clipboard history. It cannot be undone."),
             actionTitle: Localizer.string("Clear History"),
             onAction: {
-                onClearHistory()
-                Task { await refreshStats() }
+                Task {
+                    await onClearHistory()
+                    await refreshStats()
+                }
             },
             onCancel: {}
         )

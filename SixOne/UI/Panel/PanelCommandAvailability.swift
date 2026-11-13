@@ -55,7 +55,7 @@ struct PanelCommandAvailability: Equatable {
                 && focusedGroupFileIndex == nil
                 && (selectionKind?.hasPlainText ?? false)
         case .delete:
-            return hasSelection
+            return !isPreviewing && hasSelection
         case .preview:
             return isPreviewing || hasSelection
         case .saveEditing:

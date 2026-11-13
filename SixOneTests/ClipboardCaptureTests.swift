@@ -390,14 +390,14 @@ struct ClipboardCaptureTests {
         harness.pasteboard.simulateCopy(text: "hello")
         await harness.pollAndWait()
 
-        harness.manager.clearAll()
+        await harness.manager.clearAll()
 
         #expect(harness.itemsNewestFirst().isEmpty)
         #expect(harness.recorder.events.last == .cleared)
     }
 
     @Test("清空历史分批读取，超过一批也能清干净")
-    func clearAllInBatches() throws {
+    func clearAllInBatches() async throws {
         let harness = try ClipboardHarness { context in
             for index in 0..<1100 {
                 context.insert(ClipboardItem(kind: .text, text: "item \(index)"))
@@ -405,7 +405,7 @@ struct ClipboardCaptureTests {
             try context.save()
         }
 
-        harness.manager.clearAll()
+        await harness.manager.clearAll()
 
         #expect(harness.itemsNewestFirst().isEmpty)
         #expect(harness.recorder.events.last == .cleared)

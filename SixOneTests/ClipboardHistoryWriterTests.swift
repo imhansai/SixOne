@@ -23,7 +23,6 @@ struct ClipboardHistoryWriterTests {
         let writer = ClipboardHistoryWriter(
             container: container,
             events: events,
-            retentionInterval: { nil },
             persist: { throw SaveFailure.simulated }
         )
         writer.onPersistenceFailure = { [recorder] in recorder.failures.append($0) }
@@ -56,7 +55,6 @@ struct ClipboardHistoryWriterTests {
         let writer = ClipboardHistoryWriter(
             container: container,
             events: events,
-            retentionInterval: { nil },
             persist: { throw SaveFailure.simulated }
         )
         writer.onPersistenceFailure = { [recorder] in recorder.failures.append($0) }
@@ -82,11 +80,7 @@ struct ClipboardHistoryWriterTests {
         let events = ClipboardHistoryEventBus()
         let recorder = Recorder()
         events.observe { [recorder] in recorder.events.append($0) }
-        let writer = ClipboardHistoryWriter(
-            container: container,
-            events: events,
-            retentionInterval: { nil }
-        )
+        let writer = ClipboardHistoryWriter(container: container, events: events)
 
         let originalRecency = item.recencyID
         #expect(writer.setAlias(id: item.id, alias: "  工作\n邮箱  "))

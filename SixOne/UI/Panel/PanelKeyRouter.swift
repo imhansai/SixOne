@@ -101,6 +101,11 @@ enum PanelKeyRouter {
             return .standard
         }
 
+        // 预览里没有删除，⌘⌫ 直接吞掉。
+        if context.isPreviewing, press.matches(PanelKeyCode.delete, .command) {
+            return .panel(.consume)
+        }
+
         // 只读文本预览聚焦：查找、全选、有选区的 ⌘C 交给 NSTextView。
         if context.isPreviewTextFocused {
             if press.isTextFindingCommand { return .standard }

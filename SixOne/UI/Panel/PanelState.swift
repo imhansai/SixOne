@@ -116,6 +116,12 @@ struct HistoryListScrollCommand: Equatable {
     var isSelectionAlreadyAtEndpoint: Bool = false
 }
 
+/// 删除后接替选中的目标。
+struct PendingDeletionSelection: Equatable {
+    let deletedID: UUID
+    let replacementID: UUID?
+}
+
 /// 键盘导航状态：选中、待滚动行与列表发布的首个完整可见行。
 @Observable
 final class NavigationState {
@@ -126,6 +132,8 @@ final class NavigationState {
     private(set) var scrollRevision = 0
     /// 复制 / 粘贴置顶后，等条目到第 0 行再滚进视野（用 id，置顶会换行号）。
     private(set) var pendingRevealItemID: UUID?
+    /// 删除后待接替的行；等被删行离开窗口再应用。
+    @ObservationIgnored private(set) var pendingDeletionSelection: PendingDeletionSelection?
     /// 首个完整可见行；会话锚点与「是否滚到深处」都只认它。
     var fullyVisibleFirstIndex = 0
     /// 完整可见行范围；快速粘贴编号与视口同源。
@@ -165,6 +173,17 @@ final class NavigationState {
 
     func clearPendingReveal() {
         pendingRevealItemID = nil
+    }
+
+    func requestSelectionAfterDeletion(deletedID: UUID, replacementID: UUID?) {
+        pendingDeletionSelection = PendingDeletionSelection(
+            deletedID: deletedID,
+            replacementID: replacementID
+        )
+    }
+
+    func clearPendingDeletionSelection() {
+        pendingDeletionSelection = nil
     }
 
     private func enqueueScrollCommand(_ command: HistoryListScrollCommand) {

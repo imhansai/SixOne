@@ -17,10 +17,16 @@ final class ClipboardManager {
     private let thumbnails: ClipboardThumbnailScheduler
     private let capturePipeline: ClipboardCapturePipeline
     private let imageLoader: ClipboardImageLoader
+    private let maintenance: HistoryMaintenance
+    private let settings: SettingsStore
     private var maintenanceTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
     private var activationObserver: NSObjectProtocol?
     private let logger = AppLog.logger("ClipboardManager")
+
+    /// 面板可见时维护挂起，收起后补跑；无面板的测试默认允许。
+    var canRunMaintenance: () -> Bool = { true }
+    private var isMaintenanceDeferred = false
 
     let events: ClipboardHistoryEventBus
 
@@ -42,12 +48,7 @@ final class ClipboardManager {
     ) {
         self.events = events
 
-        let writer = ClipboardHistoryWriter(
-            container: container,
-            events: events,
-            retentionInterval: { [weak settings] in settings?.historyRetention.interval },
-            externalByteBudget: { [weak settings] in settings?.storageLimit.bytes }
-        )
+        let writer = ClipboardHistoryWriter(container: container, events: events)
         let fileAccess = ClipboardFileAccess(writer: writer)
         let pasteboard = pasteboard ?? SystemPasteboard()
         let pasteboardWriter = ClipboardPasteboardWriter(
@@ -79,6 +80,8 @@ final class ClipboardManager {
         self.thumbnails = thumbnails
         self.capturePipeline = capturePipeline
         self.imageLoader = ClipboardImageLoader(container: container)
+        self.maintenance = HistoryMaintenance(container: container)
+        self.settings = settings
 
         writer.onStored = { [weak self] item, entry in
             self?.thumbnails.schedule(for: item, entry: entry)
@@ -189,14 +192,31 @@ final class ClipboardManager {
     private var isMaintaining = false
     private var maintenanceTask: Task<Void, Never>?
 
-    /// 同一时刻只跑一轮维护；保留期变更与定时器撞车时不重复扫库。
-    /// 先按保留期裁时间，再按外部存储预算裁字节。
+    /// 同一时刻只跑一轮维护；面板可见时挂起，收起后补跑。
     func performMaintenance() async {
+        guard canRunMaintenance() else {
+            isMaintenanceDeferred = true
+            return
+        }
         guard !isMaintaining else { return }
         isMaintaining = true
         defer { isMaintaining = false }
-        await writer.trimToRetention()
-        await writer.trimToExternalStorageBudget()
+
+        let retention = await maintenance.trimToRetention(interval: settings.historyRetention.interval)
+        let budget = await maintenance.trimToExternalStorageBudget(limit: settings.storageLimit.bytes)
+        if let reason = retention.failureReason ?? budget.failureReason {
+            onPersistenceFailure?(reason)
+        }
+        if retention.deletedCount + budget.deletedCount > 0 {
+            events.post(.trimmed)
+        }
+    }
+
+    /// 面板收起时补跑挂起的维护。
+    func runDeferredMaintenanceIfNeeded() {
+        guard isMaintenanceDeferred else { return }
+        isMaintenanceDeferred = false
+        Task { await performMaintenance() }
     }
 
     /// 等启动维护落定；测试判断最终状态时用。
@@ -204,8 +224,14 @@ final class ClipboardManager {
         await maintenanceTask?.value
     }
 
-    func clearAll() {
-        writer.clearAll()
+    func clearAll() async {
+        let result = await maintenance.clearAll()
+        if let reason = result.failureReason {
+            onPersistenceFailure?(reason)
+        }
+        if result.deletedCount > 0 {
+            events.post(.cleared)
+        }
     }
 
     @discardableResult

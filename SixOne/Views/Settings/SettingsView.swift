@@ -18,7 +18,7 @@ struct SettingsView: View {
     let settings: SettingsStore
     let hotKeyManager: HotKeyManager
     let loadStorageStats: () async -> HistoryStorageStats
-    let onClearHistory: () -> Void
+    let onClearHistory: () async -> Void
 
     var body: some View {
         // 折叠交给自带的 sidebarToggle，收起后仍能把侧栏叫回来。
