@@ -23,7 +23,7 @@ struct ItemCommandTests {
         ])
     }
 
-    @Test("图片条目：没有纯文本版本，多出别名、分享与打开")
+    @Test("图片条目：没有纯文本版本，多出别名、分享、打开与在访达中显示")
     func imageRowLayout() {
         #expect(ItemCommand.rowMenuLayout(for: .image) == [
             .command(.paste),
@@ -33,6 +33,7 @@ struct ItemCommandTests {
             .separator,
             .command(.share),
             .command(.open),
+            .command(.revealInFinder),
             .separator,
             .command(.delete),
         ])
@@ -41,6 +42,18 @@ struct ItemCommandTests {
     @Test("文件条目与图片条目同构（都只有整条的文件动作）")
     func fileRowLayoutMatchesImage() {
         #expect(ItemCommand.rowMenuLayout(for: .file) == ItemCommand.rowMenuLayout(for: .image))
+    }
+
+    @Test("定位不到文件时，行菜单不出现「在访达中显示」")
+    func revealItemIsOmittedWhenUnavailable() {
+        #expect(
+            !ItemCommand.rowMenuLayout(for: .file, canReveal: false)
+                .contains(.command(.revealInFinder))
+        )
+        #expect(
+            !ItemCommand.rowMenuLayout(for: .image, canReveal: false)
+                .contains(.command(.revealInFinder))
+        )
     }
 
     @Test("链接条目：有纯文本版本，也可以打开、分享")

@@ -124,12 +124,15 @@ final class ClipboardFileAccess {
         }
     }
 
-    /// 可安全交给外部应用的源文件。
+    /// 可安全交给外部应用的源文件：先校验视图持有的 URL，再按 bookmark 解析。
     func accessibleSourceURL(for item: ClipboardItem, scopedURL: URL?) -> URL? {
-        if let scopedURL { return scopedURL }
-        guard let path = item.filePath,
-              FileManager.default.isReadableFile(atPath: path) else { return nil }
-        return URL(fileURLWithPath: path)
+        if let scopedURL, FileManager.default.isReadableFile(atPath: scopedURL.path) {
+            return scopedURL
+        }
+        return SecurityScopedFileAccess.resolvedURLWithoutAccess(
+            bookmark: item.securityScopeBookmark,
+            path: item.filePath
+        )
     }
 
     /// 统一的打开落点：源文件可安全访问时优先，否则按类型回退。
@@ -144,12 +147,34 @@ final class ClipboardFileAccess {
         case .text:
             return openWithURL(for: item)
         case .file:
-            return preferredFileURL ?? fileURL(for: item)
+            if let preferredFileURL,
+               FileManager.default.isReadableFile(atPath: preferredFileURL.path) {
+                return preferredFileURL
+            }
+            guard item.fileCount <= 1 else { return nil }
+            return fileURL(for: item)
         case .link:
             return fileURL(for: item)
         case .color:
             return nil
         }
+    }
+
+    /// 在访达中定位用：只要路径存在即可，不要求可读。
+    func revealURLs(for item: ClipboardItem) -> [URL] {
+        guard item.kind == .file || item.kind == .image else { return [] }
+        let resolved = resolvedFileURLs(for: item)
+        return item.allFilePaths.enumerated().compactMap { index, path in
+            if resolved.indices.contains(index), let url = resolved[index] { return url }
+            guard FileManager.default.fileExists(atPath: path) else { return nil }
+            return URL(fileURLWithPath: path)
+        }
+    }
+
+    /// 菜单能否「在访达中显示」：能定位到任一文件即可。
+    func canRevealExternally(id: UUID) -> Bool {
+        guard let item = writer.fetchLightItem(id: id) else { return false }
+        return !revealURLs(for: item).isEmpty
     }
 
     /// 菜单能否「打开 / 分享」：只读轻量列，不把 imageData 读进内存。

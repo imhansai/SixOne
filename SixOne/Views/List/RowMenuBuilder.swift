@@ -40,7 +40,9 @@ struct RowMenuBuilder {
 
     /// 顺序、标题、快捷键都在 `ItemCommand` 里，这里只渲染。
     private func menuItems(for row: HistoryRow, anchor: RowInteractionHost.HostView) -> [NSMenuItem] {
-        let layout = ItemCommand.rowMenuLayout(for: row.kind)
+        let canReveal = (row.kind == .file || row.kind == .image)
+            && manager.canRevealExternally(id: row.id)
+        let layout = ItemCommand.rowMenuLayout(for: row.kind, canReveal: canReveal)
         let needsReachableFile = layout.contains { entry in
             guard case .command(let command) = entry else { return false }
             return command.requiresReachableFile
@@ -104,10 +106,11 @@ struct RowMenuBuilder {
             actions?.panelDidRequestShare(id: row.id, anchorView: anchor)
         case .open:
             actions?.panelDidRequestOpen(id: row.id)
+        case .revealInFinder:
+            actions?.panelDidRequestReveal(id: row.id)
         case .delete:
             deleteRow(row.id)
-        case .preview, .revealInFinder:
-            // 当前行菜单布局不含这两项；将来加入时先补动作，避免菜单点了没反应。
+        case .preview:
             assertionFailure("行菜单动作未接线：\(command.rawValue)")
         }
     }

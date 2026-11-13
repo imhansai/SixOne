@@ -355,6 +355,14 @@ final class ClipboardManager {
         fileAccess.canOpenExternally(id: id)
     }
 
+    func revealURLs(for item: ClipboardItem) -> [URL] {
+        fileAccess.revealURLs(for: item)
+    }
+
+    func canRevealExternally(id: UUID) -> Bool {
+        fileAccess.canRevealExternally(id: id)
+    }
+
     // MARK: - 取数
 
     func fetchFullItem(id: UUID) -> ClipboardItem? {

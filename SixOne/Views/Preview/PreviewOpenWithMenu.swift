@@ -13,6 +13,7 @@ struct PreviewOpenWithMenu: View {
     let enumerationURL: URL
     let resolveOpenURL: () -> URL?
     let resolveRevealURL: () -> URL?
+    let canReveal: Bool
     let onOpenInShottr: (() -> Void)?
     let onHandOff: () -> Void
 
@@ -43,8 +44,10 @@ struct PreviewOpenWithMenu: View {
                     Divider()
                 }
             }
-            Button(Localizer.string("Reveal in Finder")) {
-                revealInFinder()
+            if canReveal {
+                Button(Localizer.string("Reveal in Finder")) {
+                    revealInFinder()
+                }
             }
         } label: {
             PreviewHeaderMenuLabel(systemImage: "arrow.up.forward.app")

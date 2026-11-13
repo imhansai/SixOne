@@ -97,19 +97,21 @@ final class PanelItemActions {
 
     func revealCurrentItem() {
         guard let item = currentItem else { return }
-        if item.kind == .file, item.fileCount > 1 {
-            let urls = manager.resolvedFileURLs(for: item).compactMap { $0 }
-            guard !urls.isEmpty else {
-                noticeState.showMissingFile(item.displayTitle)
-                return
-            }
-            NSWorkspace.shared.activateFileViewerSelecting(urls)
-        } else if let url = manager.fileURL(for: item, allowTemporaryCopy: false) {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        } else {
+        reveal(item)
+    }
+
+    func revealItem(id: UUID) {
+        guard let item = manager.fetchLightItem(id: id) else { return }
+        reveal(item)
+    }
+
+    private func reveal(_ item: ClipboardItem) {
+        let urls = manager.revealURLs(for: item)
+        guard !urls.isEmpty else {
             noticeState.showMissingFile(item.displayTitle)
             return
         }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
         handOff()
     }
 
@@ -140,7 +142,14 @@ final class PanelItemActions {
             }
             return
         }
-        NSWorkspace.shared.open(url)
+        guard NSWorkspace.shared.open(url) else {
+            if item.kind == .link {
+                noticeState.message = String(format: Localizer.string("Cannot open link: %@"), url.absoluteString)
+            } else {
+                noticeState.showInaccessibleFile(item.displayTitle)
+            }
+            return
+        }
         handOff()
     }
 

@@ -16,6 +16,7 @@ struct PreviewHeaderView: View {
     let openWithEnumerationURL: URL?
     let resolveOpenWithURL: () -> URL?
     let resolveRevealURL: () -> URL?
+    let canReveal: Bool
     let linkURL: URL?
     let isGroupFileView: Bool
 
@@ -187,6 +188,7 @@ struct PreviewHeaderView: View {
             enumerationURL: url,
             resolveOpenURL: resolveOpenWithURL,
             resolveRevealURL: resolveRevealURL,
+            canReveal: canReveal,
             onOpenInShottr: shottrAction,
             onHandOff: { shellActions?.panelDidHandOffToExternalApp() }
         )

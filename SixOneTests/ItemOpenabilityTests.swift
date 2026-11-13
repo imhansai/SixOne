@@ -105,6 +105,78 @@ struct ItemOpenabilityTests {
         )
     }
 
+    @Test("统一打开落点：源文件改名后按 bookmark 找回原文件")
+    func openTargetFollowsBookmark() throws {
+        let harness = try ClipboardHarness()
+        let directory = try TemporaryFiles.makeDirectory(prefix: "sixone-target-bookmark")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let original = directory.appendingPathComponent("原名.png")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: original)
+        let bookmark = try #require(
+            SecurityScopedFileAccess.payload(forPaths: [original.path]).bookmark
+        )
+        let item = ClipboardItem(
+            kind: .image,
+            imageData: Data([0x89, 0x50, 0x4E, 0x47]),
+            filePath: original.path,
+            contentType: "PNG"
+        )
+        item.securityScopeBookmark = bookmark
+        try insert(item, into: harness)
+
+        let renamed = directory.appendingPathComponent("改名.png")
+        try FileManager.default.moveItem(at: original, to: renamed)
+
+        let url = try #require(
+            harness.manager.openTarget(for: item, scopedSourceURL: nil, preferredFileURL: nil)
+        )
+        #expect(url.resolvingSymlinksInPath().path == renamed.resolvingSymlinksInPath().path)
+    }
+
+    @Test("统一打开落点：不可读的 scoped URL 不被直接采用")
+    func openTargetRejectsStaleScopedURL() throws {
+        let harness = try ClipboardHarness()
+        let file = try TemporaryFiles.makeFile(prefix: "sixone-target-scoped", contents: "hello")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let item = try insert(
+            ClipboardItem(kind: .image, filePath: file.path, contentType: "PNG"),
+            into: harness
+        )
+        let stale = URL(fileURLWithPath: "/definitely/not/here.png")
+
+        let url = try #require(
+            harness.manager.openTarget(for: item, scopedSourceURL: stale, preferredFileURL: nil)
+        )
+        #expect(url.resolvingSymlinksInPath().path == file.resolvingSymlinksInPath().path)
+    }
+
+    @Test("统一打开落点：过期的预览文件 URL 回退到 bookmark")
+    func openTargetRecoversFromStalePreferredURL() throws {
+        let harness = try ClipboardHarness()
+        let directory = try TemporaryFiles.makeDirectory(prefix: "sixone-target-preferred")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let original = directory.appendingPathComponent("a.txt")
+        try Data("x".utf8).write(to: original)
+        let bookmark = try #require(
+            SecurityScopedFileAccess.payload(forPaths: [original.path]).bookmark
+        )
+        let item = ClipboardItem(kind: .file, filePath: original.path)
+        item.securityScopeBookmark = bookmark
+        try insert(item, into: harness)
+
+        let renamed = directory.appendingPathComponent("b.txt")
+        try FileManager.default.moveItem(at: original, to: renamed)
+
+        let url = try #require(
+            harness.manager.openTarget(
+                for: item,
+                scopedSourceURL: nil,
+                preferredFileURL: original
+            )
+        )
+        #expect(url.resolvingSymlinksInPath().path == renamed.resolvingSymlinksInPath().path)
+    }
+
     @Test("链接条目：URL 可解析 → 可打开")
     func linkItemIsOpenable() throws {
         let harness = try ClipboardHarness()
@@ -218,36 +290,46 @@ struct ItemOpenabilityTests {
     @Test("统一打开落点：文件组使用当前文件 URL")
     func openTargetUsesPreferredFileURL() throws {
         let harness = try ClipboardHarness()
+        let file = try TemporaryFiles.makeFile(prefix: "sixone-target-current", contents: "x")
+        defer { try? FileManager.default.removeItem(at: file) }
         let item = try insert(
-            ClipboardItem(kind: .file, filePaths: ["/a", "/b"]),
+            ClipboardItem(kind: .file, filePaths: ["/a", file.path]),
             into: harness
         )
-        let preferred = URL(fileURLWithPath: "/tmp/current.png")
 
         #expect(
             harness.manager.openTarget(
                 for: item,
                 scopedSourceURL: nil,
-                preferredFileURL: preferred
-            ) == preferred
+                preferredFileURL: file
+            ) == file
+        )
+    }
+
+    @Test("统一打开落点：文件组的过期 URL 不替换成组内其他文件")
+    func openTargetDoesNotSubstituteGroupFile() throws {
+        let harness = try ClipboardHarness()
+        let file = try TemporaryFiles.makeFile(prefix: "sixone-target-group", contents: "x")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let item = try insert(
+            ClipboardItem(kind: .file, filePaths: [file.path, "/b"]),
+            into: harness
+        )
+
+        #expect(
+            harness.manager.openTarget(
+                for: item,
+                scopedSourceURL: nil,
+                preferredFileURL: URL(fileURLWithPath: "/definitely/not/here.png")
+            ) == nil
         )
     }
 
     @Test("文件存在但不可读：视为不可打开、不可分享")
     func unreadableFileIsNotOpenable() throws {
         let harness = try ClipboardHarness()
-        let file = try TemporaryFiles.makeFile(prefix: "sixone-unreadable", contents: "x")
-        defer {
-            try? FileManager.default.setAttributes(
-                [.posixPermissions: 0o600],
-                ofItemAtPath: file.path
-            )
-            try? FileManager.default.removeItem(at: file)
-        }
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o000],
-            ofItemAtPath: file.path
-        )
+        let file = try makeUnreadableFile(prefix: "sixone-unreadable")
+        defer { removeUnreadableFile(file) }
         let item = try insert(ClipboardItem(kind: .file, filePath: file.path), into: harness)
 
         #expect(!harness.manager.canOpenExternally(id: item.id))
@@ -259,6 +341,29 @@ struct ItemOpenabilityTests {
             ) == nil
         )
         #expect(harness.manager.startScopedShareURL(for: item) == nil)
+    }
+
+    @Test("在访达中显示：存在但不可读的文件仍可定位")
+    func unreadableFileIsStillRevealable() throws {
+        let harness = try ClipboardHarness()
+        let file = try makeUnreadableFile(prefix: "sixone-reveal")
+        defer { removeUnreadableFile(file) }
+        let item = try insert(ClipboardItem(kind: .file, filePath: file.path), into: harness)
+
+        #expect(harness.manager.canRevealExternally(id: item.id))
+        #expect(!harness.manager.revealURLs(for: item).isEmpty)
+    }
+
+    @Test("在访达中显示：内联图片没有源文件 → 不可定位")
+    func inlineImageIsNotRevealable() throws {
+        let harness = try ClipboardHarness()
+        let item = try insert(
+            ClipboardItem(kind: .image, imageData: Data([0x89, 0x50, 0x4E, 0x47]), contentType: "PNG"),
+            into: harness
+        )
+
+        #expect(!harness.manager.canRevealExternally(id: item.id))
+        #expect(harness.manager.revealURLs(for: item).isEmpty)
     }
 
     @Test("打开方式枚举：文本用 0 字节占位文件")
@@ -376,6 +481,23 @@ struct ItemOpenabilityTests {
     }
 
     // MARK: - 夹具
+
+    private func makeUnreadableFile(prefix: String) throws -> URL {
+        let file = try TemporaryFiles.makeFile(prefix: prefix, contents: "x")
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o000],
+            ofItemAtPath: file.path
+        )
+        return file
+    }
+
+    private func removeUnreadableFile(_ file: URL) {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: file.path
+        )
+        try? FileManager.default.removeItem(at: file)
+    }
 
     private func makeTIFFData() throws -> Data {
         let bitmap = try #require(NSBitmapImageRep(

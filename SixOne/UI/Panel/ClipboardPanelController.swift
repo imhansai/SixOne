@@ -217,6 +217,10 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         itemActions.requestOpen(id: id)
     }
 
+    func panelDidRequestReveal(id: UUID) {
+        itemActions.revealItem(id: id)
+    }
+
     func panelDidRequestOpenInShottr(id: UUID) {
         itemActions.openInShottr(id: id)
     }
@@ -338,13 +342,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         let item = itemActions.currentItem
         let kind = item?.kind
         let hasOpenTarget = item.map { manager.canOpenExternally(id: $0.id) } ?? false
-        let hasRevealableFile: Bool = {
-            guard let item else { return false }
-            if item.kind == .file, item.fileCount > 1 {
-                return manager.resolvedFileURLs(for: item).contains { $0 != nil }
-            }
-            return manager.fileURL(for: item, allowTemporaryCopy: false) != nil
-        }()
+        let hasRevealableFile = item.map { manager.canRevealExternally(id: $0.id) } ?? false
         let focusedGroupFileIndex: Int? = {
             guard let item, item.kind == .file, item.fileCount > 1 else { return nil }
             return previewState.focusedGroupFileIndex

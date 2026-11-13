@@ -23,6 +23,7 @@ struct PreviewDetailView: View {
     @State private var groupPositionRevealID = 0
     @State private var pathBarReachable = true
     @State private var openWithEnumerationURL: URL?
+    @State private var revealAvailable = false
 
     init(item: ClipboardItem, context: PanelContext, onItemEdited: (() -> Void)? = nil) {
         self.item = item
@@ -55,6 +56,7 @@ struct PreviewDetailView: View {
                     openWithEnumerationURL: openWithEnumerationURL,
                     resolveOpenWithURL: resolveOpenWithURL,
                     resolveRevealURL: resolveRevealURL,
+                    canReveal: revealAvailable,
                     linkURL: linkURL,
                     isGroupFileView: isGroupFileView
                 )
@@ -96,7 +98,7 @@ struct PreviewDetailView: View {
         .clipShape(.rect(cornerRadius: cornerRadius))
         .task(id: metadataTaskID) {
             refreshPathBarReachability()
-            refreshOpenWithURL()
+            refreshOpenWithState()
             revealGroupFilePosition()
             await metadata.refreshFileMetadata(fileURL: fileURL, groupURLs: groupURLs)
         }
@@ -237,7 +239,7 @@ struct PreviewDetailView: View {
         pathBarReachable = FileManager.default.fileExists(atPath: url?.path ?? location.path)
     }
 
-    private func refreshOpenWithURL() {
+    private func refreshOpenWithState() {
         openWithEnumerationURL = switch item.kind {
         case .image, .text:
             context.manager.openWithEnumerationURL(
@@ -246,6 +248,17 @@ struct PreviewDetailView: View {
             )
         case .file: fileURL
         case .link, .color: nil
+        }
+        revealAvailable = switch item.kind {
+        case .file:
+            if item.fileCount > 1 {
+                fileURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+            } else {
+                !context.manager.revealURLs(for: item).isEmpty
+            }
+        case .image:
+            !context.manager.revealURLs(for: item).isEmpty
+        case .text, .link, .color: false
         }
     }
 
@@ -259,12 +272,15 @@ struct PreviewDetailView: View {
     }
 
     private func resolveRevealURL() -> URL? {
-        if item.kind == .file { return fileURL }
-        if item.kind == .image,
-           let source = context.manager.fileURL(for: item, allowTemporaryCopy: false) {
-            return source
+        switch item.kind {
+        case .file:
+            if item.fileCount > 1 { return fileURL }
+            return context.manager.revealURLs(for: item).first
+        case .image:
+            return context.manager.revealURLs(for: item).first
+        case .text, .link, .color:
+            return nil
         }
-        return resolveOpenWithURL()
     }
 
     private func revealGroup() {
@@ -349,7 +365,7 @@ struct PreviewDetailView: View {
             richText: TextPreviewView.rtfData(from: content)
         )
         metadata.invalidateTextStats()
-        refreshOpenWithURL()
+        refreshOpenWithState()
         onItemEdited?()
     }
 }

@@ -73,8 +73,8 @@ extension ItemCommand {
         return Localizer.string(AliasNormalizer.displayable(alias) == nil ? "Add Alias…" : "Edit Alias…")
     }
 
-    /// 列表行菜单布局：有纯文本形态的条目多两条 ⇧ 备用项，链接/图片/文件多分享与打开。
-    static func rowMenuLayout(for kind: ClipboardItemKind) -> [ItemMenuEntry] {
+    /// 列表行菜单布局：链接/图片/文件多分享与打开，图片与文件另有在访达中显示。
+    static func rowMenuLayout(for kind: ClipboardItemKind, canReveal: Bool = true) -> [ItemMenuEntry] {
         var entries: [ItemMenuEntry] = []
         entries.append(.command(.paste))
         if kind.hasPlainText { entries.append(.command(.pasteAsPlainText)) }
@@ -86,6 +86,9 @@ extension ItemCommand {
             entries.append(.separator)
             entries.append(.command(.share))
             entries.append(.command(.open))
+            if (kind == .file || kind == .image), canReveal {
+                entries.append(.command(.revealInFinder))
+            }
         }
         entries.append(.separator)
         entries.append(.command(.delete))
