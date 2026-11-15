@@ -182,7 +182,7 @@ struct ClipboardRowView: View {
     private var leadingIcon: some View {
         switch row.kind {
         case .image:
-            ZStack(alignment: .bottomTrailing) {
+            Group {
                 if let thumb = thumbnail {
                     Image(nsImage: thumb)
                         .resizable()
@@ -191,8 +191,8 @@ struct ClipboardRowView: View {
                 } else {
                     systemIcon("photo")
                 }
-                sourceBadge
             }
+            .rowSourceBadge(row.sourceAppBundleIdentifier)
         case .file:
             ZStack(alignment: .bottomTrailing) {
                 if let thumb = thumbnail {
@@ -200,29 +200,25 @@ struct ClipboardRowView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 40, height: 40)
-                } else if let path = row.filePath {
-                    Image(nsImage: context.caches.preview.image(for: "file-\(path)", loader: { NSWorkspace.shared.icon(forFile: path) }) ?? NSImage())
+                } else if let path = row.filePath, let icon = context.caches.fileIcon(for: path) {
+                    Image(nsImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 38, height: 38)
                 } else {
                     systemIcon("doc")
                 }
-                sourceBadge
             }
+            .rowSourceBadge(row.sourceAppBundleIdentifier)
             .overlay(alignment: .bottomLeading) { fileCountBadge }
         case .text:
-            ZStack(alignment: .bottomTrailing) {
-                textFileIcon
-                sourceBadge
-            }
+            textFileIcon
+                .rowSourceBadge(row.sourceAppBundleIdentifier)
         case .link:
-            ZStack(alignment: .bottomTrailing) {
-                linkIcon
-                sourceBadge
-            }
+            linkIcon
+                .rowSourceBadge(row.sourceAppBundleIdentifier)
         case .color:
-            ZStack(alignment: .bottomTrailing) {
+            Group {
                 if let thumb = thumbnail {
                     Image(nsImage: thumb)
                         .resizable()
@@ -235,8 +231,8 @@ struct ClipboardRowView: View {
                 } else {
                     systemIcon("paintpalette")
                 }
-                sourceBadge
             }
+            .rowSourceBadge(row.sourceAppBundleIdentifier)
         }
     }
 
@@ -283,19 +279,6 @@ struct ClipboardRowView: View {
             .font(.system(size: 24, weight: .light))
             .foregroundStyle(.secondary)
             .frame(width: 44, height: 44)
-    }
-
-    @ViewBuilder
-    private var sourceBadge: some View {
-        if let bundleID = row.sourceAppBundleIdentifier,
-           let appURL = context.caches.query.appURL(for: bundleID) {
-            Image(nsImage: context.caches.preview.image(for: "app-\(bundleID)", loader: { NSWorkspace.shared.icon(forFile: appURL.path) }) ?? NSImage())
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 18, height: 18)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                .offset(x: 4, y: 4)
-        }
     }
 
     @ViewBuilder

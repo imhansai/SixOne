@@ -157,29 +157,12 @@ struct FileGroupRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
             }
-            sourceBadge
         }
+        .rowSourceBadge(sourceAppBundleIdentifier)
     }
 
     private var fileIcon: NSImage? {
-        context.caches.preview.image(for: "file-\(currentPath)") {
-            NSWorkspace.shared.icon(forFile: currentPath)
-        }
-    }
-
-    @ViewBuilder
-    private var sourceBadge: some View {
-        if let bundleID = sourceAppBundleIdentifier,
-           let appURL = context.caches.query.appURL(for: bundleID) {
-            Image(nsImage: context.caches.preview.image(for: "app-\(bundleID)") {
-                NSWorkspace.shared.icon(forFile: appURL.path)
-            } ?? NSImage())
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 18, height: 18)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                .offset(x: 4, y: 4)
-        }
+        context.caches.fileIcon(for: currentPath)
     }
 
     private var detailText: String {
