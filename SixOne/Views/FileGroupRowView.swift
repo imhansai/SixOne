@@ -138,31 +138,9 @@ struct FileGroupRow: View {
         onCommand(.copy, index)
     }
 
-    @ViewBuilder
     private var leadingIcon: some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let thumbnail = state.thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 40, height: 40)
-            } else if let icon = fileIcon {
-                Image(nsImage: icon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 38, height: 38)
-            } else {
-                Image(systemName: "doc")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-            }
-        }
-        .rowSourceBadge(sourceAppBundleIdentifier)
-    }
-
-    private var fileIcon: NSImage? {
-        context.caches.fileIcon(for: currentPath)
+        RowFileIcon(thumbnail: state.thumbnail, path: currentPath)
+            .rowSourceBadge(sourceAppBundleIdentifier)
     }
 
     private var detailText: String {

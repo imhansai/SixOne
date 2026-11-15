@@ -187,30 +187,16 @@ struct ClipboardRowView: View {
                     Image(nsImage: thumb)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 40, height: 40)
+                        .frame(width: RowIconMetrics.thumbnail, height: RowIconMetrics.thumbnail)
                 } else {
                     systemIcon("photo")
                 }
             }
             .rowSourceBadge(row.sourceAppBundleIdentifier)
         case .file:
-            ZStack(alignment: .bottomTrailing) {
-                if let thumb = thumbnail {
-                    Image(nsImage: thumb)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 40, height: 40)
-                } else if let path = row.filePath, let icon = context.caches.fileIcon(for: path) {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 38, height: 38)
-                } else {
-                    systemIcon("doc")
-                }
-            }
-            .rowSourceBadge(row.sourceAppBundleIdentifier)
-            .overlay(alignment: .bottomLeading) { fileCountBadge }
+            RowFileIcon(thumbnail: thumbnail, path: row.filePath)
+                .rowSourceBadge(row.sourceAppBundleIdentifier)
+                .overlay(alignment: .bottomLeading) { fileCountBadge }
         case .text:
             textFileIcon
                 .rowSourceBadge(row.sourceAppBundleIdentifier)
