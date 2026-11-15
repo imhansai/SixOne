@@ -33,10 +33,6 @@ struct ClipboardRowView: View {
     @Environment(\.locale) private var locale
     @Environment(PanelContext.self) private var context
 
-    private var iconShadowColor: Color {
-        RowAppearance.iconShadowColor(for: colorScheme)
-    }
-
     var body: some View {
         ListRowShell(
             rowID: row.id,
@@ -192,7 +188,6 @@ struct ClipboardRowView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 40, height: 40)
-                        .shadow(color: iconShadowColor, radius: 3, y: 1)
                 } else {
                     systemIcon("photo")
                 }
@@ -205,13 +200,11 @@ struct ClipboardRowView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 40, height: 40)
-                        .shadow(color: iconShadowColor, radius: 3, y: 1)
                 } else if let path = row.filePath {
                     Image(nsImage: context.caches.preview.image(for: "file-\(path)", loader: { NSWorkspace.shared.icon(forFile: path) }) ?? NSImage())
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 38, height: 38)
-                        .shadow(color: iconShadowColor, radius: 3, y: 1)
                 } else {
                     systemIcon("doc")
                 }
@@ -239,7 +232,6 @@ struct ClipboardRowView: View {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                         )
-                        .shadow(color: iconShadowColor, radius: 3, y: 1)
                 } else {
                     systemIcon("paintpalette")
                 }
@@ -258,7 +250,6 @@ struct ClipboardRowView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 38, height: 38)
-                .shadow(color: iconShadowColor, radius: 3, y: 1)
         } else {
             systemIcon("doc.text")
         }
@@ -273,7 +264,6 @@ struct ClipboardRowView: View {
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(Color(nsColor: .textBackgroundColor))
-                    .shadow(color: iconShadowColor, radius: 3, y: 1)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -304,7 +294,6 @@ struct ClipboardRowView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 18, height: 18)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                .shadow(color: iconShadowColor, radius: 2, y: 1)
                 .offset(x: 4, y: 4)
         }
     }

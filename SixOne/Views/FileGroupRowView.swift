@@ -81,17 +81,12 @@ struct FileGroupRow: View {
     let onCommand: (GroupFileCommand, Int) -> Void
     let onShare: (Int, NSView) -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(PanelContext.self) private var context
 
     private var index: Int { file.index }
     private var url: URL? { file.url }
     private var name: String { file.name }
     private var currentPath: String { url?.path ?? file.path }
-
-    private var iconShadowColor: Color {
-        RowAppearance.iconShadowColor(for: colorScheme)
-    }
 
     var body: some View {
         ListRowShell(
@@ -151,13 +146,11 @@ struct FileGroupRow: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 40, height: 40)
-                    .shadow(color: iconShadowColor, radius: 3, y: 1)
             } else if let icon = fileIcon {
                 Image(nsImage: icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 38, height: 38)
-                    .shadow(color: iconShadowColor, radius: 3, y: 1)
             } else {
                 Image(systemName: "doc")
                     .font(.system(size: 24, weight: .light))
@@ -185,7 +178,6 @@ struct FileGroupRow: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 18, height: 18)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                .shadow(color: iconShadowColor, radius: 2, y: 1)
                 .offset(x: 4, y: 4)
         }
     }

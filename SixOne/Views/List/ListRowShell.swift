@@ -14,16 +14,10 @@ enum RowAccessibility {
     }
 }
 
-/// 行外观常量：两套列表共用，避免选中底色和图标阴影各自漂移。
+/// 行外观常量：两套列表共用，避免选中底色各自漂移。
 enum RowAppearance {
     static let activeSelection = Color(.sRGB, red: 84 / 255, green: 140 / 255, blue: 235 / 255)
     static let inactiveSelection = Color(.sRGB, white: 0.45).opacity(0.30)
-
-    static func iconShadowColor(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.24)
-            : Color.black.opacity(0.30)
-    }
 }
 
 /// 行容器：首末行留白折进行高，内容只提供图标与标题/副标题。
