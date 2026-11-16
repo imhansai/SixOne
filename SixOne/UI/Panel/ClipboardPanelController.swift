@@ -344,7 +344,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         let hasOpenTarget = item.map { manager.canOpenExternally(id: $0.id) } ?? false
         let hasRevealableFile = item.map { manager.canRevealExternally(id: $0.id) } ?? false
         let focusedGroupFileIndex: Int? = {
-            guard let item, item.kind == .file, item.fileCount > 1 else { return nil }
+            guard previewState.mode.isGroupPreview else { return nil }
             return previewState.focusedGroupFileIndex
         }()
         return PanelCommandAvailability(
@@ -352,7 +352,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             isTextEditing: isTextEditing,
             hasSelection: item != nil,
             selectionKind: kind,
-            isPreviewing: previewState.item != nil,
+            isPreviewing: previewState.mode.isPreviewing,
             focusedGroupFileIndex: focusedGroupFileIndex,
             canOpenExternally: hasOpenTarget,
             hasRevealableFile: hasRevealableFile,
@@ -419,9 +419,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         guard let sender = sender as? NSMenuItem else { return }
         // 文件组列表的 Find… 该聚焦组内筛选框，而不是被内容盖住的外层搜索。
         if sender.tag == NSTextFinder.Action.showFindInterface.rawValue,
-           let item = previewState.item,
-           item.kind == .file, item.fileCount > 1,
-           previewState.groupFileIndex == nil {
+           previewState.mode.isGroupOverview {
             searchState.resignFocus()
             previewState.focusGroupFilter()
             return
@@ -504,7 +502,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         // 预览或文本输入中，⌥⌘F 不该把焦点塞给被盖住的搜索框。
         if let command,
            PanelMenuCommandTable.command(for: command.action) == .focusSearch,
-           previewState.item != nil || isTextEditing {
+           previewState.mode.isPreviewing || isTextEditing {
             return false
         }
 
@@ -531,7 +529,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
     /// 预览中、输入法组合或有模态时，Tab 交给系统。
     var shouldCycleFocusWithTab: Bool {
-        guard previewState.item == nil else { return false }
+        guard previewState.mode == .historyList else { return false }
         guard !confirmationState.isPresenting, panel.attachedSheet == nil else { return false }
         return !isIMEComposing
     }
@@ -547,12 +545,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     // MARK: - 标准 action（interpretKeyEvents 的落点）
 
     @objc func moveUp(_ sender: Any?) {
-        if let item = previewState.item, item.kind == .file, item.fileCount > 1,
-           previewState.groupFileIndex == nil,
+        if previewState.mode.isGroupOverview,
            previewState.moveGroupSelection(by: -1, visibleIndices: previewState.visibleGroupFileIndices) {
             return
         }
-        if previewState.item != nil {
+        if previewState.mode.isPreviewing {
             cursor.stepPreview(direction: -1)
             return
         }
@@ -564,12 +561,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     @objc func moveDown(_ sender: Any?) {
-        if let item = previewState.item, item.kind == .file, item.fileCount > 1,
-           previewState.groupFileIndex == nil,
+        if previewState.mode.isGroupOverview,
            previewState.moveGroupSelection(by: 1, visibleIndices: previewState.visibleGroupFileIndices) {
             return
         }
-        if previewState.item != nil {
+        if previewState.mode.isPreviewing {
             cursor.stepPreview(direction: 1)
             return
         }
@@ -581,7 +577,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     @objc func moveRight(_ sender: Any?) {}
 
     @objc func moveToBeginningOfDocument(_ sender: Any?) {
-        if previewState.item != nil {
+        if previewState.mode.isPreviewing {
             cursor.jumpPreview(to: 0)
         } else {
             cursor.jumpToBeginning()
@@ -589,7 +585,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     @objc func moveToEndOfDocument(_ sender: Any?) {
-        if previewState.item != nil {
+        if previewState.mode.isPreviewing {
             cursor.jumpPreviewToOldest()
         } else {
             cursor.jumpToOldest()

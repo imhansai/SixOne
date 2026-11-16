@@ -34,12 +34,6 @@ final class FileGroupPreviewState {
         !filterText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 预览停在组内列表。
-    func isOverview(item: ClipboardItem?) -> Bool {
-        guard let item, item.kind == .file, item.fileCount > 1 else { return false }
-        return fileIndex == nil
-    }
-
     func visibleIndices(item: ClipboardItem?, scopedURLs: [ScopedFileURL?]) -> [Int] {
         guard let item, item.kind == .file, item.fileCount > 1 else { return [] }
         let all = Array(0..<item.fileCount)

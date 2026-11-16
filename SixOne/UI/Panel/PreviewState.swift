@@ -101,7 +101,7 @@ final class PreviewState {
     var isGroupFilterActive: Bool { group.isFilterActive }
 
     /// 预览停在组内列表。
-    var isGroupOverview: Bool { group.isOverview(item: presentation.item) }
+    var isGroupOverview: Bool { mode.isGroupOverview }
 
     var visibleGroupFileIndices: [Int] {
         group.visibleIndices(item: presentation.item, scopedURLs: presentation.scopedGroupURLs)

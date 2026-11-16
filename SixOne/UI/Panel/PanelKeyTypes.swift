@@ -109,9 +109,8 @@ enum PanelKeyAction: Equatable {
 
 /// 解释一次按键所需的现场状态；字段全有默认值，测试只写关心的那几个。
 struct PanelKeyContext {
-    var previewKind: ClipboardItemKind?
-    var previewFileCount = 0
-    var isViewingGroupFile = false
+    /// 导航层级；编辑、搜索与筛选焦点由下面的标志单独表达。
+    var mode: PanelMode = .historyList
     /// 当前聚焦的组内文件下标（单文件态是正在看的，列表态是选中的）。
     var focusedGroupFileIndex: Int?
     /// 这一方向还有行可去；移动本身由执行侧做。
@@ -139,12 +138,14 @@ struct PanelKeyContext {
     /// 文本视图里选中了文字；⌘C 应复制选区而非整条。
     var hasPreviewTextSelection = false
 
-    var isPreviewing: Bool { previewKind != nil }
+    var isPreviewing: Bool { mode.isPreviewing }
 
     /// 预览停在文件组列表。
-    var isGroupOverview: Bool {
-        previewKind == .file && previewFileCount > 1 && !isViewingGroupFile
-    }
+    var isGroupOverview: Bool { mode.isGroupOverview }
+
+    var isViewingGroupFile: Bool { mode.isGroupFile }
+
+    var isGroupPreview: Bool { mode.isGroupPreview }
 
     /// 列表可快速粘贴；预览仅文件组总览。
     var canQuickPasteVisibleRow: Bool {

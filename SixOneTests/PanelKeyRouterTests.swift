@@ -10,6 +10,8 @@ import Testing
 
 @Suite("面板 pre-dispatch 路由")
 struct PanelKeyRouterTests {
+    private let previewID = UUID()
+
     private func route(
         _ key: UInt16,
         _ modifiers: NSEvent.ModifierFlags = [],
@@ -19,6 +21,20 @@ struct PanelKeyRouterTests {
             PanelKeyPress(keyCode: key, modifiers: modifiers),
             context: context
         )
+    }
+
+    private func itemPreview() -> PanelKeyContext {
+        var context = PanelKeyContext()
+        context.mode = .itemPreview(id: previewID)
+        return context
+    }
+
+    private func groupContext(viewing: Bool = false, index: Int = 0) -> PanelKeyContext {
+        var context = PanelKeyContext()
+        context.mode = viewing
+            ? .groupFile(itemID: previewID, index: index)
+            : .groupOverview(itemID: previewID)
+        return context
     }
 
     @Test("模态与输入法：所有键走标准路径")
@@ -39,7 +55,7 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.tab, .shift) == .panel(.cycleFocus(backwards: true)))
         #expect(route(PanelKeyCode.tab, [], PanelKeyContext(isSearchFocused: true))
             == .panel(.cycleFocus(backwards: false)))
-        #expect(route(PanelKeyCode.tab, [], PanelKeyContext(previewKind: .text)) == .standard)
+        #expect(route(PanelKeyCode.tab, [], itemPreview()) == .standard)
     }
 
     @Test("Control+Tab 是 HIG 的组间切换：与 Tab 一样走焦点循环")
@@ -47,7 +63,7 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.tab, .control) == .panel(.cycleFocus(backwards: false)))
         #expect(route(PanelKeyCode.tab, [.control, .shift]) == .panel(.cycleFocus(backwards: true)))
 
-        #expect(route(PanelKeyCode.tab, .control, PanelKeyContext(previewKind: .text)) == .standard)
+        #expect(route(PanelKeyCode.tab, .control, itemPreview()) == .standard)
 
         let repeated = PanelKeyPress(keyCode: PanelKeyCode.tab, modifiers: .control, isARepeat: true)
         #expect(PanelKeyRouter.route(repeated, context: PanelKeyContext()) == .panel(.consume))
@@ -82,7 +98,7 @@ struct PanelKeyRouterTests {
 
     @Test("查找栏：Esc 关栏，查找命令转交文本视图，其余放行")
     func findBar() {
-        var context = PanelKeyContext(previewKind: .text)
+        var context = itemPreview()
         context.isPreviewFindBarVisible = true
         #expect(route(PanelKeyCode.escape, [], context) == .panel(.dismissPreviewFindBar))
         #expect(route(PanelKeyCode.f, .command, context)
@@ -94,7 +110,7 @@ struct PanelKeyRouterTests {
 
     @Test("编辑态：Esc 取消编辑，其余交给 NSTextView；面板非 key 时不抢 Esc")
     func editing() {
-        var context = PanelKeyContext(previewKind: .text)
+        var context = itemPreview()
         context.isEditing = true
         #expect(route(PanelKeyCode.escape, [], context) == .panel(.cancelEditing))
         #expect(route(PanelKeyCode.left, [], context) == .standard)
@@ -105,7 +121,7 @@ struct PanelKeyRouterTests {
 
     @Test("预览中 ⌘⌫ 吞掉，删除只在列表进行")
     func deleteInPreview() {
-        let preview = PanelKeyContext(previewKind: .text)
+        let preview = itemPreview()
         #expect(route(PanelKeyCode.delete, .command, preview) == .panel(.consume))
         #expect(route(PanelKeyCode.delete, [], preview) == .standard)
         #expect(route(PanelKeyCode.delete, .command) == .standard)
@@ -113,7 +129,8 @@ struct PanelKeyRouterTests {
 
     @Test("只读文本预览聚焦：查找、全选、有选区的 ⌘C 放行")
     func previewTextFocused() {
-        var context = PanelKeyContext(previewKind: .text, hasPreviewTextSelection: true)
+        var context = itemPreview()
+        context.hasPreviewTextSelection = true
         context.isPreviewTextFocused = true
         #expect(route(PanelKeyCode.f, .command, context) == .standard)
         #expect(route(PanelKeyCode.g, .command, context) == .standard)
@@ -127,7 +144,7 @@ struct PanelKeyRouterTests {
 
     @Test("文件组：列表内移动、到边缘停住；查看态用 ↑/↓ 换文件，Esc/Space 退列表")
     func fileGroup() {
-        var list = PanelKeyContext(previewKind: .file, previewFileCount: 4)
+        var list = groupContext()
         list.canMoveGroupSelectionUp = true
         list.canMoveGroupSelectionDown = true
         #expect(route(PanelKeyCode.up, [], list) == .panel(.moveGroupSelection(by: -1)))
@@ -157,8 +174,7 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.up, [], list) == .panel(.focusGroupFilter))
         list.focusedGroupFileIndex = nil
 
-        var viewing = PanelKeyContext(previewKind: .file, previewFileCount: 4)
-        viewing.isViewingGroupFile = true
+        var viewing = groupContext(viewing: true)
         viewing.focusedGroupFileIndex = 1
         #expect(route(PanelKeyCode.up, [], viewing) == .panel(.stepGroupFile(by: -1)))
         #expect(route(PanelKeyCode.down, [], viewing) == .panel(.stepGroupFile(by: 1)))
@@ -172,7 +188,7 @@ struct PanelKeyRouterTests {
 
     @Test("文件组筛选框聚焦：⌘F 幂等聚焦，↑ 吞掉，其余交给 SearchField")
     func groupFilterFocused() {
-        var context = PanelKeyContext(previewKind: .file, previewFileCount: 4)
+        var context = groupContext()
         context.isGroupFilterFocused = true
 
         #expect(route(PanelKeyCode.f, .command, context) == .panel(.focusGroupFilter),
@@ -193,7 +209,8 @@ struct PanelKeyRouterTests {
 
     @Test("预览：方向、Space、Return、Esc、⌘↑/⌘↓、⌘F 在响应链之前接管")
     func previewKeys() {
-        let context = PanelKeyContext(previewKind: .file, previewFileCount: 1, hasSelection: true)
+        var context = itemPreview()
+        context.hasSelection = true
         #expect(route(PanelKeyCode.escape, [], context) == .panel(.escape))
         #expect(route(PanelKeyCode.space, [], context) == .panel(.closePreview))
         #expect(route(PanelKeyCode.returnKey, [], context)
@@ -222,14 +239,15 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.returnKey, .shift, PanelKeyContext(isSearchFocused: true))
             == .standard, "搜索框聚焦时 Return 交给 delegate")
 
-        let preview = PanelKeyContext(previewKind: .text, hasSelection: true)
+        var preview = itemPreview()
+        preview.hasSelection = true
         #expect(route(PanelKeyCode.returnKey, .shift, preview)
             == .panel(.activateSelectedItem(asPlainText: true)))
     }
 
     @Test("文本预览聚焦时 ⌘F 放行给查找栏")
     func previewFindWhenTextFocused() {
-        var context = PanelKeyContext(previewKind: .text)
+        var context = itemPreview()
         context.isPreviewTextFocused = true
         #expect(route(PanelKeyCode.f, .command, context) == .standard)
     }
@@ -243,7 +261,7 @@ struct PanelKeyRouterTests {
         let tab = PanelKeyPress(keyCode: PanelKeyCode.tab, isARepeat: true)
         #expect(PanelKeyRouter.route(tab, context: PanelKeyContext()) == .panel(.consume))
 
-        let preview = PanelKeyContext(previewKind: .text)
+        let preview = itemPreview()
         let esc = PanelKeyPress(keyCode: PanelKeyCode.escape, isARepeat: true)
         #expect(PanelKeyRouter.route(esc, context: preview) == .panel(.consume))
 
@@ -277,11 +295,11 @@ struct PanelKeyRouterTests {
             == .panel(.pasteVisibleRow(offset: 0, asPlainText: false)),
                 "搜索框聚焦时也能直接粘")
 
-        var preview = PanelKeyContext(previewKind: .text)
+        var preview = itemPreview()
         preview.visibleRowCount = 3
         #expect(route(PanelKeyCode.one, .command, preview) == .standard)
 
-        var editing = PanelKeyContext(previewKind: .text)
+        var editing = itemPreview()
         editing.isEditing = true
         editing.visibleRowCount = 3
         #expect(route(PanelKeyCode.one, .command, editing) == .standard)
@@ -293,7 +311,7 @@ struct PanelKeyRouterTests {
 
     @Test("文件组总览：⌘+数字粘贴组内可见文件；单文件态与普通预览让路")
     func quickPasteGroupFiles() {
-        var group = PanelKeyContext(previewKind: .file, previewFileCount: 4)
+        var group = groupContext()
         group.visibleRowCount = 3
         #expect(route(PanelKeyCode.one, .command, group)
             == .panel(.pasteVisibleGroupFile(offset: 0, asPlainText: false)))
@@ -307,13 +325,12 @@ struct PanelKeyRouterTests {
             == .panel(.pasteVisibleGroupFile(offset: 0, asPlainText: false)),
                 "组筛选框聚焦时也能直接粘")
 
-        var viewing = PanelKeyContext(previewKind: .file, previewFileCount: 4)
-        viewing.isViewingGroupFile = true
+        var viewing = groupContext(viewing: true)
         viewing.visibleRowCount = 3
         #expect(route(PanelKeyCode.one, .command, viewing) == .standard,
                 "组内单文件态没有编号直粘")
 
-        var single = PanelKeyContext(previewKind: .file, previewFileCount: 1)
+        var single = itemPreview()
         single.visibleRowCount = 3
         #expect(route(PanelKeyCode.one, .command, single) == .standard,
                 "单文件条目仍走普通预览，不进入组内快速粘贴")

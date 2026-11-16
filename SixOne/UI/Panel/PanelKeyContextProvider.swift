@@ -32,10 +32,7 @@ struct PanelKeyContextProvider {
 
         context.isEditing = previewState.isEditing
 
-        let previewItem = previewState.item
-        context.previewKind = previewItem?.kind
-        context.previewFileCount = previewItem?.fileCount ?? 0
-        context.isViewingGroupFile = previewState.groupFileIndex != nil
+        context.mode = previewState.mode
         let visibleGroupIndices = previewState.visibleGroupFileIndices
         context.canMoveGroupSelectionUp = previewState.canMoveGroupSelection(by: -1, visibleIndices: visibleGroupIndices)
         context.canMoveGroupSelectionDown = previewState.canMoveGroupSelection(by: 1, visibleIndices: visibleGroupIndices)

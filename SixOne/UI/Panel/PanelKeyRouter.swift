@@ -116,7 +116,7 @@ enum PanelKeyRouter {
         }
 
         // 文件组预览只在组内导航，不切换外层历史。
-        if context.previewKind == .file, context.previewFileCount > 1 {
+        if context.isGroupPreview {
             let viewing = context.isViewingGroupFile
             if viewing {
                 // 单文件态：↑/↓ 换文件，Space / Esc 回总览；←/→ 留给内容本身。
@@ -227,7 +227,7 @@ enum PanelKeyRouter {
     }
 
     private static func focusedGroupFileIndex(_ context: PanelKeyContext) -> Int? {
-        guard context.previewKind == .file, context.previewFileCount > 1 else { return nil }
+        guard context.isGroupPreview else { return nil }
         return context.focusedGroupFileIndex
     }
 }
