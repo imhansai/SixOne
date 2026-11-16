@@ -8,7 +8,7 @@ A macOS menu-bar clipboard history tool. Press `⌃⌘V` (default) to open a flo
 - Native search field: filters body text, titles, and file paths, debounced 200 ms before querying the store.
 - Previews: text (rich text, in-place editing, `⌘F` find), image (zoom / pan), file (image / video / web page / PDF / text / Quick Look), multi-file list (filter by name / path), link, colour. File and on-disk image previews show the source path at the bottom, draggable or copyable in one click.
 - Item actions: copy back to the clipboard, paste into the previous app (synthesizes `⌘V`), share, open with the default app / reveal in Finder, delete, and plain-text copy / paste (`⇧⌘C` / `⇧⌘V`). If the previous app has quit or does not come forward, SixOne beeps and leaves the item on the clipboard rather than pasting into whatever is frontmost.
-- Settings: ignored apps, retention, storage limit, global hotkey, language (Follow System / English / Chinese (Simplified)), launch at login, clear history. A language change takes effect after a restart.
+- Settings: ignored apps, retention, storage limit, global hotkey, launch at login, clear history. Language follows the per-app language set in System Settings → General → Language & Region → Applications; reopen SixOne after changing it.
 
 ## Screenshots
 
@@ -142,7 +142,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 741 tests in 120 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 748 tests in 121 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 System resources are driven by doubles under `SixOneTests/Support/`: `FakePasteboard`, `InMemorySettingsStorage`, `FakeHotKeyEventMonitor`, `FakeHistoryRepository`, `OffscreenHost` / `TestPanel`, `TemporaryFiles`, and `Wait`. The benchmarks in `HistoryBenchmarkTests` / `MigrationBenchmarkTests` run only when `.benchmark-history` exists at the repo root or `/tmp/sixone-benchmark` does; delete the switch file afterwards.
 

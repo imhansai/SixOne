@@ -11,6 +11,8 @@ import Testing
 @Suite("图片预览")
 @MainActor
 struct ImagePreviewTests {
+    /// 并发跑时布局/解码可能排队，等待与其它 UI 用例一致。
+    private static let asyncTimeout: Duration = .seconds(10)
     @Test("body 重算不复位缩放（列表图片条目的真路径）")
     func keepsZoomAcrossBodyUpdates() async throws {
         let context = try TestPanel.context()
@@ -18,7 +20,9 @@ struct ImagePreviewTests {
         let (hosting, window) = Self.makeHost(item: item, context: context)
         defer { window.orderOut(nil) }
 
-        let appeared = await Wait.until { Self.previewView(in: hosting)?.bitmapPixelSize ?? 0 > 0 }
+        let appeared = await Wait.until(timeout: Self.asyncTimeout) {
+            Self.previewView(in: hosting)?.bitmapPixelSize ?? 0 > 0
+        }
         let view = try #require(
             appeared ? Self.previewView(in: hosting) : nil,
             "没等到图片预览视图"
@@ -140,7 +144,7 @@ struct ImagePreviewTests {
         #expect(view.bitmapPixelSize == 40, "基准档没进去")
 
         view.zoom(by: 2, centeredAt: .zero)
-        let upgraded = await Wait.until { view.bitmapPixelSize == 400 }
+        let upgraded = await Wait.until(timeout: Self.asyncTimeout) { view.bitmapPixelSize == 400 }
         #expect(upgraded, "放大后没换成细档位")
         let zoomed = view.magnification
 
@@ -166,16 +170,16 @@ struct ImagePreviewTests {
         #expect(view.bitmapPixelSize == 1536, "基准档没进去")
 
         view.zoom(by: 2, centeredAt: .zero)
-        #expect(await Wait.until { view.bitmapPixelSize == 3072 }, "放大后没换成细档")
+        #expect(await Wait.until(timeout: Self.asyncTimeout) { view.bitmapPixelSize == 3072 }, "放大后没换成细档")
         let zoomed = view.magnification
 
         view.zoom(by: 0.25, centeredAt: .zero)   // 缩回适配窗口以下
-        #expect(await Wait.until { view.bitmapPixelSize == 1536 }, "缩回去没放掉细档（大位图一直挂着）")
+        #expect(await Wait.until(timeout: Self.asyncTimeout) { view.bitmapPixelSize == 1536 }, "缩回去没放掉细档（大位图一直挂着）")
         #expect(view.magnification != zoomed, "换回基准档动了缩放")
         #expect(view.displaySize == NSSize(width: 1200, height: 800), "显示尺寸被改了")
 
         view.zoom(by: 8, centeredAt: .zero)
-        #expect(await Wait.until { view.bitmapPixelSize == 3072 }, "再放大换不回细档")
+        #expect(await Wait.until(timeout: Self.asyncTimeout) { view.bitmapPixelSize == 3072 }, "再放大换不回细档")
     }
 
     @Test("源图给不出更细的档就不去解（小图放大不白解一次）")
@@ -282,7 +286,7 @@ struct ImagePreviewTests {
         defer { window.orderOut(nil) }
 
         let view = try await Self.waitForFittedView(in: hosting)
-        let appeared = await Wait.until { Self.layerContents(of: view) != nil }
+        let appeared = await Wait.until(timeout: Self.asyncTimeout) { Self.layerContents(of: view) != nil }
         #expect(appeared, "位图没进 layer.contents")
 
         // 改视口并显示后 contents 仍须在；直接赋 contents 会被 AppKit 顶掉，走 updateLayer。
@@ -377,12 +381,12 @@ struct ImagePreviewTests {
     }
 
     private static func waitForView(in hosting: NSView) async throws -> ZoomableImageScrollView {
-        let appeared = await Wait.until { previewView(in: hosting) != nil }
+        let appeared = await Wait.until(timeout: Self.asyncTimeout) { previewView(in: hosting) != nil }
         return try #require(appeared ? previewView(in: hosting) : nil, "没找到图片预览视图")
     }
 
     private static func waitForFittedView(in hosting: NSView) async throws -> ZoomableImageScrollView {
-        let fitted = await Wait.until { previewView(in: hosting)?.isAtFit ?? false }
+        let fitted = await Wait.until(timeout: Self.asyncTimeout) { previewView(in: hosting)?.isAtFit ?? false }
         return try #require(fitted ? previewView(in: hosting) : nil, "没等到适配窗口")
     }
 

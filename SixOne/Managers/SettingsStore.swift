@@ -73,7 +73,7 @@ struct IgnoredApplication: Codable, Identifiable, Hashable {
 
     /// 展示名按当前界面语言实时解析，避免固化首次运行语言。
     var displayName: String {
-        let key = "\(path)#\(RuntimeLanguage.shared.current.rawValue)" as NSString
+        let key = path as NSString
         if let cached = Self.displayNameCache.object(forKey: key) {
             return cached as String
         }
@@ -144,14 +144,6 @@ final class SettingsStore {
         maintenanceObservers.append(handler)
     }
 
-    /// 语言偏好；重启后生效。
-    var language: AppLanguage {
-        didSet {
-            guard language != oldValue else { return }
-            preferences.language = language
-        }
-    }
-
     var ignoredApps: [IgnoredApplication] {
         didSet {
             guard ignoredApps != oldValue else { return }
@@ -167,7 +159,6 @@ final class SettingsStore {
         self.preferences = preferences
         historyRetention = preferences.historyRetention
         storageLimit = preferences.storageLimit
-        language = preferences.language
         ignoredApps = Self.loadIgnoredApps(from: preferences)
     }
 

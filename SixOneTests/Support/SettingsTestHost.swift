@@ -22,7 +22,6 @@ enum SettingsTestHost {
             loadStorageStats: { HistoryStorageStats(itemCount: 0, byteCount: 0) },
             onClearHistory: {}
         )
-        .environment(RuntimeLanguage.shared)
         .environment(\.locale, RuntimeLanguage.shared.locale)
 
         let window = NSWindow(

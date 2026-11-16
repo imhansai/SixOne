@@ -8,9 +8,6 @@ import AppKit
 @main
 enum SixOneApp {
     static func main() {
-        // 创建 NSApplication 前恢复运行时语言，让 Bundle 与系统文案按所选语言解析。
-        RuntimeLanguage.shared.restoreFromDefaults()
-        RuntimeLanguage.shared.applyToDefaults()
         // 关掉 AppKit 的 AutoFill 启发式，避免唤出面板时闪候选浮窗；键未公开，可能失效。
         UserDefaults.standard.register(defaults: ["NSAutoFillHeuristicsEnabled": false])
         let app = NSApplication.shared

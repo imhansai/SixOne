@@ -4,7 +4,6 @@
 
 import AppKit
 import SwiftData
-import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
     private var statusBarController: StatusBarController?
@@ -157,31 +156,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppMenuTarget {
     private func openAbout() {
         NSApp.activate()
         NSApp.orderFrontStandardAboutPanel(nil)
-    }
-}
-
-/// 应用重启：派生子进程后终止自己，让新实例读入新语言。
-enum AppRelauncher {
-    private static let logger = AppLog.logger("Relaunch")
-
-    /// 派生子进程后终止自己；失败要留日志。
-    static func relaunch() {
-        // 马上要终止进程，显式冲一次偏好写入。
-        UserDefaults.standard.synchronize()
-        guard let executableURL = Bundle.main.executableURL else {
-            logger.error("重启失败：取不到自身的可执行文件路径")
-            return
-        }
-        let process = Process()
-        process.executableURL = executableURL
-        do {
-            try process.run()
-        } catch {
-            logger.error("重启失败：无法派生新进程 \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            NSApp.terminate(nil)
-        }
     }
 }

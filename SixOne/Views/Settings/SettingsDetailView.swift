@@ -18,7 +18,7 @@ struct SettingsDetailView: View {
         Form {
             switch navigation.current {
             case .general:
-                GeneralSettingsView(settings: settings)
+                GeneralSettingsView()
             case .storage:
                 StorageSettingsView(
                     settings: settings,

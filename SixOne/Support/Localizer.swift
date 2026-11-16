@@ -4,12 +4,10 @@
 
 import Foundation
 
-/// 按运行时语言解析本地化字符串，切换后立即生效。
+/// 按进程当前语言解析本地化字符串；语言由 macOS 在启动时选定。
 enum Localizer {
     static func string(_ key: String.LocalizationValue, table: String? = nil) -> String {
-        var resource = LocalizedStringResource(key, table: table)
-        resource.locale = RuntimeLanguage.shared.locale
-        return String(localized: resource)
+        String(localized: key, table: table)
     }
 
     static func groupTitle(firstName: String, count: Int) -> String {

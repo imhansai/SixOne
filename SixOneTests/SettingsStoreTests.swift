@@ -16,13 +16,12 @@ struct SettingsStoreTests {
         return (SettingsStore(storage: storage), storage)
     }
 
-    @Test("读：没存过时落到默认档位、跟随系统语言与默认忽略列表")
+    @Test("读：没存过时落到默认档位与默认忽略列表")
     func defaultsWhenNothingStored() {
         let (store, _) = makeStore()
 
         #expect(store.historyRetention == SettingsStore.defaultRetention)
         #expect(store.storageLimit == SettingsStore.defaultStorageLimit)
-        #expect(store.language == .system)
         #expect(store.ignoredApps.map(\.bundleIdentifier) == [
             "com.apple.Passwords", "com.apple.keychainaccess",
         ])
@@ -33,13 +32,11 @@ struct SettingsStoreTests {
         let (store, _) = makeStore([
             "historyRetention": 99,
             "historyStorageLimit": 99,
-            "appLanguage": "kl",
             "privacyIgnoredApps": Data("not json".utf8),
         ])
 
         #expect(store.historyRetention == SettingsStore.defaultRetention)
         #expect(store.storageLimit == SettingsStore.defaultStorageLimit)
-        #expect(store.language == .system)
         #expect(store.ignoredApps.count == 2, "解码失败回落默认忽略列表")
     }
 
@@ -110,17 +107,6 @@ struct SettingsStoreTests {
 
         #expect(storage.setCount == writesAfterFirst, "相等赋值不该再写盘")
         #expect(notified == 0, "相等赋值不该再触发一次裁剪")
-    }
-
-    @Test("相等赋值对语言同样不落盘")
-    func equalLanguageAssignmentIsIgnored() {
-        let (store, storage) = makeStore()
-        store.language = .english
-        let writesAfterFirst = storage.setCount
-
-        store.language = .english
-
-        #expect(storage.setCount == writesAfterFirst)
     }
 
     @Test("写：忽略列表按 JSON 落盘，重开能读回来")

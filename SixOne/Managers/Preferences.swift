@@ -2,7 +2,7 @@
 //  Preferences.swift
 //  SixOne
 //
-//  配置读写门面：保留既有 UserDefaults key，设置、快捷键与语言共用一套存储口。
+//  配置读写门面：保留既有 UserDefaults key，设置与快捷键共用一套存储口。
 //
 
 import Foundation
@@ -57,16 +57,6 @@ final class Preferences {
         }
         set {
             storage.set(newValue.rawValue, forKey: Key.storageLimit)
-        }
-    }
-
-    var language: AppLanguage {
-        get {
-            let raw = storage.object(forKey: AppLanguage.storageKey) as? String ?? ""
-            return AppLanguage(rawValue: raw) ?? .system
-        }
-        set {
-            storage.set(newValue.rawValue, forKey: AppLanguage.storageKey)
         }
     }
 

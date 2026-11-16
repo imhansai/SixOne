@@ -1,7 +1,7 @@
 //
 //  HotKeyManagerTests.swift
 //  SixOneTests
-//  快捷键状态机：成功 / 被占用 / 改键失败回滚；用假注册口，不碰真实快捷键。
+//  快捷键状态机：成功 / 被占用与重试 / 改键失败回滚；用假注册口，不碰真实快捷键。
 
 import AppKit
 import Carbon.HIToolbox
@@ -14,16 +14,19 @@ struct HotKeyManagerTests {
     private func makeManager(
         registrar: FakeHotKeyRegistrar,
         monitor: FakeHotKeyEventMonitor = FakeHotKeyEventMonitor(),
-        storage: SettingsStorage = InMemorySettingsStorage()
+        storage: SettingsStorage = InMemorySettingsStorage(),
+        scheduleRetry: @escaping HotKeyRetryScheduling = { _ in }
     ) -> HotKeyManager {
         HotKeyManager(
             onTrigger: {},
             registrar: registrar,
             eventMonitor: monitor,
             storage: storage,
-            systemHotKeys: { [] }
+            systemHotKeys: { [] },
+            scheduleRetry: scheduleRetry
         )
     }
+
 
     @Test("启动注册成功：可用")
     func reapplySucceeds() {
@@ -140,12 +143,13 @@ struct HotKeyManagerTests {
         #expect(secondCount == 1)
     }
 
-    @Test("实例释放时卸载按键处理器，不留进程级残留")
+    @Test("实例释放时卸载按键处理器与系统注册，不留进程级残留")
     func releasesEventHandlerOnDeinit() {
+        let registrar = FakeHotKeyRegistrar()
         let monitor = FakeHotKeyEventMonitor()
         var manager: HotKeyManager? = HotKeyManager(
             onTrigger: {},
-            registrar: FakeHotKeyRegistrar(),
+            registrar: registrar,
             eventMonitor: monitor,
             storage: InMemorySettingsStorage()
         )
@@ -155,6 +159,7 @@ struct HotKeyManagerTests {
         manager = nil
 
         #expect(monitor.released == [0])
+        #expect(registrar.releaseCount == 1)
     }
 
     @Test("处理器装不上：快捷键仍算注册成功，下次注册再兜一次")
@@ -282,6 +287,126 @@ struct HotKeyManagerTests {
         #expect(!manager.isRegistered)
         #expect(!manager.isActive)
         #expect(registrar.registered.isEmpty)
+    }
+
+    @Test("启动注册被占用：按调度重试，占用解除后自动恢复")
+    func retriesRegistrationWhenOccupied() {
+        let registrar = FakeHotKeyRegistrar()
+        registrar.isOccupied = { _, _ in true }
+        var retries: [@MainActor () -> Void] = []
+        let manager = makeManager(registrar: registrar) { action in
+            retries.append(action)
+        }
+
+        manager.reapply()
+        #expect(!manager.isRegistered)
+        #expect(retries.count == 1)
+
+        // 占用解除后，下一次重试应当接上。
+        registrar.isOccupied = { _, _ in false }
+        retries[0]()
+
+        #expect(manager.isRegistered)
+        #expect(manager.isActive)
+    }
+
+    @Test("重试成功会通知订阅者刷新状态栏")
+    func retrySuccessNotifiesObservers() {
+        let registrar = FakeHotKeyRegistrar()
+        registrar.isOccupied = { _, _ in true }
+        var retries: [@MainActor () -> Void] = []
+        let manager = makeManager(registrar: registrar) { retries.append($0) }
+        var changes = 0
+        manager.observeChanges { changes += 1 }
+
+        manager.reapply()
+        #expect(!manager.isRegistered)
+        #expect(changes == 0)
+
+        registrar.isOccupied = { _, _ in false }
+        retries[0]()
+
+        #expect(manager.isRegistered)
+        #expect(changes == 1)
+    }
+
+    @Test("一直注册失败：重试有上限，不会无限排")
+    func retriesAreBounded() {
+        let registrar = FakeHotKeyRegistrar()
+        registrar.isOccupied = { _, _ in true }
+        var retries: [@MainActor () -> Void] = []
+        let manager = makeManager(registrar: registrar) { action in
+            retries.append(action)
+        }
+
+        manager.reapply()
+        var executed = 0
+        while !retries.isEmpty, executed < 10 {
+            let action = retries.removeFirst()
+            action()
+            executed += 1
+        }
+
+        #expect(executed == 5)
+        #expect(retries.isEmpty, "达到上限后不应再排队")
+        #expect(registrar.registered.count == 6, "初始一次 + 五次重试")
+        #expect(!manager.isRegistered)
+    }
+
+    @Test("重试预算耗尽后改键，仍会重新排一次重试")
+    func rebindingResetsRetryBudget() {
+        let registrar = FakeHotKeyRegistrar()
+        registrar.isOccupied = { _, _ in true }
+        var retries: [@MainActor () -> Void] = []
+        let manager = makeManager(registrar: registrar) { retries.append($0) }
+        manager.reapply()
+        var executed = 0
+        while !retries.isEmpty, executed < 10 {
+            let action = retries.removeFirst()
+            action()
+            executed += 1
+        }
+        #expect(executed == 5)
+        #expect(retries.isEmpty)
+
+        #expect(!manager.update(keyCode: UInt16(kVK_ANSI_Y), modifiers: [.command, .option]))
+        #expect(retries.count == 1, "用户改键后应重新获得重试预算")
+    }
+
+    @Test("排队中的重试不强引用 manager")
+    func pendingRetryDoesNotRetainManager() {
+        let registrar = FakeHotKeyRegistrar()
+        registrar.isOccupied = { _, _ in true }
+        var retries: [@MainActor () -> Void] = []
+        var manager: HotKeyManager? = makeManager(registrar: registrar) { retries.append($0) }
+        weak var weakManager: HotKeyManager? = manager
+        manager?.reapply()
+        #expect(retries.count == 1)
+
+        manager = nil
+        #expect(weakManager == nil)
+
+        retries[0]()
+        #expect(registrar.registered.count == 1, "释放后重试不应再注册")
+    }
+
+    @Test("清除快捷键后，已排队的重试不再注册")
+    func pendingRetryAfterClearDoesNothing() {
+        let registrar = FakeHotKeyRegistrar()
+        registrar.isOccupied = { _, _ in true }
+        var retries: [@MainActor () -> Void] = []
+        let manager = makeManager(registrar: registrar) { action in
+            retries.append(action)
+        }
+        manager.reapply()
+        manager.clear()
+        let attempts = registrar.registered.count
+
+        retries[0]()
+
+        #expect(registrar.registered.count == attempts)
+        #expect(!manager.isConfigured)
+        #expect(!manager.isRegistered)
     }
 
     @Test("菜单快捷键：特殊键与修饰键按系统菜单格式给出")

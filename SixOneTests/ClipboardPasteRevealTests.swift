@@ -42,7 +42,6 @@ struct ClipboardPasteRevealTests {
                 ClipboardListView(context: context)
                     .environment(context)
                     .environment(\.locale, RuntimeLanguage.shared.locale)
-                    .environment(RuntimeLanguage.shared)
             ),
             size: ClipboardLayout.panelSize
         )

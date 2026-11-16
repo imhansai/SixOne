@@ -144,7 +144,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 }
 
-/// 读 `RuntimeLanguage`，语言变化时更新环境。
+/// 注入系统解析出的 locale。
 private struct SettingsRootView: View {
     let navigation: SettingsNavigation
     let settings: SettingsStore
@@ -162,6 +162,5 @@ private struct SettingsRootView: View {
             onClearHistory: onClearHistory
         )
         .environment(\.locale, language.locale)
-        .environment(language)
     }
 }

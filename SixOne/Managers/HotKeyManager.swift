@@ -33,6 +33,9 @@ struct SystemHotKeyRegistrar: HotKeyRegistering {
     }
 }
 
+/// 注册失败后的重试调度；测试注入手动队列。
+typealias HotKeyRetryScheduling = (@escaping @MainActor () -> Void) -> Void
+
 /// 全局快捷键：注册、修改、清除；失败只反映在 `isRegistered` 上。
 @Observable
 final class HotKeyManager {
@@ -44,7 +47,11 @@ final class HotKeyManager {
     private let eventMonitor: HotKeyEventMonitoring
     private let preferences: Preferences
     private let systemHotKeys: () -> [SystemSymbolicHotKey]
+    private let scheduleRetry: HotKeyRetryScheduling
     private let logger = AppLog.logger("HotKey")
+
+    private var registrationRetryCount = 0
+    private static let maxRegistrationRetries = 5
 
     var displayString: String
     var isConfigured: Bool
@@ -71,13 +78,19 @@ final class HotKeyManager {
         registrar: HotKeyRegistering? = nil,
         eventMonitor: HotKeyEventMonitoring? = nil,
         storage: SettingsStorage = UserDefaults.standard,
-        systemHotKeys: @escaping () -> [SystemSymbolicHotKey] = { SystemSymbolicHotKey.current() }
+        systemHotKeys: @escaping () -> [SystemSymbolicHotKey] = { SystemSymbolicHotKey.current() },
+        scheduleRetry: @escaping HotKeyRetryScheduling = { action in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                MainActor.assumeIsolated { action() }
+            }
+        }
     ) {
         self.onTrigger = onTrigger
         self.registrar = registrar ?? SystemHotKeyRegistrar()
         self.eventMonitor = eventMonitor ?? CarbonHotKeyEventMonitor()
         self.preferences = Preferences(storage: storage)
         self.systemHotKeys = systemHotKeys
+        self.scheduleRetry = scheduleRetry
         let saved = self.preferences.hotKey
         keyCode = saved.keyCode
         modifiers = saved.modifiers
@@ -123,6 +136,11 @@ final class HotKeyManager {
             return
         }
         registerCurrent()
+        if isRegistered {
+            notifyChanges()
+        } else {
+            scheduleRegistrationRetryIfNeeded()
+        }
     }
 
     /// 注册一组快捷键；失败时旧快捷键保持可用，返回 false。
@@ -146,6 +164,8 @@ final class HotKeyManager {
         ) else {
             return false
         }
+        // 用户主动改键，重试预算重新开始。
+        registrationRetryCount = 0
         let oldKeyCode = self.keyCode
         let oldModifiers = self.modifiers
         let oldDisplayString = displayString
@@ -191,6 +211,7 @@ final class HotKeyManager {
         if let handle = outcome.handle {
             registration = handle
             isRegistered = true
+            registrationRetryCount = 0
         } else {
             registration = nil
             isRegistered = false
@@ -199,6 +220,17 @@ final class HotKeyManager {
             )
         }
         return outcome.status
+    }
+
+    /// 注册失败后按调度重试，达到上限后停止。
+    private func scheduleRegistrationRetryIfNeeded() {
+        guard isConfigured, !isRegistered,
+              registrationRetryCount < Self.maxRegistrationRetries else { return }
+        registrationRetryCount += 1
+        scheduleRetry { [weak self] in
+            guard let self, self.isConfigured, !self.isRegistered else { return }
+            self.reapply()
+        }
     }
 
     /// 状态栏菜单的 key equivalent；无法用单字符表达时返回 nil。

@@ -2,18 +2,15 @@
 //  GeneralSettingsView.swift
 //  SixOne
 //
-//  设置 → 通用：开机自启、语言（重启后生效）与辅助功能授权。
+//  设置 → 通用：开机自启、语言入口与辅助功能授权。
 //
 
+import AppKit
 import SwiftUI
 
 struct GeneralSettingsView: View {
-    let settings: SettingsStore
-
-    @Environment(RuntimeLanguage.self) private var lang
+    private let language = RuntimeLanguage.shared
     @State private var launchAtLogin = LaunchAtLogin()
-
-    private var restartPending: Bool { settings.language != lang.current }
 
     var body: some View {
         Section("General") {
@@ -47,40 +44,39 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.red)
             }
 
-            Picker("Language", selection: languageBinding) {
-                ForEach(AppLanguage.allCases) { language in
-                    Text(language.title).tag(language)
-                }
+            HStack {
+                Text("Language")
+                Spacer()
+                Text(language.current.title)
+                    .foregroundStyle(.secondary)
             }
 
-            if restartPending {
-                HStack {
-                    Text("The language change will take effect after restarting SixOne.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Restart Now") {
-                        AppRelauncher.relaunch()
-                    }
-                }
+            Text(Localizer.string(
+                "SixOne follows the language set for it in macOS. Change it in System Settings → General → Language & Region → Applications, then reopen SixOne."
+            ))
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Button(Localizer.string("Open Language & Region")) {
+                openLanguageAndRegion()
             }
         }
 
         AccessibilityPermissionSection()
     }
 
-    private var languageBinding: Binding<AppLanguage> {
-        Binding(
-            get: { settings.language },
-            set: { settings.language = $0 }
-        )
+    /// 系统设置 → 通用 → 语言与地区；按 App 语言在页面底部的「应用程序」列表。
+    private func openLanguageAndRegion() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension")
+        else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
 private extension AppLanguage {
     var title: LocalizedStringKey {
         switch self {
-        case .system: "Follow System"
         case .english: "English"
         case .simplifiedChinese: "Chinese (Simplified)"
         }

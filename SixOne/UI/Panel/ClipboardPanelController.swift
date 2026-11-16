@@ -196,7 +196,6 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         ClipboardListView(context: context)
             .environment(context)
             .environment(\.locale, RuntimeLanguage.shared.locale)
-            .environment(RuntimeLanguage.shared)
     }
 
     // MARK: - 面板级动作（PanelActionHandler）

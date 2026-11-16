@@ -3,40 +3,18 @@
 //  SixOne
 
 import Foundation
-import Observation
 
-/// 运行时当前语言的可观察源，供 SwiftUI 与 AppKit/模型层读取。
-@Observable
+/// 当前进程实际生效的语言：由 macOS（含按 App 语言设置）在启动时解析。
+/// 旧版本写入的 `AppleLanguages` 保留，升级后语言不跳变。
 final class RuntimeLanguage {
     static let shared = RuntimeLanguage()
 
-    private let preferences = Preferences()
-    var current: AppLanguage = .system
+    let current: AppLanguage
 
-    var locale: Locale {
-        switch current {
-        case .system: .autoupdatingCurrent
-        case .english: Locale(identifier: "en")
-        case .simplifiedChinese: Locale(identifier: "zh-Hans")
-        }
-    }
+    /// 格式用 locale：macOS 会把按 App 语言与系统地区合成（如 en_CN）。
+    var locale: Locale { .autoupdatingCurrent }
 
-    var languageCode: String? {
-        current.languageCode
-    }
-
-    /// 启动时恢复；须在创建 NSApplication 前调用。
-    func restoreFromDefaults() {
-        current = preferences.language
-    }
-
-    /// 写入 AppleLanguages 使本次启动的系统文案切换；.system 时移除覆盖，须在创建 NSApplication 前调用。
-    func applyToDefaults() {
-        if let code = languageCode {
-            UserDefaults.standard.set([code], forKey: "AppleLanguages")
-        } else {
-            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
-        }
-        UserDefaults.standard.synchronize()
+    private init() {
+        current = AppLanguage.resolved(from: Bundle.main.preferredLocalizations)
     }
 }

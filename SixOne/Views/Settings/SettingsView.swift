@@ -104,10 +104,9 @@ extension SettingsView {
     }
 }
 
-// 预览要注入语言环境，否则通用页与快捷键录制器访问时会抛运行时错误。
+// 预览注入 locale，保证本地化与格式化与运行时一致。
 #Preview {
     SettingsView.preview
-        .environment(RuntimeLanguage.shared)
         .environment(\.locale, RuntimeLanguage.shared.locale)
 }
 #endif

@@ -29,7 +29,6 @@ struct ClipboardListViewTests {
             ClipboardListView(context: context)
                 .environment(context)
                 .environment(\.locale, RuntimeLanguage.shared.locale)
-                .environment(RuntimeLanguage.shared)
         )
 
         let (host, window) = OffscreenHost.make(view, size: ClipboardLayout.panelSize)
@@ -79,7 +78,6 @@ struct ClipboardListViewTests {
             ClipboardListView(context: context)
                 .environment(context)
                 .environment(\.locale, RuntimeLanguage.shared.locale)
-                .environment(RuntimeLanguage.shared)
         )
         let (host, window) = OffscreenHost.make(view, size: ClipboardLayout.panelSize)
         defer { window.orderOut(nil) }

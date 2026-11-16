@@ -1,7 +1,7 @@
 //
 //  ClipboardTimeCache.swift
 //  SixOne
-//  列表副标题时间文案缓存；键含时间与语言，避免置顶或切语言后显示旧文案。
+//  列表副标题时间文案缓存；键含时间与 locale，避免置顶或日期状态变化后显示旧文案。
 
 import Foundation
 
@@ -13,7 +13,6 @@ final class ClipboardTimeCache {
     }
 
     private func cacheKey(for id: UUID, lastActivityAt: Date) -> NSString {
-        let lang = RuntimeLanguage.shared.languageCode ?? "system"
         let locale = RuntimeLanguage.shared.locale.identifier
         let time = lastActivityAt.timeIntervalSinceReferenceDate
         // 跨过午夜后「今天/昨天」会变，键里带上日状态与当前时区。
@@ -26,7 +25,7 @@ final class ClipboardTimeCache {
         } else {
             dayState = "older"
         }
-        return "\(id.uuidString)-\(time)-\(lang)-\(locale)-\(TimeZone.current.identifier)-\(dayState)" as NSString
+        return "\(id.uuidString)-\(time)-\(locale)-\(TimeZone.current.identifier)-\(dayState)" as NSString
     }
 
     func copyTime(for id: UUID, lastActivityAt: Date, locale: Locale) -> String {
