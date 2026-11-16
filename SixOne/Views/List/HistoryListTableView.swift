@@ -109,7 +109,7 @@ struct HistoryListTableView: NSViewRepresentable {
             animation.allowsImplicitAnimation = false
             coordinator.syncSelectionAppearance(in: tableView)
             coordinator.syncCopyFeedback(in: tableView)
-            coordinator.syncQuickPasteHints(in: tableView)
+            coordinator.syncQuickPasteHints(in: tableView, range: quickPasteRange)
             coordinator.syncSelection(in: tableView)
             coordinator.handle(
                 self.context.navigationState.takePendingScrollCommands(),
@@ -138,14 +138,13 @@ struct HistoryListTableView: NSViewRepresentable {
         private var reloadedDataRevision: Int?
         private var reloadedLocale: Locale?
         private var reloadedRowCount = -1
-        private var mirroredSelectionID: UUID?
+        private var selectionMirror = SelectionMirror<UUID>()
         private struct RenderedSelection: Equatable {
             var id: UUID?
             var isActive: Bool
         }
         private var renderedSelection = RenderedSelection(id: nil, isActive: false)
         private var renderedCopyFeedbackID: UUID?
-        private var renderedQuickPasteRange: ClosedRange<Int>?
         private var beep: () -> Void = { NSSound.beep() }
 
         override init(
@@ -241,7 +240,7 @@ struct HistoryListTableView: NSViewRepresentable {
             }
 
             rows = newRows
-            mirroredSelectionID = nil
+            selectionMirror.reset()
             tableView.reloadData()
             renderedSelection = RenderedSelection(id: selectedItemID, isActive: isSelectionActive)
             renderedCopyFeedbackID = copiedItemID
@@ -273,34 +272,13 @@ struct HistoryListTableView: NSViewRepresentable {
             }
         }
 
-        /// 编号出现/消失或随滚动重排时，只刷新涉及到的行。
-        func syncQuickPasteHints(in tableView: NSTableView) {
-            guard quickPasteRange != renderedQuickPasteRange else { return }
-            let previous = renderedQuickPasteRange
-            renderedQuickPasteRange = quickPasteRange
-            var indices: Set<Int> = []
-            for range in [previous, quickPasteRange].compactMap({ $0 }) {
-                indices.formUnion(range)
-            }
-            for index in indices.sorted() where rows.indices.contains(index) {
-                refreshRowContent(at: index, in: tableView)
-            }
-        }
-
         // MARK: - 选中镜像
 
         /// 把模型选中单向同步到表格，表格不回写。
         func syncSelection(in tableView: NSTableView) {
-            guard let selectedItemID else {
-                guard mirroredSelectionID != nil else { return }
-                mirroredSelectionID = nil
-                tableView.deselectAll(nil)
-                return
+            selectionMirror.sync(selectedItemID, in: tableView) { id in
+                rows.firstIndex(where: { $0.id == id })
             }
-            guard mirroredSelectionID != selectedItemID,
-                  let index = rows.firstIndex(where: { $0.id == selectedItemID }) else { return }
-            mirroredSelectionID = selectedItemID
-            tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
         }
 
         // MARK: - 滚动

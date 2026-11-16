@@ -23,6 +23,7 @@ class ListTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     private var lastPublishedVisibleRowRange: ClosedRange<Int>?
     private var lastPublishedUsesOverlayScrollers: Bool?
+    private var renderedQuickPasteRange: ClosedRange<Int>?
     private var boundsObserver: NSObjectProtocol?
     private var frameObserver: NSObjectProtocol?
     private var styleObserver: NSObjectProtocol?
@@ -137,6 +138,20 @@ class ListTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// 整表重建后强制重发一次可见范围，外部状态可能已经清空。
     func invalidatePublishedVisibleRowRange() {
         lastPublishedVisibleRowRange = nil
+    }
+
+    /// 快速粘贴编号变化时只刷新涉及的行。
+    func syncQuickPasteHints(in tableView: NSTableView, range: ClosedRange<Int>?) {
+        guard range != renderedQuickPasteRange else { return }
+        let previous = renderedQuickPasteRange
+        renderedQuickPasteRange = range
+        var indices: Set<Int> = []
+        for range in [previous, range].compactMap({ $0 }) {
+            indices.formUnion(range)
+        }
+        for index in indices.sorted() where index >= 0 && index < rowCount {
+            refreshRowContent(at: index, in: tableView)
+        }
     }
 
     func needsScrollerLayoutPublish(for scrollView: NSScrollView) -> Bool {

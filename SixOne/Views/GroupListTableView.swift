@@ -76,7 +76,7 @@ struct GroupListTableView: NSViewRepresentable {
             animation.duration = 0
             animation.allowsImplicitAnimation = false
             context.coordinator.syncSelectionAppearance(in: tableView)
-            context.coordinator.syncQuickPasteHints(in: tableView)
+            context.coordinator.syncQuickPasteHints(in: tableView, range: quickPasteRange)
             context.coordinator.syncSelection(in: tableView)
             context.coordinator.performPendingScroll()
         }
@@ -105,13 +105,12 @@ struct GroupListTableView: NSViewRepresentable {
 
         /// 语言变化需重建行内文案。
         private var reloadedLocale: Locale?
-        private var mirroredSelectionIndex: Int?
+        private var selectionMirror = SelectionMirror<Int>()
         private struct RenderedSelection: Equatable {
             var index: Int?
             var isActive: Bool
         }
         private var renderedSelection = RenderedSelection(index: nil, isActive: false)
-        private var renderedQuickPasteRange: ClosedRange<Int>?
 
         private var scrollRequest: GroupScrollRequest?
         private var scrollRequestID = 0
@@ -225,7 +224,7 @@ struct GroupListTableView: NSViewRepresentable {
 
             files = newFiles
             // 重建会清掉表格选中，下一轮重新同步。
-            mirroredSelectionIndex = nil
+            selectionMirror.reset()
             // 重建后范围相同也要重发，外部状态可能已清空。
             invalidatePublishedVisibleRowRange()
             tableView.reloadData()
@@ -246,34 +245,13 @@ struct GroupListTableView: NSViewRepresentable {
             }
         }
 
-        /// 编号变化时只刷新涉及的行。
-        func syncQuickPasteHints(in tableView: NSTableView) {
-            guard quickPasteRange != renderedQuickPasteRange else { return }
-            let previous = renderedQuickPasteRange
-            renderedQuickPasteRange = quickPasteRange
-            var indices: Set<Int> = []
-            for range in [previous, quickPasteRange].compactMap({ $0 }) {
-                indices.formUnion(range)
-            }
-            for index in indices.sorted() where files.indices.contains(index) {
-                refreshRowContent(at: index, in: tableView)
-            }
-        }
-
         // MARK: - 选中镜像
 
         /// 模型 → 表格的单向选中镜像。
         func syncSelection(in tableView: NSTableView) {
-            guard let selectedIndex else {
-                guard mirroredSelectionIndex != nil else { return }
-                mirroredSelectionIndex = nil
-                tableView.deselectAll(nil)
-                return
+            selectionMirror.sync(selectedIndex, in: tableView) { index in
+                files.firstIndex(where: { $0.index == index })
             }
-            guard mirroredSelectionIndex != selectedIndex,
-                  let position = files.firstIndex(where: { $0.index == selectedIndex }) else { return }
-            mirroredSelectionIndex = selectedIndex
-            tableView.selectRowIndexes(IndexSet(integer: position), byExtendingSelection: false)
         }
 
         // MARK: - 滚动
