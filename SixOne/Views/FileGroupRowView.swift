@@ -18,6 +18,12 @@ final class FileGroupRowState {
     @ObservationIgnored private let feedback = TransientFeedback()
     private var loadedPath: String?
 
+    private struct FileMetadata: Sendable {
+        let isDirectory: Bool
+        let size: Int64?
+        let version: Double
+    }
+
     func load(file: GroupFileEntry, cache: FileGroupThumbnailCache, displayScale: CGFloat) async {
         let path = file.url?.path ?? file.path
         if loadedPath != path {
@@ -26,26 +32,41 @@ final class FileGroupRowState {
             thumbnail = nil
             isCopied = false
         }
-        let values = try? URL(fileURLWithPath: path).resourceValues(
-            forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]
-        )
-        let directory = values?.isDirectory ?? false
-        isDirectory = directory
-        size = values?.fileSize.map(Int64.init)
-        guard let url = file.url, !directory else {
+        let metadata = await Self.readMetadata(at: path)
+        guard !Task.isCancelled, loadedPath == path else { return }
+        isDirectory = metadata.isDirectory
+        size = metadata.size
+        guard let url = file.url, !metadata.isDirectory else {
             thumbnail = nil
             return
         }
-        // 修改时间 + 大小进缓存键，同路径内容变化可拿到新图。
-        let version = (values?.contentModificationDate?.timeIntervalSince1970 ?? 0) + Double(values?.fileSize ?? 0)
         let image = await cache.thumbnail(
             for: url,
             pointSize: ClipboardLayout.groupRowThumbnailSize,
             scale: displayScale,
-            version: version
+            version: metadata.version
         )
         guard !Task.isCancelled else { return }
         thumbnail = image
+    }
+
+    /// 读取放后台；修改时间 + 大小进缓存键。
+    private nonisolated static func readMetadata(at path: String) async -> FileMetadata {
+        await withCheckedContinuation { (continuation: CheckedContinuation<FileMetadata, Never>) in
+            DispatchQueue.global(qos: .utility).async {
+                let values = try? URL(fileURLWithPath: path).resourceValues(
+                    forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]
+                )
+                let size = values?.fileSize.map(Int64.init)
+                let version = (values?.contentModificationDate?.timeIntervalSince1970 ?? 0)
+                    + Double(values?.fileSize ?? 0)
+                continuation.resume(returning: FileMetadata(
+                    isDirectory: values?.isDirectory ?? false,
+                    size: size,
+                    version: version
+                ))
+            }
+        }
     }
 
     func markCopied() {
