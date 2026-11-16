@@ -67,6 +67,17 @@ enum ItemMenuEntry: Equatable {
 }
 
 extension ItemCommand {
+    /// 文件组行菜单布局；分享、打开与访达按可达性启用。
+    static let groupFileMenuLayout: [ItemMenuEntry] = [
+        .command(.preview),
+        .command(.paste),
+        .command(.copy),
+        .separator,
+        .command(.share),
+        .command(.open),
+        .command(.revealInFinder),
+    ]
+
     /// 菜单标题；别名动作随是否已设置切换。
     func title(alias: String?) -> String {
         guard self == .editAlias else { return title }

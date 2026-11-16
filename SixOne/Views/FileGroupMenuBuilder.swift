@@ -19,16 +19,51 @@ enum FileGroupMenuBuilder {
     ) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.addItem(item(ItemCommand.preview.title, enabled: isReachable, target: target, handler: onPreview))
-        menu.addItem(item(ItemCommand.paste.title, enabled: isReachable, target: target, handler: onPaste))
-        menu.addItem(item(ItemCommand.copy.title, enabled: isReachable, target: target, handler: onCopy))
-        menu.addItem(.separator())
-        menu.addItem(item(ItemCommand.share.title, enabled: isReachable, target: target) {
-            onShare(target)
-        })
-        menu.addItem(item(ItemCommand.open.title, enabled: isReachable, target: target, handler: onOpen))
-        menu.addItem(item(ItemCommand.revealInFinder.title, enabled: isReachable, target: target, handler: onReveal))
+        for entry in ItemCommand.groupFileMenuLayout {
+            switch entry {
+            case .separator:
+                menu.addItem(.separator())
+            case .command(let command):
+                guard let handler = handler(
+                    for: command,
+                    target: target,
+                    onPreview: onPreview,
+                    onPaste: onPaste,
+                    onCopy: onCopy,
+                    onShare: onShare,
+                    onOpen: onOpen,
+                    onReveal: onReveal
+                ) else { continue }
+                menu.addItem(item(
+                    command.title,
+                    enabled: isReachable,
+                    target: target,
+                    handler: handler
+                ))
+            }
+        }
         return menu
+    }
+
+    private static func handler(
+        for command: ItemCommand,
+        target: RowInteractionHost.HostView,
+        onPreview: @escaping () -> Void,
+        onPaste: @escaping () -> Void,
+        onCopy: @escaping () -> Void,
+        onShare: @escaping (NSView) -> Void,
+        onOpen: @escaping () -> Void,
+        onReveal: @escaping () -> Void
+    ) -> (() -> Void)? {
+        switch command {
+        case .preview: onPreview
+        case .paste: onPaste
+        case .copy: onCopy
+        case .share: { onShare(target) }
+        case .open: onOpen
+        case .revealInFinder: onReveal
+        default: nil
+        }
     }
 
     private static func item(
