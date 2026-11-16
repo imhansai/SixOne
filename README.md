@@ -121,7 +121,7 @@ open build/Build/Products/Debug/SixOne.app
 | 改全局快捷键（注册 / 按键事件） | `HotKeyManager` + `HotKeyRegistering`（注册，会失败）/ `HotKeyEventMonitoring`（按键分发）+ `HotKeyManagerTests` |
 | 加 / 改一个模型字段 | 从当前版本的 `Persistence/Schema/SixOneSchemaV4.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
 | 动取数路径 | 先分清「要整条」还是「只要身份 / 路径」：`ClipboardManager.fetchFullItem` / `fetchLightItem`；列表取窗走后台 actor 上的 `ClipboardHistoryRepository.latest` |
-| 改库文件位置或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名，兜底只允许动 `SixOne.store` |
+| 改库文件位置或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名，兜底只允许动 `SixOne.store` 及其外部存储目录 `.SixOne_SUPPORT` |
 | 改「事后怎么找回文件」（移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark；解析到过期 bookmark 时重取并回写。用例：`ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` / `BookmarkRefreshTests` |
 | 改预览顶栏 / 打开方式菜单 | `PreviewHeaderModel`、`PreviewHeaderView` / `PreviewGroupHeaderView`、`PreviewOpenWithMenu`、`PreviewDetailView` |
 | 改预览元数据 / 副标题 | `PreviewMetadataModel`（解码、stat、文本统计）、`PreviewSubtitle`（纯格式化） |
@@ -142,7 +142,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 748 项用例、121 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 752 项用例、122 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
 
 系统资源一律用 `SixOneTests/Support/` 下的替身：`FakePasteboard`、`InMemorySettingsStorage`、`FakeHotKeyEventMonitor`、`FakeHistoryRepository`、`OffscreenHost` / `TestPanel`、`TemporaryFiles`、`Wait`。性能基准（`HistoryBenchmarkTests` / `MigrationBenchmarkTests`）只有在仓库根存在 `.benchmark-history` 或 `/tmp/sixone-benchmark` 时才跑，跑完请删掉开关文件。
 
@@ -155,7 +155,7 @@ open build/Build/Products/Debug/SixOne.app
 每条都源自一次具体故障。削弱其中任何一条，都必须写明理由并论证它依然成立。
 
 1. **「不要记录」标记必须在读取剪贴板内容之前判定**（`PasteboardSnapshot.doNotRecordTypes`；`readRecordableSnapshot` 用同一次 `pasteboardItems` 读取完成判定与快照）。来源应用忽略列表替代不了这一道 —— 前台应用并不总是写剪贴板的那个应用。
-2. **库文件保留专属文件名。** `AppModelContainer` 绝不回落到 SwiftData 默认的 `default.store`；「打不开 → 改名备份再新建」只允许动 `SixOne.store`。
+2. **库文件保留专属文件名。** `AppModelContainer` 绝不回落到 SwiftData 默认的 `default.store`；「打不开 → 改名备份再新建」只允许动 `SixOne.store` 及 `.SixOne_SUPPORT`。
 3. **HTML 预览保持围栏。** 不执行内容脚本、不允许离开本地文件，外传通道保持阻断；远程图片 / 样式 / 字体有意放行 —— 改这条规则前先看 [PRIVACY.md](PRIVACY.md) §3。
 4. **粘贴链路必须在改变任何东西之前失败。** 先确认 `⌘V` 事件建得出来，之后才写剪贴板、才收起面板。
 5. **日志保持默认隐私级别。** 绝不把剪贴板正文或文件路径以 `privacy: .public` 插进 `os.Logger`。

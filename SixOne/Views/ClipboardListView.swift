@@ -169,6 +169,7 @@ struct ClipboardListView: View {
     private var rowMenuBuilder: RowMenuBuilder {
         RowMenuBuilder(
             manager: manager,
+            fileCapabilities: context.fileCapabilities,
             panelActions: { actions },
             selectRow: { coordinator.select(id: $0) },
             copyFeedback: { coordinator.setCopiedFeedback(for: $0) },

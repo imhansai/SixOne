@@ -49,7 +49,7 @@ struct MenuKeyEquivalentIndexTests {
         #expect(index.command(for: event("w", [.command]))?.action
             == #selector(NSWindow.performClose(_:)))
         #expect(index.command(for: event(",", [.command]))?.action
-            == Selector(("openSettingsFromMenu:")))
+            == #selector(AppMenuTarget.openSettingsFromMenu(_:)))
         #expect(index.command(for: event("\u{7f}", [.command]))?.action
             == #selector(NSText.delete(_:)))
         #expect(index.command(for: event("s", [.command]))?.action
@@ -96,6 +96,16 @@ struct MenuKeyEquivalentIndexTests {
         #expect(index.command(for: event("h", [.command])) == nil, "Hide 在面板模式隐藏")
         #expect(index.command(for: event("m", [.command])) == nil, "Window 菜单在面板模式隐藏")
         #expect(index.command(for: event("q", [.command])) != nil, "Quit 仍可见")
+    }
+
+    @Test("冲突预检可以包含隐藏菜单项")
+    func includesHiddenItems() {
+        let built = MainMenuBuilder.makeMainMenu(target: Target())
+        built.apply(panelVisible: false)
+        let index = MenuKeyEquivalentIndex(menu: built.menu, includesHidden: true)
+
+        #expect(index.command(for: event("r", [.command, .option])) != nil)
+        #expect(index.command(for: event("a", [.command, .option])) != nil)
     }
 
     @Test("命中后 perform 会用菜单项的 target/action")

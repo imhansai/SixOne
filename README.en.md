@@ -121,7 +121,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 | Change the global hotkey (registration / key events) | `HotKeyManager` + `HotKeyRegistering` (registration, can fail) / `HotKeyEventMonitoring` (per-instance dispatch) + `HotKeyManagerTests` |
 | Add / change a model field | Copy the current `Persistence/Schema/SixOneSchemaV4.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
 | Change a fetch path | Decide "need the whole item" vs "only identity/paths": `ClipboardManager.fetchFullItem` / `fetchLightItem`; the list window uses `ClipboardHistoryRepository.latest` on the background actor |
-| Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name; the fallback may only touch `SixOne.store` |
+| Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name; the fallback may only touch `SixOne.store` and its external-storage directory `.SixOne_SUPPORT` |
 | Change how a file is reached after the fact (moved / renamed / after a restart) | `SecurityScopedFileAccess`: bookmark first, original path as fallback, at most 100 bookmarks per copy; stale bookmarks are re-created and written back. Covered by `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` / `BookmarkRefreshTests` |
 | Change the preview header / open-with menu | `PreviewHeaderModel`, `PreviewHeaderView` / `PreviewGroupHeaderView`, `PreviewOpenWithMenu`, `PreviewDetailView` |
 | Change preview metadata / subtitles | `PreviewMetadataModel` (decode, stat, text stats), `PreviewSubtitle` (pure formatting) |
@@ -142,7 +142,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 748 tests in 121 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 752 tests in 122 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 System resources are driven by doubles under `SixOneTests/Support/`: `FakePasteboard`, `InMemorySettingsStorage`, `FakeHotKeyEventMonitor`, `FakeHistoryRepository`, `OffscreenHost` / `TestPanel`, `TemporaryFiles`, and `Wait`. The benchmarks in `HistoryBenchmarkTests` / `MigrationBenchmarkTests` run only when `.benchmark-history` exists at the repo root or `/tmp/sixone-benchmark` does; delete the switch file afterwards.
 
@@ -155,7 +155,7 @@ Contributions are welcome. Build and test commands are under **Quick start**; th
 Each exists because of a specific failure. A change that weakens one has to say so and show how it still holds.
 
 1. **Do-not-record markers are checked before any clipboard content is read** (`PasteboardSnapshot.doNotRecordTypes`; `readRecordableSnapshot` does the marker check and the snapshot from one `pasteboardItems` read). The source-app ignore list cannot replace this — the frontmost app is not reliably the app that wrote the content.
-2. **The store keeps its own file name.** `AppModelContainer` must never fall back to SwiftData's default `default.store`, and the rename-aside fallback may only touch `SixOne.store`.
+2. **The store keeps its own file name.** `AppModelContainer` must never fall back to SwiftData's default `default.store`, and the rename-aside fallback may only touch `SixOne.store` and `.SixOne_SUPPORT`.
 3. **The HTML preview stays fenced.** No content JavaScript, no navigation away from local files, and the remote transfer channels stay blocked; remote images / stylesheets / fonts are deliberately allowed — see [PRIVACY.en.md](PRIVACY.en.md) §3 first.
 4. **The paste path fails before it changes anything.** Prove the `⌘V` event can be created before writing the clipboard or hiding the panel.
 5. **Logs stay at the default privacy level.** Never interpolate clipboard text or file paths into `os.Logger` with `privacy: .public`.

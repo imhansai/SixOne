@@ -82,9 +82,10 @@ final class PanelFileCapabilityCache {
         capabilities(itemID: request.itemID, recencyID: request.recencyID) { request }
     }
 
-    /// 已落定结果；测试用。
+    /// 已落定结果；测试用。乐观占位不算落定。
     func cachedCapabilities(for itemID: UUID) -> FileCapabilities? {
-        entries[itemID]?.capabilities
+        guard let entry = entries[itemID], entry.resolvedAt != .distantPast else { return nil }
+        return entry.capabilities
     }
 
     func invalidateAll() {

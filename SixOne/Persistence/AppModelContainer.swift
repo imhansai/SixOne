@@ -94,9 +94,8 @@ enum AppModelContainer {
         }
     }
 
-    /// 把库连同 -wal/-shm 挪到带时间戳的备份名；只改名不删除，保留用户数据。
-    /// 只对自己的文件名生效，绝不搬别人的库。
-    private static func backupUnreadableStore(at url: URL) -> URL? {
+    /// 库、边车与外部存储一起改名备份；只动本应用的文件。
+    static func backupUnreadableStore(at url: URL) -> URL? {
         guard url.lastPathComponent == storeFileName else {
             logger.error("拒绝备份非本应用的库文件：\(url.lastPathComponent, privacy: .public)")
             return nil
@@ -125,6 +124,30 @@ enum AppModelContainer {
                 )
             }
         }
+        // 不搬外部数据的话，新库会继承旧的孤儿 blob 并把它算进存储预算。
+        if let externalBackup = backupExternalStorage(forStoreAt: url, stamp: stamp) {
+            logger.notice("已把外部存储备份到 \(externalBackup.lastPathComponent, privacy: .public)")
+        }
         return backup
+    }
+
+    /// 外部存储目录与库同名同目录；整体改名，避免新库继续使用旧数据。
+    private static func backupExternalStorage(forStoreAt url: URL, stamp: String) -> URL? {
+        // ExternalStorageDirectory 指向 .SixOne_SUPPORT/_EXTERNAL_DATA，搬整个 support 目录。
+        let supportDirectory = ExternalStorageDirectory.url(forStoreAt: url)
+            .deletingLastPathComponent()
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: supportDirectory.path) else { return nil }
+        let backup = supportDirectory.deletingLastPathComponent().appendingPathComponent(
+            "\(supportDirectory.lastPathComponent).corrupt-\(stamp)",
+            isDirectory: true
+        )
+        do {
+            try fileManager.moveItem(at: supportDirectory, to: backup)
+            return backup
+        } catch {
+            logger.error("备份外部存储失败：\(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 }

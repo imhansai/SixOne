@@ -94,7 +94,7 @@ rm -rf ~/Library/Containers/dev.sixone.SixOne         # signed / sandboxed build
 
 Two more things outlive a "clear":
 
-- **Corrupt-store backups.** If the store cannot be opened it is renamed to `SixOne.store.corrupt-<timestamp>` (with its `-wal` and `-shm` sidecars) rather than deleted. These accumulate; nothing prunes them.
+- **Corrupt-store backups.** If the store cannot be opened it is renamed to `SixOne.store.corrupt-<timestamp>` (with its `-wal` and `-shm` sidecars, and its external-storage directory becomes `.SixOne_SUPPORT.corrupt-<timestamp>`) rather than deleted. These accumulate; nothing prunes them.
 - **Export temp files.** "Open / Share" writes a bitmap or text copy to `$TMPDIR/sixone-export/<uuid>/` for the receiving app. Each is a complete copy of that clipboard item, pruned at launch once older than 24 hours on a best-effort basis; a directory whose timestamp cannot be read is left alone. macOS's Quick Look may also cache preview thumbnails.
 
 ## 6. Logging

@@ -47,9 +47,9 @@ final class ClipboardPasteboardWriter {
     /// 只把关联的第 index 个文件写回剪贴板；解析不到时返回 false。
     @discardableResult
     func copy(_ item: ClipboardItem, fileAt index: Int) -> Bool {
-        let urls = fileAccess.resolvedFileURLs(for: item)
-        guard urls.indices.contains(index), let url = urls[index] else { return false }
-        pasteboard.write(.fileURLs([url]))
+        guard let scoped = fileAccess.startScopedShareURL(for: item, fileAt: index) else { return false }
+        defer { scoped.stopAccessIfNeeded() }
+        pasteboard.write(.fileURLs([scoped.url]))
         syncChangeCount()
         writer.recordTouch(item)
         return true
@@ -114,9 +114,13 @@ final class ClipboardPasteboardWriter {
                 pasteboard.write(.clear)
                 return
             }
-            let resolvedURLs = fileAccess.resolvedFileURLs(for: item)
+            // 写回期间持有访问权，NSURL 才能带出文件沙盒扩展。
+            let scoped = item.fileCount > 1
+                ? fileAccess.scopedFileURLs(for: item)
+                : [fileAccess.startScopedFileURL(for: item)]
+            defer { scoped.forEach { $0?.stopAccessIfNeeded() } }
             let urls = paths.enumerated().map { index, path in
-                (index < resolvedURLs.count ? resolvedURLs[index] : nil) ?? URL(fileURLWithPath: path)
+                (index < scoped.count ? scoped[index]?.url : nil) ?? URL(fileURLWithPath: path)
             }
             pasteboard.write(.fileURLs(urls))
         case .link:

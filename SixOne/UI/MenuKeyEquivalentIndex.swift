@@ -50,8 +50,10 @@ struct MenuKeyEquivalentIndex {
     }
 
     private var commands: [Key: Command] = [:]
+    private let includesHidden: Bool
 
-    init(menu: NSMenu?) {
+    init(menu: NSMenu?, includesHidden: Bool = false) {
+        self.includesHidden = includesHidden
         guard let menu else { return }
         collect(menu)
     }
@@ -69,14 +71,13 @@ struct MenuKeyEquivalentIndex {
 
     private mutating func collect(_ menu: NSMenu) {
         for item in menu.items {
-            // 隐藏项（及其子菜单）不参与按键匹配。
-            guard !item.isHidden else { continue }
+            // 隐藏项（及其子菜单）默认不参与按键匹配；冲突预检要包含它们。
+            if !includesHidden, item.isHidden { continue }
             if let submenu = item.submenu {
                 collect(submenu)
                 continue
             }
             guard !item.isSeparatorItem,
-                  !item.isHidden,
                   !item.keyEquivalent.isEmpty,
                   item.action != nil else {
                 continue

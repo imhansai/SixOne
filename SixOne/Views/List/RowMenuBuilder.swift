@@ -10,6 +10,7 @@ import AppKit
 /// 行菜单的依赖与落点：面板动作、选中、复制反馈与删除收尾。
 struct RowMenuBuilder {
     let manager: ClipboardManager
+    let fileCapabilities: PanelFileCapabilityCache
     let panelActions: () -> ItemActionHandling?
     let selectRow: (UUID) -> Void
     let copyFeedback: (UUID) -> Void
@@ -40,14 +41,14 @@ struct RowMenuBuilder {
 
     /// 顺序、标题、快捷键都在 `ItemCommand` 里，这里只渲染。
     private func menuItems(for row: HistoryRow, anchor: RowInteractionHost.HostView) -> [NSMenuItem] {
-        let canReveal = (row.kind == .file || row.kind == .image)
-            && manager.canRevealExternally(id: row.id)
+        let capabilities = resolvedCapabilities(for: row)
+        let canReveal = (row.kind == .file || row.kind == .image) && capabilities.canReveal
         let layout = ItemCommand.rowMenuLayout(for: row.kind, canReveal: canReveal)
         let needsReachableFile = layout.contains { entry in
             guard case .command(let command) = entry else { return false }
             return command.requiresReachableFile
         }
-        let canOpenExternally = needsReachableFile && manager.canOpenExternally(id: row.id)
+        let canOpenExternally = needsReachableFile && capabilities.canOpen
         return layout.map { entry in
             switch entry {
             case .separator:
@@ -60,6 +61,17 @@ struct RowMenuBuilder {
                     canOpenExternally: canOpenExternally
                 )
             }
+        }
+    }
+
+    /// 只读缓存；未命中先给乐观值，后台探测，动作执行时复检。
+    private func resolvedCapabilities(for row: HistoryRow) -> FileCapabilities {
+        switch row.kind {
+        case .text, .color:
+            return .none
+        case .link, .image, .file:
+            guard let item = manager.fetchLightItem(id: row.id) else { return .none }
+            return fileCapabilities.capabilities(for: item, manager: manager)
         }
     }
 

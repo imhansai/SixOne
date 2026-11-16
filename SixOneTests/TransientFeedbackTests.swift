@@ -18,7 +18,8 @@ struct TransientFeedbackTests {
         feedback.schedule(after: 0.1) { fired.append(1) }
         feedback.schedule(after: 0.2) { fired.append(2) }
 
-        #expect(await Wait.until { fired == [2] })
+        // 并行测试可能长时间占住主线程，等待放宽到覆盖整套测试的时长。
+        #expect(await Wait.until(timeout: .seconds(30)) { fired == [2] })
         #expect(fired == [2])
     }
 

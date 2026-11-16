@@ -45,6 +45,7 @@ struct RowMenuBuilderTests {
         var deleted: [UUID] = []
         let builder = RowMenuBuilder(
             manager: harness.manager,
+            fileCapabilities: makeCache(),
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: { _ in },
@@ -65,6 +66,7 @@ struct RowMenuBuilderTests {
         let item = try insert(ClipboardItem(kind: .text, text: "x"), into: harness)
         let builder = RowMenuBuilder(
             manager: harness.manager,
+            fileCapabilities: makeCache(),
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: { _ in },
@@ -82,14 +84,16 @@ struct RowMenuBuilderTests {
         #expect(editMenu.items.contains { $0.title == Localizer.string("Edit Alias…") })
     }
 
-    @Test("源文件还在：分享与打开可用；文件没了：两项一起置灰")
-    func reachableFileGatesShareAndOpen() throws {
+    @Test("源文件还在：分享与打开可用；文件没了：探测落定后置灰")
+    func reachableFileGatesShareAndOpen() async throws {
         let harness = try ClipboardHarness()
         let file = try TemporaryFiles.makeFile(prefix: "sixone-menu", contents: "x")
         defer { try? FileManager.default.removeItem(at: file) }
         let item = try insert(ClipboardItem(kind: .file, filePath: file.path), into: harness)
+        let cache = makeCache()
         let builder = RowMenuBuilder(
             manager: harness.manager,
+            fileCapabilities: cache,
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: { _ in },
@@ -99,11 +103,20 @@ struct RowMenuBuilderTests {
         )
         let anchor = RowInteractionHost.HostView()
 
+        // 首轮菜单先乐观放行，后台探测落定后仍可用。
+        let optimisticMenu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
+        #expect(try menuItem(ItemCommand.share, in: optimisticMenu).isEnabled)
+        #expect(await Wait.until { cache.cachedCapabilities(for: item.id)?.canOpen == true })
+
         let enabledMenu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
         #expect(try menuItem(ItemCommand.share, in: enabledMenu).isEnabled)
         #expect(try menuItem(ItemCommand.open, in: enabledMenu).isEnabled)
 
         try FileManager.default.removeItem(at: file)
+        cache.invalidateAll()
+        // 触发一次重新探测，再等结果落定。
+        _ = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
+        #expect(await Wait.until { cache.cachedCapabilities(for: item.id)?.canOpen == false })
 
         let disabledMenu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
         #expect(try !menuItem(ItemCommand.share, in: disabledMenu).isEnabled)
@@ -112,6 +125,10 @@ struct RowMenuBuilderTests {
 
     // MARK: - 夹具
 
+    private func makeCache() -> PanelFileCapabilityCache {
+        PanelFileCapabilityCache(notificationCenter: nil)
+    }
+
     private func makeMenu(
         for item: ClipboardItem,
         harness: ClipboardHarness,
@@ -119,6 +136,7 @@ struct RowMenuBuilderTests {
     ) -> NSMenu {
         let builder = RowMenuBuilder(
             manager: harness.manager,
+            fileCapabilities: makeCache(),
             panelActions: { nil },
             selectRow: { _ in },
             copyFeedback: onCopyFeedback,

@@ -72,16 +72,10 @@ struct SystemPasteboard: PasteboardAccessing {
         case let .image(data, type):
             pasteboard.setData(data, forType: type)
         case let .fileURLs(urls):
-            guard let first = urls.first else { return }
-            guard urls.count > 1 else {
-                pasteboard.setString(first.absoluteString, forType: .fileURL)
-                return
-            }
-            pasteboard.writeObjects(urls.map { url in
-                let item = NSPasteboardItem()
-                item.setString(url.absoluteString, forType: .fileURL)
-                return item
-            })
+            guard !urls.isEmpty else { return }
+            // NSURL 随 writeObjects 附带文件沙盒扩展；手写 .fileURL 字符串不会。
+            let objects: [any NSPasteboardWriting] = urls.map { $0 as NSURL }
+            pasteboard.writeObjects(objects)
         case let .url(urlString):
             pasteboard.setString(urlString, forType: .URL)
             pasteboard.setString(urlString, forType: .string)
