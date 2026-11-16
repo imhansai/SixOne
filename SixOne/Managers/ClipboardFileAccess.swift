@@ -2,7 +2,7 @@
 //  ClipboardFileAccess.swift
 //  SixOne
 //
-//  条目关联文件的解析与导出：bookmark 优先、原路径兜底，图片与文本另存临时文件。
+//  条目关联文件的解析与导出：bookmark 优先、原路径兜底、过期回写，图片与文本另存临时文件。
 //
 
 import Foundation
@@ -17,18 +17,50 @@ final class ClipboardFileAccess {
 
     // MARK: - 解析
 
-    /// 逐项解析关联文件的有效路径（与 `allFilePaths` 对应，失败为 nil），优先 bookmark。
+    /// 逐项解析关联文件的有效路径（与 `allFilePaths` 对应，失败为 nil），优先 bookmark；过期顺手回写。
     func resolvedFileURLs(for item: ClipboardItem) -> [URL?] {
-        SecurityScopedFileAccess.resolvedURLs(for: item)
+        guard item.kind == .file || item.kind == .image else { return [] }
+        let paths = item.allFilePaths
+        guard !paths.isEmpty else { return [] }
+        let resolved: [ResolvedFileURL?]
+        if paths.count > 1 {
+            let bookmarks = SecurityScopedFileAccess.decodeBookmarks(item.securityScopeBookmarks)
+            resolved = paths.map {
+                SecurityScopedFileAccess.resolvedFileWithoutAccess(bookmark: bookmarks[$0], path: $0, pathKey: $0)
+            }
+        } else {
+            resolved = [SecurityScopedFileAccess.resolvedFileWithoutAccess(
+                bookmark: item.securityScopeBookmark,
+                path: item.filePath
+            )]
+        }
+        writeBackRefreshedBookmarks(resolved.compactMap { $0?.refreshedBookmark }, for: item)
+        return resolved.map { $0?.url }
     }
 
     func resolvedFileURL(for item: ClipboardItem) -> URL? {
         resolvedFileURLs(for: item).compactMap { $0 }.first
     }
 
-    /// 逐个解析并 start，调用方按 `needsStop` 释放。
+    /// 逐个解析并 start，调用方按 `needsStop` 释放；过期顺手回写。
     func scopedFileURLs(for item: ClipboardItem) -> [ScopedFileURL?] {
-        SecurityScopedFileAccess.startScopedURLs(for: item)
+        guard item.kind == .file, item.fileCount > 1 else { return [] }
+        let bookmarks = SecurityScopedFileAccess.decodeBookmarks(item.securityScopeBookmarks)
+        let resolved = item.allFilePaths.map {
+            SecurityScopedFileAccess.startScopedURL(bookmark: bookmarks[$0], path: $0, pathKey: $0)
+        }
+        writeBackRefreshedBookmarks(resolved.compactMap { $0?.refreshedBookmark }, for: item)
+        return resolved
+    }
+
+    /// 单文件（含图片）解析并 start；过期顺手回写。
+    func startScopedFileURL(for item: ClipboardItem) -> ScopedFileURL? {
+        let resolved = SecurityScopedFileAccess.startScopedURL(
+            bookmark: item.securityScopeBookmark,
+            path: item.filePath
+        )
+        writeBackRefreshedBookmark(resolved?.refreshedBookmark, for: item)
+        return resolved
     }
 
     // MARK: - 分享
@@ -37,10 +69,7 @@ final class ClipboardFileAccess {
     func startScopedShareURL(for item: ClipboardItem) -> ScopedFileURL? {
         switch item.kind {
         case .file, .image:
-            if let scoped = SecurityScopedFileAccess.startScopedURL(
-                bookmark: item.securityScopeBookmark,
-                path: item.filePath
-            ) {
+            if let scoped = startScopedFileURL(for: item) {
                 return scoped
             }
             guard item.kind == .image else { return nil }
@@ -53,11 +82,42 @@ final class ClipboardFileAccess {
     }
 
     func startScopedShareURLs(for item: ClipboardItem) -> [ScopedFileURL] {
-        SecurityScopedFileAccess.startScopedURLsForSharing(for: item)
+        guard item.kind == .file, item.fileCount > 1 else { return [] }
+        let bookmarks = SecurityScopedFileAccess.decodeBookmarks(item.securityScopeBookmarks)
+        let resolved = item.allFilePaths.compactMap {
+            SecurityScopedFileAccess.startScopedURL(bookmark: bookmarks[$0], path: $0, pathKey: $0)
+        }
+        writeBackRefreshedBookmarks(resolved.compactMap(\.refreshedBookmark), for: item)
+        return resolved
     }
 
     func startScopedShareURL(for item: ClipboardItem, fileAt index: Int) -> ScopedFileURL? {
-        SecurityScopedFileAccess.startScopedURLForSharing(for: item, fileAt: index)
+        let paths = item.allFilePaths
+        guard item.kind == .file, paths.indices.contains(index) else { return nil }
+        let resolved: ScopedFileURL?
+        if paths.count > 1 {
+            let bookmarks = SecurityScopedFileAccess.decodeBookmarks(item.securityScopeBookmarks)
+            resolved = SecurityScopedFileAccess.startScopedURL(
+                bookmark: bookmarks[paths[index]],
+                path: paths[index],
+                pathKey: paths[index]
+            )
+        } else {
+            resolved = SecurityScopedFileAccess.startScopedURL(bookmark: item.securityScopeBookmark, path: item.filePath)
+        }
+        writeBackRefreshedBookmark(resolved?.refreshedBookmark, for: item)
+        return resolved
+    }
+
+    /// 回写过期 bookmark，下次解析不再走 stale 路径。
+    private func writeBackRefreshedBookmarks(_ refreshes: [RefreshedBookmark], for item: ClipboardItem) {
+        guard !refreshes.isEmpty else { return }
+        writer.refreshSecurityScopeBookmarks(id: item.id, refreshes)
+    }
+
+    private func writeBackRefreshedBookmark(_ refresh: RefreshedBookmark?, for item: ClipboardItem) {
+        guard let refresh else { return }
+        writer.refreshSecurityScopeBookmarks(id: item.id, [refresh])
     }
 
     // MARK: - 打开 / 分享目标
@@ -129,10 +189,12 @@ final class ClipboardFileAccess {
         if let scopedURL, FileManager.default.isReadableFile(atPath: scopedURL.path) {
             return scopedURL
         }
-        return SecurityScopedFileAccess.resolvedURLWithoutAccess(
+        guard let resolved = SecurityScopedFileAccess.resolvedFileWithoutAccess(
             bookmark: item.securityScopeBookmark,
             path: item.filePath
-        )
+        ) else { return nil }
+        writeBackRefreshedBookmark(resolved.refreshedBookmark, for: item)
+        return resolved.url
     }
 
     /// 统一的打开落点：源文件可安全访问时优先，否则按类型回退。

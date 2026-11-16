@@ -34,9 +34,9 @@ final class ClipboardHistoryWriter {
 
     // MARK: - 写库
 
-    /// 写盘：失败回滚这一轮改动并上报，不打断剪贴板流程。返回是否落盘。
+    /// 写盘：失败回滚并上报（`reportsFailure` 为 false 时只记日志）。返回是否落盘。
     @discardableResult
-    func save(_ reason: String) -> Bool {
+    func save(_ reason: String, reportsFailure: Bool = true) -> Bool {
         do {
             try persist()
             return true
@@ -44,7 +44,7 @@ final class ClipboardHistoryWriter {
             // 不回滚的话，context 里的改动会继续被读到，随后的事件也会让界面与磁盘分叉。
             context.rollback()
             logger.error("保存失败（\(reason, privacy: .public)）：\(error.localizedDescription, privacy: .public)")
-            onPersistenceFailure?(reason)
+            if reportsFailure { onPersistenceFailure?(reason) }
             return false
         }
     }
@@ -81,6 +81,7 @@ final class ClipboardHistoryWriter {
             }
             existing.securityScopeBookmark = fileAccess.bookmark
             existing.securityScopeBookmarks = fileAccess.bookmarks
+            forgetRefreshedBookmarks(for: existing.id)
             guard recordTouch(existing, isExternal: isExternal) else { return }
             onStored?(existing, entry)
             return
@@ -136,6 +137,45 @@ final class ClipboardHistoryWriter {
         guard save("设置别名") else { return false }
         events.post(.rowUpdated(id: id))
         return true
+    }
+
+    /// 本会话已回写过的 item+路径键，防止陈旧 bookmark 反复重取写盘。
+    private var refreshedBookmarkKeys: Set<String> = []
+
+    /// 回写过期的 bookmark：单文件写列，组内按原路径键更新 JSON；每条路径每会话只写一次。
+    @discardableResult
+    func refreshSecurityScopeBookmarks(id: UUID, _ refreshes: [RefreshedBookmark]) -> Bool {
+        guard !refreshes.isEmpty, let item = fetchLightItem(id: id) else { return false }
+        var changed = false
+        for refresh in refreshes {
+            if item.fileCount > 1 {
+                guard let pathKey = refresh.pathKey else { continue }
+                guard markRefreshed(id: id, pathKey: pathKey) else { continue }
+                var map = SecurityScopedFileAccess.decodeBookmarks(item.securityScopeBookmarks)
+                guard map[pathKey] != refresh.data else { continue }
+                map[pathKey] = refresh.data
+                item.securityScopeBookmarks = SecurityScopedFileAccess.encodeBookmarks(map)
+                changed = true
+            } else {
+                guard markRefreshed(id: id, pathKey: nil) else { continue }
+                guard item.securityScopeBookmark != refresh.data else { continue }
+                item.securityScopeBookmark = refresh.data
+                changed = true
+            }
+        }
+        guard changed else { return true }
+        return save("刷新文件 bookmark", reportsFailure: false)
+    }
+
+    /// 标记本条路径已回写；本会话重复时返回 false。
+    private func markRefreshed(id: UUID, pathKey: String?) -> Bool {
+        refreshedBookmarkKeys.insert("\(id.uuidString)|\(pathKey ?? "")").inserted
+    }
+
+    /// 重新捕获会带来新 bookmark，解除该条目的回写抑制。
+    private func forgetRefreshedBookmarks(for id: UUID) {
+        let prefix = id.uuidString + "|"
+        refreshedBookmarkKeys = refreshedBookmarkKeys.filter { !$0.hasPrefix(prefix) }
     }
 
     /// 删除一条；已不存在视为已完成。返回是否落盘。

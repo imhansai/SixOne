@@ -81,8 +81,6 @@ struct PreviewLauncher {
     }
 
     private func resolvedScopedURL(for item: ClipboardItem) -> ScopedFileURL? {
-        guard let bookmark = item.securityScopeBookmark,
-              let url = SecurityScopedFileAccess.startAccess(bookmark: bookmark) else { return nil }
-        return ScopedFileURL(url: url, needsStop: true)
+        manager.startScopedFileURL(for: item)
     }
 }

@@ -93,6 +93,53 @@ struct ClipboardHistoryWriterTests {
         #expect(recorder.events.last == .rowUpdated(id: item.id))
     }
 
+    @Test("bookmark 回写失败：只记日志，不上报保存失败")
+    func refreshFailureIsSilent() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = ClipboardItem(kind: .file, filePath: "/tmp/sixone-silent.txt")
+        item.securityScopeBookmark = Data([0])
+        context.insert(item)
+        try context.save()
+
+        let recorder = Recorder()
+        let writer = ClipboardHistoryWriter(
+            container: container,
+            events: ClipboardHistoryEventBus(),
+            persist: { throw SaveFailure.simulated }
+        )
+        writer.onPersistenceFailure = { [recorder] in recorder.failures.append($0) }
+
+        #expect(!writer.refreshSecurityScopeBookmarks(
+            id: item.id,
+            [RefreshedBookmark(pathKey: nil, data: Data([1]))]
+        ))
+        #expect(recorder.failures.isEmpty)
+    }
+
+    @Test("bookmark 回写：同一路径每会话只落一次")
+    func refreshHappensOncePerSession() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = ClipboardItem(kind: .file, filePath: "/tmp/sixone-once.txt")
+        item.securityScopeBookmark = Data([0])
+        context.insert(item)
+        try context.save()
+        let writer = ClipboardHistoryWriter(container: container, events: ClipboardHistoryEventBus())
+
+        #expect(writer.refreshSecurityScopeBookmarks(
+            id: item.id,
+            [RefreshedBookmark(pathKey: nil, data: Data([1]))]
+        ))
+        #expect(item.securityScopeBookmark == Data([1]))
+
+        #expect(writer.refreshSecurityScopeBookmarks(
+            id: item.id,
+            [RefreshedBookmark(pathKey: nil, data: Data([2]))]
+        ))
+        #expect(item.securityScopeBookmark == Data([1]))
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([ClipboardItem.self])
         return try ModelContainer(

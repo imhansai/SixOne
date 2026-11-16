@@ -312,6 +312,11 @@ final class ClipboardManager {
         fileAccess.scopedFileURLs(for: item)
     }
 
+    /// 单文件（含图片）：解析并 start，过期 bookmark 顺手回写。
+    func startScopedFileURL(for item: ClipboardItem) -> ScopedFileURL? {
+        fileAccess.startScopedFileURL(for: item)
+    }
+
     func startScopedShareURL(for item: ClipboardItem) -> ScopedFileURL? {
         fileAccess.startScopedShareURL(for: item)
     }

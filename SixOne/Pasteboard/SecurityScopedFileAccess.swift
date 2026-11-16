@@ -2,19 +2,44 @@
 //  SecurityScopedFileAccess.swift
 //  SixOne
 //
-//  沙盒文件访问权：捕获时固化安全作用域 bookmark，之后按 bookmark 优先、原路径兜底解析。
+//  沙盒文件访问权：捕获时固化安全作用域 bookmark，解析时 bookmark 优先、原路径兜底，过期重取回写。
 //
 
 import Foundation
+
+/// 过期 bookmark 重取出的新数据；调用方应回写库。
+nonisolated struct RefreshedBookmark: Sendable {
+    /// 组内文件的原路径键；单文件为 nil。
+    let pathKey: String?
+    let data: Data
+}
 
 /// 已解析的文件 URL；`needsStop` 表示已 start 安全作用域访问权，调用方须配对一次 stop。
 nonisolated struct ScopedFileURL: Sendable {
     let url: URL
     let needsStop: Bool
+    let refreshedBookmark: RefreshedBookmark?
+
+    init(url: URL, needsStop: Bool, refreshedBookmark: RefreshedBookmark? = nil) {
+        self.url = url
+        self.needsStop = needsStop
+        self.refreshedBookmark = refreshedBookmark
+    }
 
     func stopAccessIfNeeded() {
         guard needsStop else { return }
         url.stopAccessingSecurityScopedResource()
+    }
+}
+
+/// 不持有访问权的解析结果。
+nonisolated struct ResolvedFileURL: Sendable {
+    let url: URL
+    let refreshedBookmark: RefreshedBookmark?
+
+    init(url: URL, refreshedBookmark: RefreshedBookmark? = nil) {
+        self.url = url
+        self.refreshedBookmark = refreshedBookmark
     }
 }
 
@@ -39,62 +64,43 @@ nonisolated enum SecurityScopedFileAccess {
         return BookmarkPayload(bookmark: nil, bookmarks: makeScopeBookmarks(for: paths))
     }
 
-    /// 逐条解析当前有效路径，与 `allFilePaths` 对齐；访问权在返回前释放。
-    static func resolvedURLs(for item: ClipboardItem) -> [URL?] {
-        guard item.kind == .file || item.kind == .image else { return [] }
-        let paths = item.allFilePaths
-        guard !paths.isEmpty else { return [] }
-        guard paths.count > 1 else {
-            return [resolvedURLWithoutAccess(bookmark: item.securityScopeBookmark, path: item.filePath)]
-        }
-        let bookmarks = decodeBookmarks(item.securityScopeBookmarks)
-        return paths.map { resolvedURLWithoutAccess(bookmark: bookmarks[$0], path: $0) }
-    }
-
-    /// 预览用：解析并 start 访问权，由调用方结束后统一释放。
-    static func startScopedURLs(for item: ClipboardItem) -> [ScopedFileURL?] {
-        guard item.kind == .file, item.fileCount > 1 else { return [] }
-        let bookmarks = decodeBookmarks(item.securityScopeBookmarks)
-        return item.allFilePaths.map { startScopedURL(bookmark: bookmarks[$0], path: $0) }
-    }
-
     /// 按 bookmark 优先、原路径兜底解析；返回值已释放访问权，只能用于显示或写回，不能继续做文件 I/O。
-    static func resolvedURLWithoutAccess(bookmark: Data?, path: String?) -> URL? {
-        if let bookmark, let url = startAccess(bookmark: bookmark) {
-            url.stopAccessingSecurityScopedResource()
-            return url
+    static func resolvedFileWithoutAccess(
+        bookmark: Data?,
+        path: String?,
+        pathKey: String? = nil
+    ) -> ResolvedFileURL? {
+        if let bookmark, let resolved = resolveAndStart(bookmark: bookmark) {
+            let refreshed = refreshedBookmark(from: resolved, pathKey: pathKey)
+            resolved.url.stopAccessingSecurityScopedResource()
+            return ResolvedFileURL(url: resolved.url, refreshedBookmark: refreshed)
         }
-        return plainURL(path: path)
+        return plainURL(path: path).map { ResolvedFileURL(url: $0) }
     }
 
     /// 解析并 start 访问权；失败回落原路径（不持有访问权）。
-    static func startScopedURL(bookmark: Data?, path: String?) -> ScopedFileURL? {
-        if let bookmark, let url = startAccess(bookmark: bookmark) {
-            return ScopedFileURL(url: url, needsStop: true)
+    static func startScopedURL(
+        bookmark: Data?,
+        path: String?,
+        pathKey: String? = nil
+    ) -> ScopedFileURL? {
+        if let bookmark, let resolved = resolveAndStart(bookmark: bookmark) {
+            return ScopedFileURL(
+                url: resolved.url,
+                needsStop: true,
+                refreshedBookmark: refreshedBookmark(from: resolved, pathKey: pathKey)
+            )
         }
         return plainURL(path: path).map { ScopedFileURL(url: $0, needsStop: false) }
     }
 
-    /// 分享整个文件组：逐个解析并 start，只返回当前可用的文件。
-    static func startScopedURLsForSharing(for item: ClipboardItem) -> [ScopedFileURL] {
-        guard item.kind == .file, item.fileCount > 1 else { return [] }
-        let bookmarks = decodeBookmarks(item.securityScopeBookmarks)
-        return item.allFilePaths.compactMap { startScopedURL(bookmark: bookmarks[$0], path: $0) }
-    }
-
-    /// 分享组内某一个文件：只解析并 start 这一项。
-    static func startScopedURLForSharing(for item: ClipboardItem, fileAt index: Int) -> ScopedFileURL? {
-        let paths = item.allFilePaths
-        guard item.kind == .file, paths.indices.contains(index) else { return nil }
-        if paths.count > 1 {
-            let bookmarks = decodeBookmarks(item.securityScopeBookmarks)
-            return startScopedURL(bookmark: bookmarks[paths[index]], path: paths[index])
-        }
-        return startScopedURL(bookmark: item.securityScopeBookmark, path: item.filePath)
-    }
-
     /// 解析 bookmark 并 start 访问权；调用方必须配对 stop。
     static func startAccess(bookmark: Data) -> URL? {
+        resolveAndStart(bookmark: bookmark)?.url
+    }
+
+    /// 解析并 start；`isStale` 表示 bookmark 需重取回写。
+    private static func resolveAndStart(bookmark: Data) -> (url: URL, isStale: Bool)? {
         var stale = false
         guard let url = try? URL(
             resolvingBookmarkData: bookmark,
@@ -102,7 +108,16 @@ nonisolated enum SecurityScopedFileAccess {
             relativeTo: nil,
             bookmarkDataIsStale: &stale
         ), url.startAccessingSecurityScopedResource() else { return nil }
-        return url
+        return (url, stale)
+    }
+
+    /// stale 时按解析出的 URL 重取；必须在 stop 访问权之前调用。
+    private static func refreshedBookmark(
+        from resolved: (url: URL, isStale: Bool),
+        pathKey: String?
+    ) -> RefreshedBookmark? {
+        guard resolved.isStale, let data = makeScopeBookmark(for: resolved.url) else { return nil }
+        return RefreshedBookmark(pathKey: pathKey, data: data)
     }
 
     /// 原路径兜底；读不到数据视为不可用。
@@ -116,10 +131,18 @@ nonisolated enum SecurityScopedFileAccess {
         return (try? JSONDecoder().decode([String: Data].self, from: data)) ?? [:]
     }
 
+    static func encodeBookmarks(_ map: [String: Data]) -> Data? {
+        guard !map.isEmpty else { return nil }
+        return try? JSONEncoder().encode(map)
+    }
+
     private static func makeScopeBookmark(for path: String) -> Data? {
+        makeScopeBookmark(for: URL(fileURLWithPath: path))
+    }
+
+    private static func makeScopeBookmark(for url: URL) -> Data? {
         // 读不到的文件建不了 bookmark（如别的应用沙盒容器里的临时文件），直接跳过。
-        guard FileManager.default.isReadableFile(atPath: path) else { return nil }
-        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
         return try? url.bookmarkData(
             options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
             includingResourceValuesForKeys: nil,
@@ -135,7 +158,6 @@ nonisolated enum SecurityScopedFileAccess {
                 map[path] = bookmark
             }
         }
-        guard !map.isEmpty else { return nil }
-        return try? JSONEncoder().encode(map)
+        return encodeBookmarks(map)
     }
 }

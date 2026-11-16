@@ -7,6 +7,7 @@ import Testing
 @testable import SixOne
 
 @Suite("分享 URL 的安全作用域记账")
+@MainActor
 struct ShareScopedURLAccessTests {
     @Test("bookmark 解析成功：标记需要 stop")
     func bookmarkURLNeedsStop() throws {
@@ -39,6 +40,7 @@ struct ShareScopedURLAccessTests {
 
     @Test("文件组分享只返回仍可解析到的文件")
     func groupShareSkipsMissingFiles() throws {
+        let harness = try ClipboardHarness()
         let file = try TemporaryFiles.makeFile(prefix: "sixone-share-group", contents: "hi")
         defer { try? FileManager.default.removeItem(at: file) }
         let item = ClipboardItem(
@@ -46,7 +48,7 @@ struct ShareScopedURLAccessTests {
             filePaths: [file.path, "/definitely/not/here-\(UUID().uuidString).txt"]
         )
 
-        let files = SecurityScopedFileAccess.startScopedURLsForSharing(for: item)
+        let files = harness.manager.startScopedShareURLs(for: item)
         #expect(files.count == 1)
         #expect(files.first?.url.lastPathComponent == file.lastPathComponent)
         #expect(files.allSatisfy { !$0.needsStop })
@@ -54,6 +56,7 @@ struct ShareScopedURLAccessTests {
 
     @Test("组内单文件分享只解析那一个")
     func singleGroupFileResolvesItsOwnPath() throws {
+        let harness = try ClipboardHarness()
         let first = try TemporaryFiles.makeFile(prefix: "sixone-share-a", contents: "a")
         let second = try TemporaryFiles.makeFile(prefix: "sixone-share-b", contents: "b")
         defer {
@@ -63,7 +66,7 @@ struct ShareScopedURLAccessTests {
         let item = ClipboardItem(kind: .file, filePaths: [first.path, second.path])
 
         let resolved = try #require(
-            SecurityScopedFileAccess.startScopedURLForSharing(for: item, fileAt: 1)
+            harness.manager.startScopedShareURL(for: item, fileAt: 1)
         )
         #expect(resolved.url.lastPathComponent == second.lastPathComponent)
         #expect(!resolved.needsStop)

@@ -122,7 +122,7 @@ open build/Build/Products/Debug/SixOne.app
 | 加 / 改一个模型字段 | 从当前版本的 `Persistence/Schema/SixOneSchemaV4.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
 | 动取数路径 | 先分清「要整条」还是「只要身份 / 路径」：`ClipboardManager.fetchFullItem` / `fetchLightItem`；列表取窗走后台 actor 上的 `ClipboardHistoryRepository.latest` |
 | 改库文件位置或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名，兜底只允许动 `SixOne.store` |
-| 改「事后怎么找回文件」（移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark。用例：`ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` |
+| 改「事后怎么找回文件」（移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark；解析到过期 bookmark 时重取并回写。用例：`ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` / `BookmarkRefreshTests` |
 | 改预览顶栏 / 打开方式菜单 | `PreviewHeaderModel`、`PreviewHeaderView` / `PreviewGroupHeaderView`、`PreviewOpenWithMenu`、`PreviewDetailView` |
 | 改预览元数据 / 副标题 | `PreviewMetadataModel`（解码、stat、文本统计）、`PreviewSubtitle`（纯格式化） |
 | 改「什么算不要记录」 | `PasteboardSnapshot.doNotRecordTypes` + `ClipboardCaptureTests`；判定必须留在读内容**之前**，并与快照共用同一次 `pasteboardItems` 读取 |
