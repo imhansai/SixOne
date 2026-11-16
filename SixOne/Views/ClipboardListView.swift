@@ -44,8 +44,8 @@ struct ClipboardListView: View {
                     }
                 }
             }
-            .opacity(previewState.item == nil ? 1 : 0)
-            .allowsHitTesting(previewState.item == nil)
+            .opacity(previewState.mode == .historyList ? 1 : 0)
+            .allowsHitTesting(previewState.mode == .historyList)
 
             if let item = previewState.item {
                 PreviewDetailView(

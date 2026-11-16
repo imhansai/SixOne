@@ -164,7 +164,7 @@ final class PanelItemActions {
 
     func copySelectedItem() {
         guard let item = currentItem else { return }
-        if item.kind == .file, item.fileCount > 1,
+        if previewState.mode.isGroupPreview,
            let index = previewState.focusedGroupFileIndex {
             copyGroupFile(at: index, of: item)
             return
@@ -175,7 +175,7 @@ final class PanelItemActions {
 
     func pasteSelectedItem() {
         guard let item = currentItem else { return }
-        if item.kind == .file, item.fileCount > 1,
+        if previewState.mode.isGroupPreview,
            let index = previewState.focusedGroupFileIndex {
             pasteFlow.paste(item, fileIndex: index)
             return
@@ -313,19 +313,19 @@ final class PanelItemActions {
     }
 
     func requestGroupFileShare(at index: Int, anchorView: NSView) {
-        guard let item = previewState.item, item.kind == .file, item.fileCount > 1 else { return }
+        guard previewState.mode.isGroupPreview, let item = previewState.item else { return }
         sharing.sharePreviewedFile(at: index, of: item, anchorView: anchorView)
     }
 
     func requestShareGroup(anchorView: NSView?) {
-        guard let item = previewState.item, item.kind == .file, item.fileCount > 1,
+        guard previewState.mode.isGroupPreview, let item = previewState.item,
               let anchor = anchorView ?? panel.contentView else { return }
         sharing.sharePreviewedGroup(item, anchorView: anchor)
     }
 
     func shareCurrentItem() {
         guard let item = currentItem, let anchor = panel.contentView else { return }
-        if previewState.item?.id == item.id, item.kind == .file, item.fileCount > 1 {
+        if previewState.mode.isGroupPreview {
             if let index = previewState.focusedGroupFileIndex {
                 sharing.sharePreviewedFile(at: index, of: item, anchorView: anchor)
             } else {
@@ -339,7 +339,7 @@ final class PanelItemActions {
     // MARK: - 文件组
 
     func invokeGroupFileCommand(_ command: GroupFileCommand, index: Int) {
-        guard let item = previewState.item, item.kind == .file, item.fileCount > 1 else { return }
+        guard previewState.mode.isGroupPreview, let item = previewState.item else { return }
         switch command {
         case .paste:
             pasteFlow.paste(item, fileIndex: index)

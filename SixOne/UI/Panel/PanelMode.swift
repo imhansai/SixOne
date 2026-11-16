@@ -14,6 +14,14 @@ enum PanelMode: Equatable {
 }
 
 extension PanelMode {
+    /// 由条目与组内下标派生层级；视图与状态共用同一判定。
+    static func resolve(item: ClipboardItem?, groupFileIndex: Int?) -> PanelMode {
+        guard let item else { return .historyList }
+        guard item.kind == .file, item.fileCount > 1 else { return .itemPreview(id: item.id) }
+        if let groupFileIndex { return .groupFile(itemID: item.id, index: groupFileIndex) }
+        return .groupOverview(itemID: item.id)
+    }
+
     var isPreviewing: Bool { self != .historyList }
 
     var isGroupOverview: Bool {
@@ -32,9 +40,6 @@ extension PanelMode {
 extension PreviewState {
     /// 当前导航层级；编辑、搜索与筛选焦点不在此列。
     var mode: PanelMode {
-        guard let item = presentation.item else { return .historyList }
-        guard item.kind == .file, item.fileCount > 1 else { return .itemPreview(id: item.id) }
-        if let index = group.fileIndex { return .groupFile(itemID: item.id, index: index) }
-        return .groupOverview(itemID: item.id)
+        .resolve(item: presentation.item, groupFileIndex: group.fileIndex)
     }
 }

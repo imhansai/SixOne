@@ -78,7 +78,9 @@ final class PanelKeyActionExecutor {
         case .activateSelectedItem(let asPlainText):
             itemActions.activateSelected(asPlainText: asPlainText)
         case .activateFocusedGroupFile(let index):
-            if let item = previewState.item { pasteFlow.paste(item, fileIndex: index) }
+            if previewState.mode.isGroupPreview, let item = previewState.item {
+                pasteFlow.paste(item, fileIndex: index)
+            }
         case .pasteVisibleRow(let offset, let asPlainText):
             itemActions.pasteVisibleRow(offset: offset, asPlainText: asPlainText)
         case .pasteVisibleGroupFile(let offset, let asPlainText):

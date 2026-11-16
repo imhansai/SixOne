@@ -112,13 +112,16 @@ struct PreviewDetailView: View {
 
     // MARK: - 状态
 
+    private var mode: PanelMode {
+        .resolve(item: item, groupFileIndex: previewState.groupFileIndex)
+    }
+
     private var isGroupListMode: Bool {
-        item.kind == .file && item.fileCount > 1 && !isGroupFileView
+        mode.isGroupPreview && !isGroupFileView
     }
 
     private var isGroupFileView: Bool {
-        guard item.kind == .file, item.fileCount > 1,
-              let index = previewState.groupFileIndex else { return false }
+        guard case .groupFile(_, let index) = mode else { return false }
         return groupURLs.indices.contains(index)
     }
 

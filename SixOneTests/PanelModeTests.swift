@@ -25,6 +25,20 @@ struct PanelModeTests {
         #expect(state.mode == .itemPreview(id: single.id))
     }
 
+    @Test("resolve 对空条目、单条目与文件组给出同一层级")
+    func resolve() {
+        #expect(PanelMode.resolve(item: nil, groupFileIndex: nil) == .historyList)
+
+        let text = ClipboardItem(kind: .text, text: "x")
+        #expect(PanelMode.resolve(item: text, groupFileIndex: 0) == .itemPreview(id: text.id))
+
+        let group = ClipboardItem(kind: .file, filePaths: ["/tmp/a", "/tmp/b"])
+        #expect(PanelMode.resolve(item: group, groupFileIndex: nil)
+            == .groupOverview(itemID: group.id))
+        #expect(PanelMode.resolve(item: group, groupFileIndex: 1)
+            == .groupFile(itemID: group.id, index: 1))
+    }
+
     @Test("多文件条目在总览与单文件之间切换")
     func groupModes() {
         let state = PreviewState()
