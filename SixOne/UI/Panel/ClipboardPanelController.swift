@@ -338,11 +338,15 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
     // MARK: - 菜单命令
 
-    private var commandAvailability: PanelCommandAvailability {
+    /// 只有 Open / Share / Reveal 需要文件能力；校验只读缓存，解析在后台。
+    private func commandAvailability(for command: PanelMenuCommand) -> PanelCommandAvailability {
         let item = itemActions.currentItem
-        let kind = item?.kind
-        let hasOpenTarget = item.map { manager.canOpenExternally(id: $0.id) } ?? false
-        let hasRevealableFile = item.map { manager.canRevealExternally(id: $0.id) } ?? false
+        let capabilities: FileCapabilities
+        if command == .open || command == .share || command == .reveal, let item {
+            capabilities = context.fileCapabilities.capabilities(for: item, manager: manager)
+        } else {
+            capabilities = .none
+        }
         let focusedGroupFileIndex: Int? = {
             guard previewState.mode.isGroupPreview else { return nil }
             return previewState.focusedGroupFileIndex
@@ -351,11 +355,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             isPanelKeyWindow: panel.isKeyWindow,
             isTextEditing: isTextEditing,
             hasSelection: item != nil,
-            selectionKind: kind,
+            selectionKind: item?.kind,
             isPreviewing: previewState.mode.isPreviewing,
             focusedGroupFileIndex: focusedGroupFileIndex,
-            canOpenExternally: hasOpenTarget,
-            hasRevealableFile: hasRevealableFile,
+            canOpenExternally: capabilities.canOpen,
+            hasRevealableFile: capabilities.canReveal,
             hasHistory: !store.rows.isEmpty,
             isEditing: previewState.isEditing
         )
@@ -441,14 +445,13 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     // MARK: - 菜单校验
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        let availability = commandAvailability
         if let command = PanelMenuCommandTable.command(for: menuItem.action) {
             if command == .preview {
-                menuItem.title = availability.isPreviewing
+                menuItem.title = previewState.mode.isPreviewing
                     ? Localizer.string("Close Preview")
                     : Localizer.string("Preview")
             }
-            return availability.isEnabled(command)
+            return commandAvailability(for: command).isEnabled(command)
         }
         switch menuItem.action {
         case #selector(ClipboardPanelController.performTextFinderAction(_:)):

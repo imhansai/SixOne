@@ -86,6 +86,8 @@ final class PanelContext {
     let scrollerLayout = ScrollerLayoutState()
     /// 搜索词到库查询链路：输入变化、Esc 清空与唤出对齐。
     let searchSession: PanelSearchSession
+    /// 菜单校验用的文件能力缓存：校验只读，解析在后台。
+    let fileCapabilities: PanelFileCapabilityCache
 
     /// 面板级动作的实现方；控制器在 init 里认领。
     weak var actions: PanelActionHandler?
@@ -101,6 +103,11 @@ final class PanelContext {
         self.manager = manager
         self.store = store
         self.caches = caches
+        self.fileCapabilities = PanelFileCapabilityCache(
+            onBookmarksRefreshed: { [weak manager] itemID, refreshes in
+                manager?.refreshSecurityScopeBookmarks(id: itemID, refreshes)
+            }
+        )
         self.searchSession = PanelSearchSession(
             store: store,
             searchState: searchState,

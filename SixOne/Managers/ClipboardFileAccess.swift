@@ -233,10 +233,18 @@ final class ClipboardFileAccess {
         }
     }
 
-    /// 菜单能否「在访达中显示」：能定位到任一文件即可。
+    /// 菜单能否「在访达中显示」：能定位到任一文件即可；文件组短路。
     func canRevealExternally(id: UUID) -> Bool {
         guard let item = writer.fetchLightItem(id: id) else { return false }
-        return !revealURLs(for: item).isEmpty
+        guard item.kind == .file || item.kind == .image else { return false }
+        let access = Self.evaluateFileAccess(
+            paths: item.allFilePaths,
+            bookmark: item.securityScopeBookmark,
+            bookmarksJSON: item.securityScopeBookmarks,
+            needsReveal: true
+        )
+        writeBackRefreshedBookmarks(access.refreshedBookmarks, for: item)
+        return access.canReveal
     }
 
     /// 菜单能否「打开 / 分享」：只读轻量列，不把 imageData 读进内存。
@@ -247,15 +255,105 @@ final class ClipboardFileAccess {
         case .text:
             return writer.hasText(id: id)
         case .file:
-            return resolvedFileURL(for: item) != nil
+            return openable(item)
         case .image:
-            if resolvedFileURL(for: item) != nil { return true }
-            return writer.hasInlineImage(id: id)
+            return openable(item) || writer.hasInlineImage(id: id)
         case .link:
             guard let text = item.text, let url = URL(string: text) else { return false }
             return url.scheme != nil
         case .color:
             return false
+        }
+    }
+
+    private func openable(_ item: ClipboardItem) -> Bool {
+        let access = Self.evaluateFileAccess(
+            paths: item.allFilePaths,
+            bookmark: item.securityScopeBookmark,
+            bookmarksJSON: item.securityScopeBookmarks,
+            needsReveal: false
+        )
+        writeBackRefreshedBookmarks(access.refreshedBookmarks, for: item)
+        return access.canOpen
+    }
+
+    // MARK: - 菜单可用性解析
+
+    /// 纯解析结果；不碰库，可在后台调用。
+    nonisolated struct FileAccessEvaluation: Sendable {
+        let canOpen: Bool
+        let canReveal: Bool
+        let refreshedBookmarks: [RefreshedBookmark]
+    }
+
+    /// 逐路径解析，文件组能确定答案时短路。
+    nonisolated static func evaluateFileAccess(
+        paths: [String],
+        bookmark: Data?,
+        bookmarksJSON: Data?,
+        needsReveal: Bool
+    ) -> FileAccessEvaluation {
+        guard !paths.isEmpty else {
+            return FileAccessEvaluation(canOpen: false, canReveal: false, refreshedBookmarks: [])
+        }
+        let isGroup = paths.count > 1
+        let bookmarks = isGroup ? SecurityScopedFileAccess.decodeBookmarks(bookmarksJSON) : [:]
+        var canOpen = false
+        var canReveal = false
+        var refreshedBookmarks: [RefreshedBookmark] = []
+        for path in paths {
+            if let resolved = SecurityScopedFileAccess.resolvedFileWithoutAccess(
+                bookmark: isGroup ? bookmarks[path] : bookmark,
+                path: path,
+                pathKey: isGroup ? path : nil
+            ) {
+                canOpen = true
+                canReveal = true
+                if let refreshed = resolved.refreshedBookmark {
+                    refreshedBookmarks.append(refreshed)
+                }
+            } else if needsReveal, FileManager.default.fileExists(atPath: path) {
+                // 存在但不可读：不能打开，仍可在访达中定位。
+                canReveal = true
+            }
+            if canOpen { break }
+        }
+        return FileAccessEvaluation(
+            canOpen: canOpen,
+            canReveal: canReveal,
+            refreshedBookmarks: refreshedBookmarks
+        )
+    }
+
+    /// 后台探测入口：给出菜单结论，交回过期 bookmark。
+    nonisolated static func resolveCapabilities(
+        for request: FileCapabilityRequest
+    ) -> FileCapabilityResolution {
+        switch request.kind {
+        case .text:
+            return FileCapabilityResolution(
+                capabilities: FileCapabilities(canOpen: request.hasText, canReveal: false),
+                refreshedBookmarks: []
+            )
+        case .link:
+            return FileCapabilityResolution(
+                capabilities: FileCapabilities(canOpen: request.isOpenableLink, canReveal: false),
+                refreshedBookmarks: []
+            )
+        case .color:
+            return FileCapabilityResolution(capabilities: .none, refreshedBookmarks: [])
+        case .image, .file:
+            let access = evaluateFileAccess(
+                paths: request.paths,
+                bookmark: request.bookmark,
+                bookmarksJSON: request.bookmarks,
+                needsReveal: true
+            )
+            let canOpen = access.canOpen || (request.kind == .image && request.hasInlineImage)
+            return FileCapabilityResolution(
+                capabilities: FileCapabilities(canOpen: canOpen, canReveal: access.canReveal),
+                refreshedBookmarks: access.refreshedBookmarks
+            )
         }
     }
 

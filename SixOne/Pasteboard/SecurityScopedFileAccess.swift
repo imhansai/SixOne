@@ -8,7 +8,7 @@
 import Foundation
 
 /// 过期 bookmark 重取出的新数据；调用方应回写库。
-nonisolated struct RefreshedBookmark: Sendable {
+nonisolated struct RefreshedBookmark: Sendable, Equatable {
     /// 组内文件的原路径键；单文件为 nil。
     let pathKey: String?
     let data: Data

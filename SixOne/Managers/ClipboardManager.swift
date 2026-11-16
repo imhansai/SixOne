@@ -368,6 +368,11 @@ final class ClipboardManager {
         fileAccess.canRevealExternally(id: id)
     }
 
+    /// 回写后台探测到的过期 bookmark；空结果不落库。
+    func refreshSecurityScopeBookmarks(id: UUID, _ refreshes: [RefreshedBookmark]) {
+        writer.refreshSecurityScopeBookmarks(id: id, refreshes)
+    }
+
     // MARK: - 取数
 
     func fetchFullItem(id: UUID) -> ClipboardItem? {
@@ -381,6 +386,11 @@ final class ClipboardManager {
 
     func hasInlineImage(id: UUID) -> Bool {
         writer.hasInlineImage(id: id)
+    }
+
+    /// 只做存在性探测，不把正文读进内存。
+    func hasText(id: UUID) -> Bool {
+        writer.hasText(id: id)
     }
 
     /// 预览用：后台读取完整位图，避免主线程加载大字段。
