@@ -39,7 +39,7 @@ struct GroupPreviewCoordinator {
         return index
     }
 
-    func url(at index: Int) -> URL? {
+    private func url(at index: Int) -> URL? {
         groupURLs.indices.contains(index) ? groupURLs[index] : nil
     }
 

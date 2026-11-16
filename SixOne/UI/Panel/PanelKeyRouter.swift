@@ -21,7 +21,7 @@ enum PanelKeyRouter {
             guard offset < context.visibleRowCount else { return .panel(.consume) }
             let asPlainText = press.modifiers.contains(.shift)
             // 文件组总览：编号对应组内列表，粘贴的是单个文件。
-            if context.isGroupOverview {
+            if context.mode.isGroupOverview {
                 return .panel(.pasteVisibleGroupFile(offset: offset, asPlainText: asPlainText))
             }
             return .panel(.pasteVisibleRow(offset: offset, asPlainText: asPlainText))
@@ -116,8 +116,8 @@ enum PanelKeyRouter {
         }
 
         // 文件组预览只在组内导航，不切换外层历史。
-        if context.isGroupPreview {
-            let viewing = context.isViewingGroupFile
+        if context.mode.isGroupPreview {
+            let viewing = context.mode.isGroupFile
             if viewing {
                 // 单文件态：↑/↓ 换文件，Space / Esc 回总览；←/→ 留给内容本身。
                 if press.matches(PanelKeyCode.up, .command) {
@@ -227,7 +227,7 @@ enum PanelKeyRouter {
     }
 
     private static func focusedGroupFileIndex(_ context: PanelKeyContext) -> Int? {
-        guard context.isGroupPreview else { return nil }
+        guard context.mode.isGroupPreview else { return nil }
         return context.focusedGroupFileIndex
     }
 }

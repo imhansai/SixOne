@@ -38,7 +38,7 @@ extension PanelMode {
 }
 
 extension PreviewState {
-    /// 当前导航层级；编辑、搜索与筛选焦点不在此列。
+    /// 当前导航层级。
     var mode: PanelMode {
         .resolve(item: presentation.item, groupFileIndex: group.fileIndex)
     }

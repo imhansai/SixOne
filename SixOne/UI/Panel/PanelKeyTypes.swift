@@ -109,7 +109,7 @@ enum PanelKeyAction: Equatable {
 
 /// 解释一次按键所需的现场状态；字段全有默认值，测试只写关心的那几个。
 struct PanelKeyContext {
-    /// 导航层级；编辑、搜索与筛选焦点由下面的标志单独表达。
+    /// 当前导航层级。
     var mode: PanelMode = .historyList
     /// 当前聚焦的组内文件下标（单文件态是正在看的，列表态是选中的）。
     var focusedGroupFileIndex: Int?
@@ -140,16 +140,9 @@ struct PanelKeyContext {
 
     var isPreviewing: Bool { mode.isPreviewing }
 
-    /// 预览停在文件组列表。
-    var isGroupOverview: Bool { mode.isGroupOverview }
-
-    var isViewingGroupFile: Bool { mode.isGroupFile }
-
-    var isGroupPreview: Bool { mode.isGroupPreview }
-
     /// 列表可快速粘贴；预览仅文件组总览。
     var canQuickPasteVisibleRow: Bool {
-        !isEditing && !isMoreActionsFocused && (!isPreviewing || isGroupOverview)
+        !isEditing && !isMoreActionsFocused && (!isPreviewing || mode.isGroupOverview)
     }
 }
 
