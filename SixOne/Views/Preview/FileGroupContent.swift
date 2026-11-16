@@ -16,15 +16,20 @@ struct FileGroupContent: View {
     @Environment(PanelContext.self) private var context
 
     private var previewState: PreviewState { context.previewState }
-    private var groupActions: GroupActionHandling? { context.groupActions }
-    private var shellActions: ShellActionHandling? { context.shellActions }
 
     var body: some View {
-        let viewingIndex = viewingGroupFileIndex
+        let coordinator = GroupPreviewCoordinator(
+            item: item,
+            groupURLs: groupURLs,
+            previewState: previewState,
+            groupActions: context.groupActions,
+            shellActions: context.shellActions
+        )
+        let viewingIndex = coordinator.viewingIndex
         return ZStack {
-            FileGroupPreview(
+            GroupFileListView(
                 context: context,
-                files: visibleGroupEntries,
+                files: coordinator.visibleEntries,
                 isListActive: !previewState.isGroupFilterFocused,
                 sourceAppBundleIdentifier: item.sourceAppBundleIdentifier,
                 selectedIndex: previewState.groupSelectedIndex,
@@ -33,21 +38,11 @@ struct FileGroupContent: View {
                 scrollRequestID: previewState.groupScrollRequestID,
                 isScrollBlocked: context.confirmationState.isPresenting,
                 quickPasteRange: quickPasteRange,
-                onVisibleRowRangeChanged: { range in
-                    // 延迟发布可能晚于切换，别写进下一个组。
-                    guard previewState.item?.id == item.id else { return }
-                    previewState.groupVisibleRowRange = range
-                },
-                onSelect: { index in
-                    previewState.selectGroupFile(index)
-                    // 收回键盘焦点，让方向键与裸 ⌫ 仍可用。
-                    shellActions?.panelDidRequestFocusContent()
-                },
-                onPreview: { previewState.showGroupFile($0) },
-                onCommand: handleGroupFileCommand,
-                onShare: { index, anchorView in
-                    groupActions?.panelDidRequestGroupFileShare(at: index, anchorView: anchorView)
-                }
+                onVisibleRowRangeChanged: coordinator.visibleRangeDidChange,
+                onSelect: coordinator.select,
+                onPreview: coordinator.preview,
+                onCommand: coordinator.handle,
+                onShare: coordinator.share
             )
             .opacity(viewingIndex == nil ? 1 : 0)
             .allowsHitTesting(viewingIndex == nil)
@@ -59,17 +54,12 @@ struct FileGroupContent: View {
                     if let url = groupURLs[index] {
                         FilePreviewContent(url: url)
                     } else {
-                        missingGroupFileNotice(index: index)
+                        missingGroupFileNotice(name: coordinator.entries[index].name)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-    }
-
-    private var viewingGroupFileIndex: Int? {
-        guard let index = previewState.groupFileIndex, groupURLs.indices.contains(index) else { return nil }
-        return index
     }
 
     /// 按住 ⌘ 时才参与编号。
@@ -78,59 +68,18 @@ struct FileGroupContent: View {
         return previewState.groupVisibleRowRange
     }
 
-    /// 组内文件动作：打开与访达在此处理，粘贴/拷贝交给面板。
-    private func handleGroupFileCommand(_ command: GroupFileCommand, index: Int) {
-        switch command {
-        case .open:
-            if groupURLs.indices.contains(index), let url = groupURLs[index] { openGroupFile(url) }
-        case .reveal:
-            if groupURLs.indices.contains(index), let url = groupURLs[index] { revealInFinder(url) }
-        case .paste, .copy:
-            groupActions?.panelDidInvokeGroupFileCommand(command, index: index)
-        }
-    }
-
-    private func revealInFinder(_ url: URL) {
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-        shellActions?.panelDidHandOffToExternalApp()
-    }
-
-    private func missingGroupFileNotice(index: Int) -> some View {
+    private func missingGroupFileNotice(name: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28))
                 .foregroundStyle(.secondary)
             Text(String(
                 format: Localizer.string("File no longer exists: %@"),
-                groupEntries[index].name
+                name
             ))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
         }
-    }
-
-    /// 列表数据：路径与 URL 成对，下标对齐由本视图保证。
-    private var groupEntries: [GroupFileEntry] {
-        item.allFilePaths.enumerated().map { index, path in
-            GroupFileEntry(
-                index: index,
-                path: path,
-                url: groupURLs.indices.contains(index) ? groupURLs[index] : nil
-            )
-        }
-    }
-
-    /// 筛选后的行；GroupFileEntry.index 始终是组内原始下标。
-    private var visibleGroupEntries: [GroupFileEntry] {
-        let entries = groupEntries
-        return previewState.visibleGroupFileIndices.compactMap { index in
-            entries.indices.contains(index) ? entries[index] : nil
-        }
-    }
-
-    private func openGroupFile(_ url: URL) {
-        NSWorkspace.shared.open(url)
-        shellActions?.panelDidHandOffToExternalApp()
     }
 }

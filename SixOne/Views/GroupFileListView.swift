@@ -1,12 +1,12 @@
 //
-//  FileGroupPreview.swift
+//  GroupFileListView.swift
 //  SixOne
 
 import AppKit
 import SwiftUI
 
-/// 多文件条目预览：组内文件按历史条目样式列出（容器 GroupListTableView）。
-struct FileGroupPreview: View {
+/// 组内文件列表：按历史条目样式列出（容器 GroupListTableView）。
+struct GroupFileListView: View {
     let context: PanelContext
     let files: [GroupFileEntry]
     let isListActive: Bool

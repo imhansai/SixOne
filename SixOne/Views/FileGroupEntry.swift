@@ -7,7 +7,7 @@
 import AppKit
 
 /// 文件组某一项的右键动作；分享单独走 onShare，因为需要行视图当锚点。
-enum GroupFileCommand {
+enum GroupFileCommand: Equatable {
     case open
     case reveal
     case paste
