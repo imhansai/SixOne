@@ -1579,6 +1579,26 @@
         }
       }
     },
+    "Showing the first %@ characters of a %@ file." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅显示前 %1$@ 个字符，文件共 %2$@。"
+          }
+        }
+      }
+    },
+    "Showing the first %@ of a %@ file." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅显示前 %1$@，文件共 %2$@。"
+          }
+        }
+      }
+    },
     "Showing the latest %@ items. Search to find older ones." : {
       "localizations" : {
         "zh-Hans" : {
