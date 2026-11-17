@@ -129,7 +129,7 @@ final class ClipboardPasteboardWriter {
                 text = full.text
             }
             // 编辑后可能已不是合法 URL，按纯文本写回。
-            if let text, let url = URL(string: text), url.scheme != nil {
+            if let text, ClipboardItem.linkURL(from: text) != nil {
                 pasteboard.write(.url(text))
             } else {
                 pasteboard.write(text.map { .text($0, rtf: nil) } ?? .clear)

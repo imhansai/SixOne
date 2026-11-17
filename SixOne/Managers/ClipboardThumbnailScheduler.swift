@@ -36,18 +36,12 @@ final class ClipboardThumbnailScheduler {
     func refresh(for item: ClipboardItem) {
         guard item.thumbnailData != nil,
               item.thumbnailVersion != ClipboardItem.currentThumbnailVersion else { return }
-
-        let source: ClipboardThumbnailService.Source?
-        if let imageData = item.imageData {
-            source = .bitmap(imageData)
-        } else if let path = item.filePath,
-                  item.securityScopeBookmark != nil || FileManager.default.isReadableFile(atPath: path) {
-            source = .file(path: path, bookmark: item.securityScopeBookmark)
-        } else if let colorData = item.colorData {
-            source = .color(colorData)
-        } else {
-            source = nil
-        }
+        let source = Self.resolveSource(
+            imageData: item.imageData,
+            filePath: item.filePath,
+            bookmark: item.securityScopeBookmark,
+            colorData: item.colorData
+        )
         guard let source else { return }
         schedule(for: item.id, source: source)
     }
@@ -90,23 +84,33 @@ final class ClipboardThumbnailScheduler {
     }
 
     /// 缩略图来源：图片用剪贴板位图（源文件可能在他应用沙盒里，读不到），文件按路径取图。
-    /// 文件读不到时不排 Quick Look：quicklookd 拿不到沙盒扩展，只会回文件类型图标。
     nonisolated static func thumbnailSource(
         for entry: PasteboardEntryParser.Entry,
         bookmark: Data?
     ) -> ClipboardThumbnailService.Source? {
-        if let imageData = entry.imageData {
-            return .bitmap(imageData)
-        }
-        if let path = entry.filePath {
-            guard bookmark != nil || FileManager.default.isReadableFile(atPath: path) else {
+        resolveSource(
+            imageData: entry.imageData,
+            filePath: entry.filePath,
+            bookmark: bookmark,
+            colorData: entry.colorData
+        )
+    }
+
+    /// 来源判定唯一入口；读不到的文件不排 Quick Look。
+    nonisolated static func resolveSource(
+        imageData: Data?,
+        filePath: String?,
+        bookmark: Data?,
+        colorData: Data?
+    ) -> ClipboardThumbnailService.Source? {
+        if let imageData { return .bitmap(imageData) }
+        if let filePath {
+            guard bookmark != nil || FileManager.default.isReadableFile(atPath: filePath) else {
                 return nil
             }
-            return .file(path: path, bookmark: bookmark)
+            return .file(path: filePath, bookmark: bookmark)
         }
-        if let colorData = entry.colorData {
-            return .color(colorData)
-        }
+        if let colorData { return .color(colorData) }
         return nil
     }
 }

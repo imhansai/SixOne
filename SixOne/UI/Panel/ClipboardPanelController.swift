@@ -527,8 +527,6 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         moreActionsState.isFocused && event.keyCode == PanelKeyCode.space
     }
 
-    /// 更多操作聚焦时，Space 交给 AppKit 默认 keyDown，让 SwiftUI Menu 自己开菜单。
-
     /// 预览中、输入法组合或有模态时，Tab 交给系统。
     var shouldCycleFocusWithTab: Bool {
         guard previewState.mode == .historyList else { return false }

@@ -43,12 +43,10 @@ struct GroupPreviewFooter: View {
     }
 
     private var timeSegments: [String] {
-        var parts: [String] = []
-        if let modDate = meta?.latestModDate {
-            parts.append(PreviewSubtitle.lastModifiedLabel(modDate))
-        }
-        parts.append(PreviewSubtitle.firstRecordedTimeLabel(item.firstCapturedAt))
-        parts.append(PreviewSubtitle.lastCopiedTimeLabel(item.lastActivityAt))
-        return parts
+        PreviewSubtitle.timeSegments(
+            lastModified: meta?.latestModDate,
+            firstCapturedAt: item.firstCapturedAt,
+            lastActivityAt: item.lastActivityAt
+        )
     }
 }

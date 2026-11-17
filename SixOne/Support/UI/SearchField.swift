@@ -239,11 +239,8 @@ struct SearchField: NSViewRepresentable {
 final class FocusAwareTextField: NSTextField {
     var onFocusChange: ((Bool) -> Void)?
 
+    /// 测试注入的右键落点；生产为 nil，走系统菜单。
     var presentContextMenu: ((NSEvent) -> Void)?
-
-    override func becomeFirstResponder() -> Bool {
-        return super.becomeFirstResponder()
-    }
 
     /// 右击会绕过 become/resign，需主动设置焦点，否则 SwiftUI 仍以为列表聚焦。
     override func rightMouseDown(with event: NSEvent) {

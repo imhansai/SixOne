@@ -40,9 +40,7 @@ final class PanelSharing {
             }
             present([file], relativeTo: anchorView.bounds, of: anchorView)
         case .link:
-            guard let text = item.text,
-                  let url = URL(string: text),
-                  url.scheme != nil else { return }
+            guard let url = item.linkURL else { return }
             present([url], relativeTo: anchorView.bounds, of: anchorView)
         case .text, .color:
             return
@@ -52,7 +50,7 @@ final class PanelSharing {
     func sharePreviewedGroup(_ item: ClipboardItem, anchorView: NSView) {
         let files = manager.startScopedShareURLs(for: item)
         guard !files.isEmpty else {
-            noticeState.showMissingFile(item.displayTitle)
+            noticeState.showInaccessibleFile(item.displayTitle)
             return
         }
         present(files, relativeTo: anchorView.bounds, of: anchorView)
@@ -64,7 +62,7 @@ final class PanelSharing {
             let name = item.allFilePaths.indices.contains(index)
                 ? URL(fileURLWithPath: item.allFilePaths[index]).lastPathComponent
                 : item.displayTitle
-            noticeState.showMissingFile(name)
+            noticeState.showInaccessibleFile(name)
             return
         }
         present([file], relativeTo: anchorView.bounds, of: anchorView)

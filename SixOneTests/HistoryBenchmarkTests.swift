@@ -173,7 +173,10 @@ struct HistoryBenchmarkTests {
             _ = manager.fetchFullItem(id: image)?.imageData?.count
         }
         await timed("取数：8KB 位图条目判「能否外部打开」（fetchLightItem + 存在性探测）") {
-            _ = manager.canOpenExternally(id: image)
+            guard let item = manager.fetchLightItem(id: image) else { return }
+            _ = ClipboardFileAccess.resolveCapabilities(
+                for: FileCapabilityRequest(item: item, manager: manager)
+            )
         }
 
         let screenshot = Data(repeating: 0x7E, count: 3 * 1024 * 1024)
@@ -187,7 +190,10 @@ struct HistoryBenchmarkTests {
             _ = manager.fetchFullItem(id: screenshotItem.id)?.imageData?.count
         }
         await timed("取数：3MB 位图条目判「能否外部打开」（fetchLightItem + 存在性探测）") {
-            _ = manager.canOpenExternally(id: screenshotItem.id)
+            guard let item = manager.fetchLightItem(id: screenshotItem.id) else { return }
+            _ = ClipboardFileAccess.resolveCapabilities(
+                for: FileCapabilityRequest(item: item, manager: manager)
+            )
         }
 
         benchPasteboard.simulateCopy([pasteboardItem])

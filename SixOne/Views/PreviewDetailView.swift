@@ -57,7 +57,7 @@ struct PreviewDetailView: View {
                     resolveOpenWithURL: resolveOpenWithURL,
                     resolveRevealURL: resolveRevealURL,
                     canReveal: revealAvailable,
-                    linkURL: linkURL,
+                    linkURL: item.linkURL,
                     isGroupFileView: isGroupFileView
                 )
             }
@@ -187,11 +187,11 @@ struct PreviewDetailView: View {
     private var subtitleTooltip: String {
         var parts: [String] = []
         if let contentSummary { parts.append(contentSummary) }
-        if item.kind == .file, let modDate = metadata.fileMeta?.modDate {
-            parts.append(PreviewSubtitle.lastModifiedLabel(modDate))
-        }
-        parts.append(PreviewSubtitle.firstRecordedTimeLabel(item.firstCapturedAt))
-        parts.append(PreviewSubtitle.lastCopiedTimeLabel(item.lastActivityAt))
+        parts.append(contentsOf: PreviewSubtitle.timeSegments(
+            lastModified: item.kind == .file ? metadata.fileMeta?.modDate : nil,
+            firstCapturedAt: item.firstCapturedAt,
+            lastActivityAt: item.lastActivityAt
+        ))
         return parts.joined(separator: "\n")
     }
 
@@ -291,12 +291,6 @@ struct PreviewDetailView: View {
         guard !urls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
         shellActions?.panelDidHandOffToExternalApp()
-    }
-
-    private var linkURL: URL? {
-        guard item.kind == .link, let text = item.text else { return nil }
-        let url = URL(string: text)
-        return url?.scheme != nil ? url : nil
     }
 
     nonisolated static func isWebScheme(_ scheme: String?) -> Bool {

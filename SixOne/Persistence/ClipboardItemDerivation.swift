@@ -2,11 +2,24 @@
 //  ClipboardItemDerivation.swift
 //  SixOne
 //
-//  条目派生值的纯工具：去重 key、搜索快照与标题生成，模型只负责存取字段。
+//  条目派生值的纯工具：去重 key、搜索快照、标题生成与链接判定，模型只负责存取字段。
 //
 
 import CryptoKit
 import Foundation
+
+nonisolated extension ClipboardItem {
+    /// 链接条目的可打开 URL。
+    var linkURL: URL? {
+        kind == .link ? Self.linkURL(from: text) : nil
+    }
+
+    /// 文本 → 带 scheme 的 URL 判定。
+    static func linkURL(from text: String?) -> URL? {
+        guard let text, let url = URL(string: text), url.scheme != nil else { return nil }
+        return url
+    }
+}
 
 nonisolated enum ContentFingerprint {
     static func key(

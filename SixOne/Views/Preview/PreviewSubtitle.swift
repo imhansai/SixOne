@@ -45,11 +45,25 @@ enum PreviewSubtitle {
         }
         guard let folderStats else { return Localizer.string("Folder") }
         let sizeText = ByteCountFormatting.string(fromByteCount: folderStats.totalSize)
+        let countTemplate: String.LocalizationValue = folderStats.itemCount == 1 ? "%@ item" : "%@ items"
         let countText = String(
-            format: Localizer.string("%@ items"),
+            format: Localizer.string(countTemplate),
             groupedCount(folderStats.itemCount)
         )
         return "\(sizeText) · \(countText)"
+    }
+
+    /// 预览底部的时间行：最近修改（可选）、首次记录、最近复制。
+    static func timeSegments(
+        lastModified: Date?,
+        firstCapturedAt: Date,
+        lastActivityAt: Date
+    ) -> [String] {
+        var parts: [String] = []
+        if let lastModified { parts.append(lastModifiedLabel(lastModified)) }
+        parts.append(firstRecordedTimeLabel(firstCapturedAt))
+        parts.append(lastCopiedTimeLabel(lastActivityAt))
+        return parts
     }
 
     static func lastModifiedLabel(_ date: Date) -> String {

@@ -142,7 +142,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 752 tests in 122 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 757 tests in 123 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 System resources are driven by doubles under `SixOneTests/Support/`: `FakePasteboard`, `InMemorySettingsStorage`, `FakeHotKeyEventMonitor`, `FakeHistoryRepository`, `OffscreenHost` / `TestPanel`, `TemporaryFiles`, and `Wait`. The benchmarks in `HistoryBenchmarkTests` / `MigrationBenchmarkTests` run only when `.benchmark-history` exists at the repo root or `/tmp/sixone-benchmark` does; delete the switch file afterwards.
 

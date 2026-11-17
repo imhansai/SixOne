@@ -59,18 +59,27 @@ nonisolated extension TextStats {
         var words = 0
         var lines = 1
         var inWord = false
+        var previousWasCarriageReturn = false
         let whitespace = CharacterSet.whitespacesAndNewlines
         let newlines = CharacterSet.newlines
         for scalar in text.unicodeScalars {
-            var isWhitespace: Bool
+            let isLineBreak: Bool
             if scalar.value < 0x80 {
-                if (0x0A...0x0D).contains(scalar.value) { lines += 1 }
-                isWhitespace = scalar == " " || (0x09...0x0D).contains(scalar.value)
+                // CRLF 是两段标量但只算一次换行。
+                isLineBreak = scalar.value == 0x0A
+                    ? !previousWasCarriageReturn
+                    : (0x0B...0x0D).contains(scalar.value)
+                previousWasCarriageReturn = scalar.value == 0x0D
             } else {
-                if newlines.contains(scalar) { lines += 1 }
-                // U+200B 对齐 Character.isWhitespace，按非空白处理。
-                isWhitespace = scalar.value != 0x200B && whitespace.contains(scalar)
+                isLineBreak = newlines.contains(scalar)
+                previousWasCarriageReturn = false
             }
+            if isLineBreak { lines += 1 }
+
+            let isWhitespace = scalar.value < 0x80
+                ? (scalar == " " || (0x09...0x0D).contains(scalar.value))
+                // U+200B 对齐 Character.isWhitespace，按非空白处理。
+                : (scalar.value != 0x200B && whitespace.contains(scalar))
             if isWhitespace {
                 inWord = false
             } else if !inWord {

@@ -168,8 +168,7 @@ actor HistoryMaintenance {
     }
 
     private nonisolated static func storeByteCount(for container: ModelContainer) async -> Int64 {
-        guard let url = container.configurations
-            .first(where: { !$0.isStoredInMemoryOnly })?.url else { return 0 }
+        guard let url = HistoryStorageStatsReader.diskStoreURL(for: container) else { return 0 }
         return await ExternalStorageDirectory.byteCount(forStoreAt: url)
     }
 }

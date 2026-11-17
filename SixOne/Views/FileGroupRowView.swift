@@ -70,12 +70,12 @@ final class FileGroupRowState {
     }
 
     func markCopied() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(PanelAnimation.copyFeedback) {
             isCopied = true
         }
         feedback.schedule(after: PanelTiming.copiedFeedback) { [weak self] in
             guard let self else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(PanelAnimation.copyFeedback) {
                 self.isCopied = false
             }
         }

@@ -73,7 +73,7 @@ final class PanelFileCapabilityCache {
     /// 校验入口：只读缓存；未命中或过期时后台探测，本次返回乐观值或旧值。
     func capabilities(for item: ClipboardItem, manager: ClipboardManager) -> FileCapabilities {
         capabilities(itemID: item.id, recencyID: item.recencyID) {
-            Self.makeRequest(for: item, manager: manager)
+            FileCapabilityRequest(item: item, manager: manager)
         }
     }
 
@@ -157,25 +157,6 @@ final class PanelFileCapabilityCache {
               let oldest = entries.min(by: { $0.value.resolvedAt < $1.value.resolvedAt })?.key
         else { return }
         entries[oldest] = nil
-    }
-
-    private static func makeRequest(
-        for item: ClipboardItem,
-        manager: ClipboardManager
-    ) -> FileCapabilityRequest {
-        FileCapabilityRequest(
-            itemID: item.id,
-            recencyID: item.recencyID,
-            kind: item.kind,
-            paths: item.allFilePaths,
-            bookmark: item.securityScopeBookmark,
-            bookmarks: item.securityScopeBookmarks,
-            hasInlineImage: item.kind == .image && manager.hasInlineImage(id: item.id),
-            hasText: item.kind == .text && manager.hasText(id: item.id),
-            // 链接正文很短，按需补取；文本条目不读全文。
-            isOpenableLink: item.kind == .link
-                && (item.text.flatMap { URL(string: $0) }?.scheme != nil)
-        )
     }
 
     /// 未命中时的保守结论；动作执行时会再校验。

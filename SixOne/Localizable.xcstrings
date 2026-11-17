@@ -67,6 +67,16 @@
         }
       }
     },
+    "%@ item" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 个项目"
+          }
+        }
+      }
+    },
     "%@ items" : {
       "localizations" : {
         "zh-Hans" : {
@@ -999,22 +1009,22 @@
         }
       }
     },
-    "Open Language & Region" : {
+    "Last copied time: %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开“语言与地区”"
+            "value" : "最近拷贝时间：%@"
           }
         }
       }
     },
-    "SixOne follows the language set for it in macOS. Change it in System Settings → General → Language & Region → Applications, then reopen SixOne." : {
+    "Last modified: %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SixOne 跟随 macOS 为它设置的语言。可在“系统设置”→“通用”→“语言与地区”→“应用程序”中修改，然后重新打开 SixOne。"
+            "value" : "上次修改时间：%@"
           }
         }
       }
@@ -1035,26 +1045,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录时自动启动 SixOne"
-          }
-        }
-      }
-    },
-    "Last copied time: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近拷贝时间：%@"
-          }
-        }
-      }
-    },
-    "Last modified: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次修改时间：%@"
           }
         }
       }
@@ -1195,6 +1185,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在浏览器中打开"
+          }
+        }
+      }
+    },
+    "Open Language & Region" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开“语言与地区”"
           }
         }
       }
@@ -1611,6 +1611,16 @@
     },
     "SixOne" : {
 
+    },
+    "SixOne follows the language set for it in macOS. Change it in System Settings → General → Language & Region → Applications, then reopen SixOne." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SixOne 跟随 macOS 为它设置的语言。可在“系统设置”→“通用”→“语言与地区”→“应用程序”中修改，然后重新打开 SixOne。"
+          }
+        }
+      }
     },
     "Source" : {
       "localizations" : {

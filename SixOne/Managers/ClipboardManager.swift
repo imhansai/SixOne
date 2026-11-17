@@ -355,17 +355,8 @@ final class ClipboardManager {
         fileAccess.openWithURL(for: item)
     }
 
-    /// 菜单能否「打开 / 分享」：只读轻量列，不把 imageData 读进内存。
-    func canOpenExternally(id: UUID) -> Bool {
-        fileAccess.canOpenExternally(id: id)
-    }
-
     func revealURLs(for item: ClipboardItem) -> [URL] {
         fileAccess.revealURLs(for: item)
-    }
-
-    func canRevealExternally(id: UUID) -> Bool {
-        fileAccess.canRevealExternally(id: id)
     }
 
     /// 回写后台探测到的过期 bookmark；空结果不落库。

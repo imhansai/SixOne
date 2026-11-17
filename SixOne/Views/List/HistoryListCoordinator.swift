@@ -71,12 +71,12 @@ final class HistoryListCoordinator {
     func setCopiedFeedback(for id: UUID) {
         // 复制会触达置顶：等 store 落定后再滚进视野。
         navigationState.requestRevealAfterStoreChange(id: id)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(PanelAnimation.copyFeedback) {
             copyState.feedbackItemID = id
         }
         feedback.schedule(after: PanelTiming.copiedFeedback) { [weak self] in
             guard let self, self.copyState.feedbackItemID == id else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(PanelAnimation.copyFeedback) {
                 self.copyState.feedbackItemID = nil
             }
         }

@@ -135,7 +135,7 @@ final class ClipboardFileAccess {
             guard allowTemporaryCopy else { return nil }
             return writeTemporaryImageFile(for: item)
         case .link:
-            return externalLinkURL(for: item)
+            return item.linkURL
         case .color:
             return nil
         }
@@ -151,15 +151,10 @@ final class ClipboardFileAccess {
         case .image:
             return writeTemporaryImageFile(for: item) ?? resolvedFileURL(for: item)
         case .link:
-            return externalLinkURL(for: item)
+            return item.linkURL
         case .color:
             return nil
         }
-    }
-
-    private func externalLinkURL(for item: ClipboardItem) -> URL? {
-        guard let text = item.text, let url = URL(string: text), url.scheme != nil else { return nil }
-        return url
     }
 
     /// 打开方式枚举用的文件：源文件可读就用它，否则用 0 字节占位文件。
@@ -231,50 +226,6 @@ final class ClipboardFileAccess {
             guard FileManager.default.fileExists(atPath: path) else { return nil }
             return URL(fileURLWithPath: path)
         }
-    }
-
-    /// 菜单能否「在访达中显示」：能定位到任一文件即可；文件组短路。
-    func canRevealExternally(id: UUID) -> Bool {
-        guard let item = writer.fetchLightItem(id: id) else { return false }
-        guard item.kind == .file || item.kind == .image else { return false }
-        let access = Self.evaluateFileAccess(
-            paths: item.allFilePaths,
-            bookmark: item.securityScopeBookmark,
-            bookmarksJSON: item.securityScopeBookmarks,
-            needsReveal: true
-        )
-        writeBackRefreshedBookmarks(access.refreshedBookmarks, for: item)
-        return access.canReveal
-    }
-
-    /// 菜单能否「打开 / 分享」：只读轻量列，不把 imageData 读进内存。
-    /// 图片无源文件时再探测位图是否落库。
-    func canOpenExternally(id: UUID) -> Bool {
-        guard let item = writer.fetchLightItem(id: id) else { return false }
-        switch item.kind {
-        case .text:
-            return writer.hasText(id: id)
-        case .file:
-            return openable(item)
-        case .image:
-            return openable(item) || writer.hasInlineImage(id: id)
-        case .link:
-            guard let text = item.text, let url = URL(string: text) else { return false }
-            return url.scheme != nil
-        case .color:
-            return false
-        }
-    }
-
-    private func openable(_ item: ClipboardItem) -> Bool {
-        let access = Self.evaluateFileAccess(
-            paths: item.allFilePaths,
-            bookmark: item.securityScopeBookmark,
-            bookmarksJSON: item.securityScopeBookmarks,
-            needsReveal: false
-        )
-        writeBackRefreshedBookmarks(access.refreshedBookmarks, for: item)
-        return access.canOpen
     }
 
     // MARK: - 菜单可用性解析

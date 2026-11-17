@@ -42,11 +42,12 @@ actor ClipboardContentKeyRepair {
     }
 
     private static func defaultMarker(for container: ModelContainer) -> ContentKeyRepairMarker? {
-        guard let configuration = container.configurations.first,
-              !configuration.isStoredInMemoryOnly else { return nil }
+        guard let storeURL = HistoryStorageStatsReader.diskStoreURL(for: container) else {
+            return nil
+        }
         return UserDefaultsContentKeyRepairMarker(
             defaults: .standard,
-            key: "contentKeyRepairVersion:\(configuration.url.path)"
+            key: "contentKeyRepairVersion:\(storeURL.path)"
         )
     }
 

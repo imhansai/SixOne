@@ -61,6 +61,21 @@ struct PreviewFolderSubtitleTests {
         )
     }
 
+    @Test("只有 1 个项目时用单数模板")
+    func showsSingularForOneItem() {
+        let countText = String(
+            format: Localizer.string("%@ item"),
+            PreviewSubtitle.groupedCount(1)
+        )
+        let expected = "\(ByteCountFormatting.string(fromByteCount: 10)) · \(countText)"
+        #expect(
+            PreviewSubtitle.fileStats(
+                folderMeta,
+                folderStats: FolderStats(totalSize: 10, itemCount: 1)
+            ) == expected
+        )
+    }
+
     @Test("普通文件仍只显示大小")
     func regularFileShowsSize() {
         let meta = PreviewFileMeta(size: 1_024, modDate: nil, isDirectory: false)

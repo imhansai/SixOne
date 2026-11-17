@@ -16,7 +16,7 @@ struct ItemOpenabilityTests {
         let harness = try ClipboardHarness()
         let item = try insert(ClipboardItem(kind: .text, text: "内容"), into: harness)
 
-        #expect(harness.manager.canOpenExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canOpen)
     }
 
     @Test("位图条目：没有源文件（截图），但位图在库里 → 可打开")
@@ -28,7 +28,7 @@ struct ItemOpenabilityTests {
         )
 
         #expect(harness.manager.hasInlineImage(id: item.id))
-        #expect(harness.manager.canOpenExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canOpen)
     }
 
     @Test("图片条目：有源文件时按源文件判定，位图不在库里也放行")
@@ -42,7 +42,7 @@ struct ItemOpenabilityTests {
         )
 
         #expect(!harness.manager.hasInlineImage(id: item.id))
-        #expect(harness.manager.canOpenExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canOpen)
     }
 
     @Test("文件条目：文件还在 → 可打开；文件被删掉 → 置灰")
@@ -50,18 +50,18 @@ struct ItemOpenabilityTests {
         let harness = try ClipboardHarness()
         let file = try TemporaryFiles.makeFile(prefix: "sixone-openable", contents: "hello")
         let item = try insert(ClipboardItem(kind: .file, filePath: file.path), into: harness)
-        #expect(harness.manager.canOpenExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canOpen)
 
         try FileManager.default.removeItem(at: file)
 
-        #expect(!harness.manager.canOpenExternally(id: item.id))
+        #expect(!capabilities(of: item.id, in: harness).canOpen)
     }
 
     @Test("取不到条目 → 不可打开")
     func unknownItemIsNotOpenable() throws {
         let harness = try ClipboardHarness()
 
-        #expect(!harness.manager.canOpenExternally(id: UUID()))
+        #expect(!capabilities(of: UUID(), in: harness).canOpen)
         #expect(harness.manager.fetchLightItem(id: UUID()) == nil)
     }
 
@@ -97,7 +97,7 @@ struct ItemOpenabilityTests {
         let renamed = directory.appendingPathComponent("改名.png")
         try FileManager.default.moveItem(at: original, to: renamed)
 
-        #expect(harness.manager.canOpenExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canOpen)
         let resolved = try #require(harness.manager.fileURL(for: item))
         // /var 解析后带 /private 前缀，比较前统一解开符号链接。
         #expect(
@@ -182,7 +182,7 @@ struct ItemOpenabilityTests {
         let harness = try ClipboardHarness()
         let item = try insert(ClipboardItem(kind: .link, text: "https://example.com"), into: harness)
 
-        #expect(harness.manager.canOpenExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canOpen)
     }
 
     @Test("颜色条目：没有外部落点 → 不可打开")
@@ -191,7 +191,7 @@ struct ItemOpenabilityTests {
         let data = try #require(PasteboardFormat.colorData(of: .red))
         let item = try insert(ClipboardItem(kind: .color, colorData: data), into: harness)
 
-        #expect(!harness.manager.canOpenExternally(id: item.id))
+        #expect(!capabilities(of: item.id, in: harness).canOpen)
     }
 
     // MARK: - 打开方式落点
@@ -332,7 +332,7 @@ struct ItemOpenabilityTests {
         defer { removeUnreadableFile(file) }
         let item = try insert(ClipboardItem(kind: .file, filePath: file.path), into: harness)
 
-        #expect(!harness.manager.canOpenExternally(id: item.id))
+        #expect(!capabilities(of: item.id, in: harness).canOpen)
         #expect(
             harness.manager.openTarget(
                 for: item,
@@ -350,7 +350,7 @@ struct ItemOpenabilityTests {
         defer { removeUnreadableFile(file) }
         let item = try insert(ClipboardItem(kind: .file, filePath: file.path), into: harness)
 
-        #expect(harness.manager.canRevealExternally(id: item.id))
+        #expect(capabilities(of: item.id, in: harness).canReveal)
         #expect(!harness.manager.revealURLs(for: item).isEmpty)
     }
 
@@ -362,7 +362,7 @@ struct ItemOpenabilityTests {
             into: harness
         )
 
-        #expect(!harness.manager.canRevealExternally(id: item.id))
+        #expect(!capabilities(of: item.id, in: harness).canReveal)
         #expect(harness.manager.revealURLs(for: item).isEmpty)
     }
 
@@ -481,6 +481,14 @@ struct ItemOpenabilityTests {
     }
 
     // MARK: - 夹具
+
+    /// 生产菜单判定入口：轻量条目 → 能力结论。
+    private func capabilities(of id: UUID, in harness: ClipboardHarness) -> FileCapabilities {
+        guard let item = harness.manager.fetchLightItem(id: id) else { return .none }
+        return ClipboardFileAccess.resolveCapabilities(
+            for: FileCapabilityRequest(item: item, manager: harness.manager)
+        ).capabilities
+    }
 
     private func makeUnreadableFile(prefix: String) throws -> URL {
         let file = try TemporaryFiles.makeFile(prefix: prefix, contents: "x")
