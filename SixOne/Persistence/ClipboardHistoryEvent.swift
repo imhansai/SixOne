@@ -19,6 +19,8 @@ enum ClipboardHistoryEvent: Equatable {
     /// 批量裁剪，列表可能仍有剩余。
     case trimmed
     case cleared
+    /// 用户分组新建、重命名或删除；分组成员可能被批量改为未分组。
+    case collectionsChanged
 }
 
 /// 事件总线：写方 `post`、读方 `observe`；全程主线程，可按 token 退订。

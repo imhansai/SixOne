@@ -14,6 +14,7 @@ enum ItemCommand: String, CaseIterable {
     case copy
     case copyAsPlainText
     case editAlias
+    case moveToGroup
     case share
     case open
     case revealInFinder
@@ -27,6 +28,7 @@ enum ItemCommand: String, CaseIterable {
         case .copy: Localizer.string("Copy")
         case .copyAsPlainText: Localizer.string("Copy as Plain Text")
         case .editAlias: Localizer.string("Edit Alias…")
+        case .moveToGroup: Localizer.string("Move to Group")
         case .share: Localizer.string("Share")
         case .open: Localizer.string("Open")
         case .revealInFinder: Localizer.string("Reveal in Finder")
@@ -39,7 +41,7 @@ enum ItemCommand: String, CaseIterable {
         switch self {
         case .paste, .pasteAsPlainText: "v"
         case .copy, .copyAsPlainText: "c"
-        case .preview, .editAlias, .share, .open, .revealInFinder, .delete: nil
+        case .preview, .editAlias, .moveToGroup, .share, .open, .revealInFinder, .delete: nil
         }
     }
 
@@ -47,7 +49,7 @@ enum ItemCommand: String, CaseIterable {
         switch self {
         case .pasteAsPlainText, .copyAsPlainText: [.command, .shift]
         case .paste, .copy: .command
-        case .preview, .editAlias, .share, .open, .revealInFinder, .delete: []
+        case .preview, .editAlias, .moveToGroup, .share, .open, .revealInFinder, .delete: []
         }
     }
 
@@ -93,6 +95,7 @@ extension ItemCommand {
         if kind.hasPlainText { entries.append(.command(.copyAsPlainText)) }
         entries.append(.separator)
         entries.append(.command(.editAlias))
+        entries.append(.command(.moveToGroup))
         if kind != .text && kind != .color {
             entries.append(.separator)
             entries.append(.command(.share))

@@ -21,10 +21,10 @@ struct ClipboardHistoryRepositoryTests {
             }
         }
 
-        let latestTwo = try await env.repository.latest(query: "", limit: 2)
+        let latestTwo = try await env.repository.latest(query: HistoryQuery(text: ""), limit: 2)
         #expect(latestTwo.map(\.id) == [env.items[4].id, env.items[3].id])
 
-        let all = try await env.repository.latest(query: "", limit: 10)
+        let all = try await env.repository.latest(query: HistoryQuery(text: ""), limit: 10)
         #expect(all.map(\.id) == Array(env.items.map(\.id).reversed()))
     }
 
@@ -38,20 +38,20 @@ struct ClipboardHistoryRepositoryTests {
             }
         }
 
-        let latestTwo = try await env.repository.latest(query: "", limit: 2)
+        let latestTwo = try await env.repository.latest(query: HistoryQuery(text: ""), limit: 2)
         #expect(latestTwo.map(\.id) == [env.items[4].id, env.items[3].id])
         #expect(latestTwo.last?.recencyID == env.items[3].recencyID)
 
         let older = try await env.repository.rows(
             after: env.items[2].recencyID,
-            query: "",
+            query: HistoryQuery(text: ""),
             limit: 2
         )
         #expect(older.map(\.id) == [env.items[1].id, env.items[0].id])
 
         let exhausted = try await env.repository.rows(
             after: env.items[0].recencyID,
-            query: "",
+            query: HistoryQuery(text: ""),
             limit: 2
         )
         #expect(exhausted.isEmpty)
@@ -72,7 +72,7 @@ struct ClipboardHistoryRepositoryTests {
 
         let rows = try await env.repository.rows(
             after: env.items[4].recencyID,
-            query: "命中",
+            query: HistoryQuery(text: "命中"),
             limit: 5
         )
         #expect(rows.map(\.id) == [env.items[2].id, env.items[0].id])
@@ -109,13 +109,13 @@ struct ClipboardHistoryRepositoryTests {
             return [item]
         }
 
-        let byAlias = try await env.repository.latest(query: "邮箱", limit: 10)
+        let byAlias = try await env.repository.latest(query: HistoryQuery(text: "邮箱"), limit: 10)
         #expect(byAlias.map(\.id) == [env.items[0].id])
 
-        let byContent = try await env.repository.latest(query: "正文", limit: 10)
+        let byContent = try await env.repository.latest(query: HistoryQuery(text: "正文"), limit: 10)
         #expect(byContent.map(\.id) == [env.items[0].id])
 
-        let byNothing = try await env.repository.latest(query: "别名之外", limit: 10)
+        let byNothing = try await env.repository.latest(query: HistoryQuery(text: "别名之外"), limit: 10)
         #expect(byNothing.isEmpty)
     }
 
@@ -129,13 +129,13 @@ struct ClipboardHistoryRepositoryTests {
             return [text, file]
         }
 
-        let byText = try await env.repository.latest(query: "hello", limit: 10)
+        let byText = try await env.repository.latest(query: HistoryQuery(text: "hello"), limit: 10)
         #expect(byText.map(\.id) == [env.items[0].id])
 
-        let byPath = try await env.repository.latest(query: "quarterly", limit: 10)
+        let byPath = try await env.repository.latest(query: HistoryQuery(text: "quarterly"), limit: 10)
         #expect(byPath.map(\.id) == [env.items[1].id])
 
-        let byNothing = try await env.repository.latest(query: "没有这个词", limit: 10)
+        let byNothing = try await env.repository.latest(query: HistoryQuery(text: "没有这个词"), limit: 10)
         #expect(byNothing.isEmpty)
     }
 
@@ -165,7 +165,7 @@ struct ClipboardHistoryRepositoryTests {
         let items: [ClipboardItem]
 
         init(_ build: (ModelContext) -> [ClipboardItem]) throws {
-            let schema = Schema([ClipboardItem.self])
+            let schema = Schema([ClipboardItem.self, ClipboardCollection.self])
             let container = try ModelContainer(
                 for: schema,
                 configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]

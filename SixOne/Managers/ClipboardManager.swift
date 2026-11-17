@@ -284,6 +284,33 @@ final class ClipboardManager {
         writer.setAlias(id: id, alias: alias)
     }
 
+    /// 新建用户分组；名称归一化与重名校验在写入层完成。
+    @discardableResult
+    func createCollection(named name: String) -> Result<UUID, CollectionMutationFailure> {
+        writer.createCollection(named: name)
+    }
+
+    /// 把条目移到指定分组；nil 表示未分组。
+    @discardableResult
+    func assignCollection(itemID: UUID, collectionID: UUID?) -> Bool {
+        writer.assignCollection(itemID: itemID, collectionID: collectionID)
+    }
+
+    /// 重命名分组；只改分组元数据。
+    @discardableResult
+    func renameCollection(
+        id: UUID,
+        named name: String
+    ) -> Result<Void, CollectionMutationFailure> {
+        writer.renameCollection(id: id, named: name)
+    }
+
+    /// 删除分组；成员回到未分组，条目本身保留。
+    @discardableResult
+    func deleteCollection(id: UUID) -> Bool {
+        writer.deleteCollection(id: id)
+    }
+
     /// 编辑保存：写入新正文并触达；链接不留 RTF，正文清空则删除条目。
     func updateEditedText(id: UUID, text: String, richText: Data?) {
         guard let item = writer.fetchFullItem(id: id) else { return }

@@ -243,6 +243,135 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         panel.makeFirstResponder(panel.contentView)
     }
 
+    func panelDidRequestCollectionFilter(_ filter: CollectionFilter) {
+        searchSession.collectionFilterDidChange(filter)
+    }
+
+    func panelDidRequestNewCollection() {
+        createCollection(assigningItemID: nil)
+    }
+
+    func panelDidRequestNewCollection(assigningItemID: UUID) {
+        createCollection(assigningItemID: assigningItemID)
+    }
+
+    func panelDidRequestAssignCollection(itemID: UUID, collectionID: UUID?) {
+        guard manager.assignCollection(itemID: itemID, collectionID: collectionID) else {
+            noticeState.message = Localizer.string("Could not move item to group.")
+            context.collections?.reload()
+            return
+        }
+    }
+
+    func panelDidRequestRenameCollection() {
+        guard let group = selectedCollection else { return }
+        renameCollection(group)
+    }
+
+    func panelDidRequestRenameCollection(id: UUID) {
+        guard let group = context.collections?.group(id: id) else { return }
+        renameCollection(group)
+    }
+
+    func panelDidRequestDeleteCollection() {
+        guard let group = selectedCollection else { return }
+        deleteCollection(group)
+    }
+
+    func panelDidRequestDeleteCollection(id: UUID) {
+        guard let group = context.collections?.group(id: id) else { return }
+        deleteCollection(group)
+    }
+
+    /// 管理命令默认作用于当前选中的具体分组。
+    private var selectedCollection: CollectionRow? {
+        guard case .collection(let id) = store.collectionFilter else { return nil }
+        return context.collections?.group(id: id)
+    }
+
+    private func renameCollection(_ group: CollectionRow) {
+        CollectionEditor.present(
+            on: panel,
+            mode: .rename(currentName: group.name)
+        ) { [weak self] name in
+            guard let self else { return }
+            switch self.manager.renameCollection(id: group.id, named: name) {
+            case .success:
+                break
+            case .failure(let failure):
+                self.showCollectionFailure(
+                    failure,
+                    fallback: Localizer.string("Could not rename group.")
+                )
+            }
+        }
+    }
+
+    private func deleteCollection(_ group: CollectionRow) {
+        ConfirmationAlert.present(
+            on: panel,
+            title: Localizer.string("Delete Group?"),
+            message: Localizer.string(
+                "Items will remain in clipboard history and become ungrouped."
+            ),
+            actionTitle: Localizer.string("Delete"),
+            onAction: { [weak self] in
+                guard let self else { return }
+                guard self.manager.deleteCollection(id: group.id) else {
+                    self.noticeState.message = Localizer.string("Could not delete group.")
+                    self.context.collections?.reload()
+                    return
+                }
+                if self.store.collectionFilter == .collection(group.id) {
+                    self.searchSession.collectionFilterDidChange(.all)
+                }
+            },
+            onCancel: {}
+        )
+    }
+
+    private func createCollection(assigningItemID: UUID?) {
+        CollectionEditor.present(on: panel, mode: .create) { [weak self] name in
+            guard let self else { return }
+            switch self.manager.createCollection(named: name) {
+            case .success(let id):
+                guard let assigningItemID else {
+                    self.noticeState.message = Localizer.string("Group created.")
+                    return
+                }
+                guard self.manager.assignCollection(
+                    itemID: assigningItemID,
+                    collectionID: id
+                ) else {
+                    self.noticeState.message = Localizer.string("Could not move item to group.")
+                    self.context.collections?.reload()
+                    return
+                }
+            case .failure(let failure):
+                self.showCollectionFailure(
+                    failure,
+                    fallback: Localizer.string("Could not create group.")
+                )
+            }
+        }
+    }
+
+    private func showCollectionFailure(
+        _ failure: CollectionMutationFailure,
+        fallback: String
+    ) {
+        switch failure {
+        case .emptyName:
+            noticeState.message = Localizer.string("Group name cannot be empty.")
+        case .duplicateName:
+            noticeState.message = Localizer.string(
+                "A group with this name already exists."
+            )
+        case .notFound, .persistence:
+            noticeState.message = fallback
+        }
+    }
+
     func panelDidRequestGroupFileShare(at index: Int, anchorView: NSView) {
         itemActions.requestGroupFileShare(at: index, anchorView: anchorView)
     }

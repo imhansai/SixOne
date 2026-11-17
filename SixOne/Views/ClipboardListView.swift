@@ -34,6 +34,7 @@ struct ClipboardListView: View {
                 PanelHeaderChrome {
                     ClipboardTopBar(context: context)
                 }
+                CollectionFilterBar(context: context)
                 content
                 if store.hasOlder {
                     PanelFooterHint {
@@ -73,7 +74,7 @@ struct ClipboardListView: View {
                         Capsule().fill(.regularMaterial)
                     )
                     .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
-                    .padding(.top, ClipboardLayout.headerHeight + 8)
+                    .padding(.top, noticeTopInset)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -114,6 +115,13 @@ struct ClipboardListView: View {
 
     // MARK: - 列表
 
+    private var noticeTopInset: CGFloat {
+        let hasFilterBar = !(context.collections?.groups.isEmpty ?? true)
+        return ClipboardLayout.headerHeight
+            + (hasFilterBar ? ClipboardLayout.collectionFilterBarHeight : 0)
+            + 8
+    }
+
     @ViewBuilder
     private var content: some View {
         if store.rows.isEmpty {
@@ -126,6 +134,8 @@ struct ClipboardListView: View {
                 // 首次加载未落定：留白，避免闪出空历史文案。
                 Color.clear
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if store.collectionFilter != .all {
+                emptyState(icon: "folder", text: "This group is empty")
             } else {
                 emptyState(icon: "clipboard", text: "Recently copied content will appear here")
             }
@@ -175,7 +185,8 @@ struct ClipboardListView: View {
             copyFeedback: { coordinator.setCopiedFeedback(for: $0) },
             copyItem: { context.copyItem(id: $0) },
             copyItemAsPlainText: { context.copyItemAsPlainText(id: $0) },
-            deleteRow: { coordinator.requestDelete(id: $0) }
+            deleteRow: { coordinator.requestDelete(id: $0) },
+            collections: { context.collections?.groups ?? [] }
         )
     }
 

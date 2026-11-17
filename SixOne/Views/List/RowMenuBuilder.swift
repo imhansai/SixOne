@@ -17,6 +17,8 @@ struct RowMenuBuilder {
     let copyItem: (UUID) -> Void
     let copyItemAsPlainText: (UUID) -> Void
     let deleteRow: (UUID) -> Void
+    /// 分组子菜单的数据源；测试可省略。
+    var collections: () -> [CollectionRow] = { [] }
 
     func makeMenu(for row: HistoryRow, anchor: RowInteractionHost.HostView) -> NSMenu {
         selectRow(row.id)
@@ -53,6 +55,8 @@ struct RowMenuBuilder {
             switch entry {
             case .separator:
                 return .separator()
+            case .command(.moveToGroup):
+                return moveToGroupItem(for: row, anchor: anchor)
             case .command(let command):
                 return menuItem(
                     for: command,
@@ -62,6 +66,66 @@ struct RowMenuBuilder {
                 )
             }
         }
+    }
+
+    /// 当前归属打勾；末尾可新建并移入。
+    private func moveToGroupItem(
+        for row: HistoryRow,
+        anchor: RowInteractionHost.HostView
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: ItemCommand.moveToGroup.title,
+            action: nil,
+            keyEquivalent: ""
+        )
+        item.isEnabled = true
+
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        let actions = panelActions()
+
+        let ungrouped = menuItem(
+            Localizer.string("Ungrouped"),
+            target: anchor,
+            handler: {
+                actions?.panelDidRequestAssignCollection(
+                    itemID: row.id,
+                    collectionID: nil
+                )
+            }
+        )
+        ungrouped.state = row.collectionID == nil ? .on : .off
+        submenu.addItem(ungrouped)
+
+        let groups = collections()
+        if !groups.isEmpty {
+            submenu.addItem(.separator())
+            for group in groups {
+                let groupItem = menuItem(
+                    group.name,
+                    target: anchor,
+                    handler: {
+                        actions?.panelDidRequestAssignCollection(
+                            itemID: row.id,
+                            collectionID: group.id
+                        )
+                    }
+                )
+                groupItem.state = row.collectionID == group.id ? .on : .off
+                submenu.addItem(groupItem)
+            }
+        }
+
+        submenu.addItem(.separator())
+        submenu.addItem(menuItem(
+            Localizer.string("New Group…"),
+            target: anchor,
+            handler: {
+                actions?.panelDidRequestNewCollection(assigningItemID: row.id)
+            }
+        ))
+        item.submenu = submenu
+        return item
     }
 
     /// 只读缓存；未命中先给乐观值，后台探测，动作执行时复检。
@@ -122,6 +186,8 @@ struct RowMenuBuilder {
             actions?.panelDidRequestReveal(id: row.id)
         case .delete:
             deleteRow(row.id)
+        case .moveToGroup:
+            assertionFailure("分组子菜单应直接落到面板动作")
         case .preview:
             assertionFailure("行菜单动作未接线：\(command.rawValue)")
         }

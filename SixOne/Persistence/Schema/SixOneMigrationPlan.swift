@@ -3,7 +3,7 @@
 //  SixOne
 //
 //  历史库版本迁移：V1 → V2 只补真正缺失的派生快照；V2 → V3 新增 id 索引与缩略图版本字段；
-//  V3 → V4 新增可空别名字段，交给轻量迁移。
+//  V3 → V4 新增可空别名字段；V4 → V5 新增可空分组归属与分组表，都交给轻量迁移。
 //
 
 import Foundation
@@ -14,11 +14,14 @@ nonisolated enum SixOneMigrationPlan: SchemaMigrationPlan {
     private static let logger = AppLog.logger("Migration")
 
     static var schemas: [any VersionedSchema.Type] {
-        [SixOneSchemaV1.self, SixOneSchemaV2.self, SixOneSchemaV3.self, SixOneSchemaV4.self]
+        [
+            SixOneSchemaV1.self, SixOneSchemaV2.self, SixOneSchemaV3.self,
+            SixOneSchemaV4.self, SixOneSchemaV5.self,
+        ]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV4]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5]
     }
 
     /// 结构迁移由 SwiftData 完成；这里只补旧条目真正缺失的派生快照。
@@ -42,6 +45,12 @@ nonisolated enum SixOneMigrationPlan: SchemaMigrationPlan {
     static let migrateV3toV4 = MigrationStage.lightweight(
         fromVersion: SixOneSchemaV3.self,
         toVersion: SixOneSchemaV4.self
+    )
+
+    /// V5 只加可空分组归属和空分组表，旧条目保持未分组。
+    static let migrateV4toV5 = MigrationStage.lightweight(
+        fromVersion: SixOneSchemaV4.self,
+        toVersion: SixOneSchemaV5.self
     )
 
     private static func backfillMissingSnapshots(in context: ModelContext) {

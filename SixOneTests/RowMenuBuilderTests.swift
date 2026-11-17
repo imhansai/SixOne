@@ -84,6 +84,82 @@ struct RowMenuBuilderTests {
         #expect(editMenu.items.contains { $0.title == Localizer.string("Edit Alias…") })
     }
 
+    @Test("移到分组子菜单：未分组、各分组与新建分组，当前归属打勾")
+    func moveToGroupSubmenu() throws {
+        let harness = try ClipboardHarness()
+        let group = CollectionRow(id: UUID(), name: "Work", createdAt: Date())
+        let item = try insert(
+            ClipboardItem(kind: .text, text: "x", collectionID: group.id),
+            into: harness
+        )
+        let builder = RowMenuBuilder(
+            manager: harness.manager,
+            fileCapabilities: makeCache(),
+            panelActions: { nil },
+            selectRow: { _ in },
+            copyFeedback: { _ in },
+            copyItem: { _ in },
+            copyItemAsPlainText: { _ in },
+            deleteRow: { _ in },
+            collections: { [group] }
+        )
+
+        let menu = builder.makeMenu(
+            for: HistoryRow(item),
+            anchor: RowInteractionHost.HostView()
+        )
+        let move = try #require(
+            menu.items.first { $0.title == ItemCommand.moveToGroup.title }
+        )
+        let submenu = try #require(move.submenu)
+
+        #expect(
+            submenu.items.first { $0.title == Localizer.string("Ungrouped") }?.state
+                == .off
+        )
+        #expect(submenu.items.first { $0.title == group.name }?.state == .on)
+        #expect(submenu.items.contains { $0.title == Localizer.string("New Group…") })
+    }
+
+    @Test("移到分组子菜单动作落到面板归属接口")
+    func moveToGroupActionWiresToPanel() throws {
+        let harness = try ClipboardHarness()
+        let group = CollectionRow(id: UUID(), name: "Work", createdAt: Date())
+        let item = try insert(ClipboardItem(kind: .text, text: "x"), into: harness)
+        let spy = SpyItemActions()
+        let builder = RowMenuBuilder(
+            manager: harness.manager,
+            fileCapabilities: makeCache(),
+            panelActions: { spy },
+            selectRow: { _ in },
+            copyFeedback: { _ in },
+            copyItem: { _ in },
+            copyItemAsPlainText: { _ in },
+            deleteRow: { _ in },
+            collections: { [group] }
+        )
+
+        let menu = builder.makeMenu(
+            for: HistoryRow(item),
+            anchor: RowInteractionHost.HostView()
+        )
+        let move = try #require(
+            menu.items.first { $0.title == ItemCommand.moveToGroup.title }
+        )
+        let submenu = try #require(move.submenu)
+
+        let groupItem = try #require(submenu.items.first { $0.title == group.name })
+        (groupItem.representedObject as? MenuAction)?.run()
+        #expect(spy.assignedItemID == item.id)
+        #expect(spy.assignedCollectionID == group.id)
+
+        let newGroup = try #require(
+            submenu.items.first { $0.title == Localizer.string("New Group…") }
+        )
+        (newGroup.representedObject as? MenuAction)?.run()
+        #expect(spy.newGroupItemID == item.id)
+    }
+
     @Test("源文件还在：分享与打开可用；文件没了：探测落定后置灰")
     func reachableFileGatesShareAndOpen() async throws {
         let harness = try ClipboardHarness()
@@ -160,5 +236,34 @@ struct RowMenuBuilderTests {
         harness.context.insert(item)
         try harness.context.save()
         return item
+    }
+
+    @MainActor
+    private final class SpyItemActions: ItemActionHandling {
+        var assignedItemID: UUID?
+        var assignedCollectionID: UUID?
+        var newGroupItemID: UUID?
+
+        func panelDidActivate(id: UUID, asPlainText: Bool) {}
+        func panelDidPasteAsPlainText(id: UUID) {}
+        func panelDidRequestDelete(id: UUID) {}
+        func panelDidRequestOpen(id: UUID) {}
+        func panelDidRequestReveal(id: UUID) {}
+        func panelDidRequestOpenInShottr(id: UUID) {}
+        func panelDidRequestShare(id: UUID, anchorView: NSView) {}
+        func panelDidRequestCopy(id: UUID) {}
+        func panelDidRequestCopyAsPlainText(id: UUID) {}
+        func panelDidRequestCopyText(_ text: String) {}
+        func panelDidRequestThumbnailRefresh(id: UUID) {}
+        func panelDidRequestEditAlias(id: UUID, currentAlias: String?) {}
+
+        func panelDidRequestAssignCollection(itemID: UUID, collectionID: UUID?) {
+            assignedItemID = itemID
+            assignedCollectionID = collectionID
+        }
+
+        func panelDidRequestNewCollection(assigningItemID: UUID) {
+            newGroupItemID = assigningItemID
+        }
     }
 }

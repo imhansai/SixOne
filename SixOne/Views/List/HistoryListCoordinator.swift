@@ -94,8 +94,8 @@ final class HistoryListCoordinator {
     /// 被删行离开窗口后，把选中接到接替行。
     private func applyPendingDeletionSelection() {
         guard let pending = navigationState.pendingDeletionSelection else { return }
-        guard pending.query == store.query else {
-            // 换词后的结果与删除时的行无关。
+        guard pending.query == store.activeQuery else {
+            // 换词/换分组后的结果与删除时的行无关。
             navigationState.clearPendingDeletionSelection()
             return
         }

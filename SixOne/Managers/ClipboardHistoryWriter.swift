@@ -139,6 +139,104 @@ final class ClipboardHistoryWriter {
         return true
     }
 
+    // MARK: - 用户分组
+
+    /// 新建分组；名称归一化后要求非空且不重名。
+    @discardableResult
+    func createCollection(named raw: String) -> Result<UUID, CollectionMutationFailure> {
+        guard let name = CollectionNameNormalizer.normalized(raw) else {
+            return .failure(.emptyName)
+        }
+        guard let duplicate = collectionNameExists(name) else {
+            return .failure(.persistence)
+        }
+        guard !duplicate else { return .failure(.duplicateName) }
+
+        let collection = ClipboardCollection(name: name)
+        context.insert(collection)
+        guard save("新增分组") else { return .failure(.persistence) }
+        events.post(.collectionsChanged)
+        return .success(collection.id)
+    }
+
+    /// 重命名分组；只改元数据，不触碰分组成员。
+    @discardableResult
+    func renameCollection(
+        id: UUID,
+        named raw: String
+    ) -> Result<Void, CollectionMutationFailure> {
+        guard let collection = fetchCollection(id: id) else { return .failure(.notFound) }
+        guard let name = CollectionNameNormalizer.normalized(raw) else {
+            return .failure(.emptyName)
+        }
+        guard let duplicate = collectionNameExists(name, excluding: id) else {
+            return .failure(.persistence)
+        }
+        guard !duplicate else { return .failure(.duplicateName) }
+        guard collection.name != name else { return .success(()) }
+
+        collection.name = name
+        guard save("重命名分组") else { return .failure(.persistence) }
+        events.post(.collectionsChanged)
+        return .success(())
+    }
+
+    /// 删除分组只把成员改为未分组，不删除任何条目。
+    @discardableResult
+    func deleteCollection(id: UUID) -> Bool {
+        guard let collection = fetchCollection(id: id) else { return true }
+        var descriptor = FetchDescriptor<ClipboardItem>(
+            predicate: #Predicate { $0.collectionID == id }
+        )
+        descriptor.propertiesToFetch = [\.id, \.collectionID]
+        guard let items = fetchLogged("取分组内条目", { try context.fetch(descriptor) }) else {
+            return false
+        }
+        for item in items {
+            item.collectionID = nil
+        }
+        context.delete(collection)
+        guard save("删除分组") else { return false }
+        events.post(.collectionsChanged)
+        return true
+    }
+
+    /// 只改归属元数据，不刷新排序键与活动时间。
+    @discardableResult
+    func assignCollection(itemID: UUID, collectionID: UUID?) -> Bool {
+        guard let item = fetchLightItem(id: itemID) else { return false }
+        if let collectionID, fetchCollection(id: collectionID) == nil { return false }
+        guard item.collectionID != collectionID else { return true }
+
+        item.collectionID = collectionID
+        guard save("设置分组") else { return false }
+        events.post(.rowUpdated(id: itemID))
+        return true
+    }
+
+    private func fetchCollection(id: UUID) -> ClipboardCollection? {
+        var descriptor = FetchDescriptor<ClipboardCollection>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return fetchLogged("按 id 取分组") { try context.fetch(descriptor).first }
+    }
+
+    /// 返回 nil 表示读取失败；名称比较忽略大小写。
+    private func collectionNameExists(
+        _ name: String,
+        excluding excludedID: UUID? = nil
+    ) -> Bool? {
+        guard let collections = fetchLogged(
+            "检查分组名",
+            { try context.fetch(FetchDescriptor<ClipboardCollection>()) }
+        ) else { return nil }
+        return collections.contains { collection in
+            collection.id != excludedID
+                && collection.name.localizedCaseInsensitiveCompare(name) == .orderedSame
+        }
+    }
+
     /// 本会话已回写过的 item+路径键，防止陈旧 bookmark 反复重取写盘。
     private var refreshedBookmarkKeys: Set<String> = []
 
@@ -220,7 +318,7 @@ final class ClipboardHistoryWriter {
         descriptor.fetchLimit = 1
         descriptor.propertiesToFetch = [
             \.id, \.kindRaw, \.titleSnapshot, \.alias, \.filePath, \.filePaths,
-            \.securityScopeBookmark, \.securityScopeBookmarks,
+            \.securityScopeBookmark, \.securityScopeBookmarks, \.collectionID,
         ]
         return fetchLogged("按 id 取轻量条目") { try context.fetch(descriptor).first }
     }

@@ -20,6 +20,8 @@ enum ClipboardLayout {
     static let headerHeight: CGFloat = 54
     /// 顶栏内容的左右安全边距。
     static let headerHorizontalInset: CGFloat = 10
+    /// 分组筛选条高度；无分组时不占位。
+    static let collectionFilterBarHeight: CGFloat = 35
     /// 顶栏操作按钮之间的间距；预览与文件组顶栏共用。
     static let headerActionSpacing: CGFloat = 12
 

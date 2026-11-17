@@ -99,6 +99,30 @@ struct SchemaMigrationTests {
         #expect(item.alias == nil)
     }
 
+    @Test("V4 库升级到 V5：原有内容保留，条目未分组，分组表为空")
+    func migratesV4ToV5() throws {
+        let fixture = try MigrationFixture()
+        defer { fixture.cleanUp() }
+        let seeded = try fixture.seedV4Store()
+
+        let container = AppModelContainer.make(
+            isStoredInMemoryOnly: false,
+            storeURL: fixture.storeURL
+        )
+        let items = try container.mainContext.fetch(FetchDescriptor<ClipboardItem>())
+        #expect(items.count == 1)
+
+        let item = try #require(items.first { $0.id == seeded })
+        #expect(item.text == "v4 text")
+        #expect(item.alias == "旧别名")
+        #expect(item.collectionID == nil)
+
+        let collections = try container.mainContext.fetch(
+            FetchDescriptor<ClipboardCollection>()
+        )
+        #expect(collections.isEmpty)
+    }
+
     @Test("全新库按当前版本创建，写入后重新打开仍在")
     func freshStoreUsesCurrentSchema() throws {
         let fixture = try MigrationFixture()
@@ -201,6 +225,23 @@ private struct MigrationFixture {
         let item = SixOneSchemaV3.ClipboardItem(kind: .text, text: "v3 text")
         item.refreshTitleSnapshot()
         item.refreshContentKey()
+        context.insert(item)
+
+        try context.save()
+        return item.id
+    }
+
+    /// 用冻结的 V4 schema 建库，验证新增分组归属与分组表的轻量迁移。
+    func seedV4Store() throws -> UUID {
+        let schema = Schema(versionedSchema: SixOneSchemaV4.self)
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+
+        let item = SixOneSchemaV4.ClipboardItem(kind: .text, text: "v4 text")
+        item.refreshTitleSnapshot()
+        item.refreshContentKey()
+        item.alias = "旧别名"
         context.insert(item)
 
         try context.save()

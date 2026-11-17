@@ -3,7 +3,7 @@
 //  SixOne
 //
 //  V3 已冻结：V3 在 V2 上给 `id` 加索引，并记录缩略图生成版本；不要再改这里的字段或索引。
-//  当前版本见 `SixOneSchemaV4`。
+//  当前版本见 `SixOneSchemaV5`。
 //
 
 import Foundation

@@ -142,7 +142,9 @@ struct PanelKeyContext {
 
     /// 列表可快速粘贴；预览仅文件组总览。
     var canQuickPasteVisibleRow: Bool {
-        !isEditing && !isMoreActionsFocused && (!isPreviewing || mode.isGroupOverview)
+        !isEditing
+            && !isMoreActionsFocused
+            && (!isPreviewing || mode.isGroupOverview)
     }
 }
 

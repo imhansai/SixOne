@@ -7,7 +7,8 @@ macOS 菜单栏剪贴板历史工具。按 `⌃⌘V`（默认）唤出浮层面�
 - 菜单栏图标左键开关面板，右键打开菜单（剪贴板 / 设置… / 退出）。面板贴在唤出处：状态栏图标下方、指针处或屏幕居中。
 - 原生搜索框：按正文、标题与文件路径过滤，输入经 200 ms 防抖后查询数据库。
 - 预览：文本（富文本、就地编辑、`⌘F` 查找）、图片（缩放 / 平移）、文件（图片 / 视频 / 网页 / PDF / 文本 / Quick Look）、多文件列表（组内按名称 / 路径筛选）、链接、颜色。文件与磁盘图片预览底部显示来源路径，可拖选片段或一键拷贝完整路径。
-- 条目动作：复制回剪贴板、粘贴进上一个应用（合成 `⌘V`）、分享、用默认应用打开 / 在访达中显示、删除、纯文本拷贝 / 粘贴（`⇧⌘C` / `⇧⌘V`）。上一个应用已退出或未回到前台时，只提示音并把内容留在剪贴板，不会粘进当前前台应用。
+- 用户分组：存在分组时，顶栏分隔线与历史列表之间显示筛选条；分组 chip 右键可重命名 / 删除，筛选条末尾可新建分组；行右键菜单可把条目移到分组，或新建分组并直接移入；更多操作也可管理当前分组。删除分组后条目回到未分组。
+- 条目动作：复制回剪贴板、粘贴进上一个应用（合成 `⌘V`）、分享、用默认应用打开 / 在访达中显示、移动到分组、删除、纯文本拷贝 / 粘贴（`⇧⌘C` / `⇧⌘V`）。上一个应用已退出或未回到前台时，只提示音并把内容留在剪贴板，不会粘进当前前台应用。
 - 设置：忽略应用、保留时长、存储上限、全局快捷键、开机自启、清空历史。语言跟随 macOS 的「按 App 语言」设置（系统设置 → 通用 → 语言与地区 → 应用程序），修改后重新打开 SixOne 生效。
 
 ## 截图
@@ -22,7 +23,7 @@ macOS 菜单栏剪贴板历史工具。按 `⌃⌘V`（默认）唤出浮层面�
 
 ## 项目状态
 
-**1.0.0，源码发布。** 不提供预编译包。库已版本化（当前 schema **V4**），由 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移，改 schema 不再需要清空历史。迁移单向：回退旧版本前先备份库文件。
+**1.0.0，源码发布。** 不提供预编译包。库已版本化（当前 schema **V5**），由 `SixOneMigrationPlan` 打开；从 V1 升级会原地迁移，改 schema 不再需要清空历史。迁移单向：回退旧版本前先备份库文件。
 
 **非目标：** 云同步、账号体系、多设备历史、iOS 客户端、自动更新。SixOne 只在本机、只服务单台 Mac。
 
@@ -115,11 +116,12 @@ open build/Build/Products/Debug/SixOne.app
 | 动面板激活 / 预览捏合手势 / 状态栏点击 | 手势只投递给激活的应用：唤出时设为 key 与 main，收起时把设置窗口摘出 key/main 候选；见 `PanelWindowLifecycle` 与 `SettingsWindowController` |
 | 改设置窗口的激活 / Dock 图标 | `AppActivationPolicy`（常规身份按窗口登记，最后一个离场才回 `.accessory`；窗口先前移成为 key，再激活）+ `SettingsWindowController.showSettings` / `windowWillClose` + `AppDelegate.openSettings`（收起面板并把激活交还唤出前的应用，等应用退出激活后再显示设置窗口）；Dock / Finder 重开走 `applicationShouldHandleReopen`。做法参考 Shottr |
 | 改搜索词管道（防抖 / 清空 / 对齐） | `PanelSearchSession` + `PanelSearchSessionTests`；顶栏只交入「输入变了」 |
+| 改用户分组的筛选 / 新建 / 归属 / 管理 | `HistoryQuery` + `CollectionFilter`、`HistoryListStore`、`CollectionListStore` + `CollectionFilterBar` / `ClipboardTopBar` / `RowMenuBuilder` / `CollectionEditor`；写入在 `ClipboardHistoryWriter`。测试：`HistoryListCollectionFilterTests` / `CollectionListStoreTests` / `RowMenuBuilderTests` / `ClipboardCollectionTests` |
 | 加一个右键菜单项 | `ItemCommand`（标题、快捷键、布局）+ `ItemCommandTests`，动作落在 `RowMenuBuilder` / `FileGroupPreview` |
 | 加一个视图侧动作（复制、保存编辑、复制文字） | 经 `PanelContext.copyItem` / `copyText` / `saveEditedText` 发意图，落到 `PanelActionHandler`；不要在视图里调 `ClipboardManager` 的写方法 |
 | 加一个设置项 | 在 `Preferences` 加类型化访问器，再改 `SettingsStore` 与对应面板（`Views/Settings/*SettingsView.swift`） |
 | 改全局快捷键（注册 / 按键事件） | `HotKeyManager` + `HotKeyRegistering`（注册，会失败）/ `HotKeyEventMonitoring`（按键分发）+ `HotKeyManagerTests` |
-| 加 / 改一个模型字段 | 从当前版本的 `Persistence/Schema/SixOneSchemaV4.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
+| 加 / 改一个模型字段 | 从当前版本的 `Persistence/Schema/SixOneSchemaV5.swift` 复制出新的 `SixOneSchemaV<N>`（不改已冻结版本），在 `SixOneMigrationPlan` 加 `MigrationStage`，再把 `ClipboardItem` 类型别名指向新版本。测试：`SchemaMigrationTests` / `SchemaIndexTests` |
 | 动取数路径 | 先分清「要整条」还是「只要身份 / 路径」：`ClipboardManager.fetchFullItem` / `fetchLightItem`；列表取窗走后台 actor 上的 `ClipboardHistoryRepository.latest` |
 | 改库文件位置或「打不开就改名备份、再建新库」的兜底 | `AppModelContainer` + `历史库位置与兜底` 用例。库必须保留自己的文件名，兜底只允许动 `SixOne.store` 及其外部存储目录 `.SixOne_SUPPORT` |
 | 改「事后怎么找回文件」（移动 / 改名 / 重启后） | `SecurityScopedFileAccess`：bookmark 优先、原始路径兜底，一次复制最多固化 100 个 bookmark；解析到过期 bookmark 时重取并回写。用例：`ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` / `BookmarkRefreshTests` |
@@ -142,7 +144,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 757 项用例、123 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 788 项用例、127 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
 
 系统资源一律用 `SixOneTests/Support/` 下的替身：`FakePasteboard`、`InMemorySettingsStorage`、`FakeHotKeyEventMonitor`、`FakeHistoryRepository`、`OffscreenHost` / `TestPanel`、`TemporaryFiles`、`Wait`。性能基准（`HistoryBenchmarkTests` / `MigrationBenchmarkTests`）只有在仓库根存在 `.benchmark-history` 或 `/tmp/sixone-benchmark` 时才跑，跑完请删掉开关文件。
 

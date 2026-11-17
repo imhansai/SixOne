@@ -53,6 +53,43 @@ struct SchemaIndexTests {
 
         #expect(try fixture.hasIndex(onColumn: "ZID"), "迁移后的库没有 id 索引")
     }
+
+    @Test("新建 V5 库包含 collectionID 索引")
+    func freshStoreHasCollectionIDIndex() throws {
+        let fixture = try IndexFixture()
+        defer { fixture.cleanUp() }
+
+        let container = AppModelContainer.make(
+            isStoredInMemoryOnly: false,
+            storeURL: fixture.storeURL
+        )
+        let item = ClipboardItem(kind: .text, text: "index")
+        container.mainContext.insert(item)
+        try container.mainContext.save()
+
+        #expect(
+            try fixture.hasIndex(onColumn: "ZCOLLECTIONID"),
+            "新建库没有 collectionID 索引"
+        )
+    }
+
+    @Test("V4 库迁移到 V5 后包含 collectionID 索引")
+    func migratedStoreHasCollectionIDIndex() throws {
+        let fixture = try IndexFixture()
+        defer { fixture.cleanUp() }
+        try fixture.seedV4Store()
+
+        let container = AppModelContainer.make(
+            isStoredInMemoryOnly: false,
+            storeURL: fixture.storeURL
+        )
+        _ = container.mainContext
+
+        #expect(
+            try fixture.hasIndex(onColumn: "ZCOLLECTIONID"),
+            "迁移后的库没有 collectionID 索引"
+        )
+    }
 }
 
 @MainActor
@@ -67,6 +104,17 @@ private struct IndexFixture {
 
     func cleanUp() {
         try? FileManager.default.removeItem(at: directory)
+    }
+
+    func seedV4Store() throws {
+        let schema = Schema(versionedSchema: SixOneSchemaV4.self)
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let item = SixOneSchemaV4.ClipboardItem(kind: .text, text: "legacy")
+        item.refreshTitleSnapshot()
+        item.refreshContentKey()
+        container.mainContext.insert(item)
+        try container.mainContext.save()
     }
 
     func hasIndex(onColumn column: String) throws -> Bool {

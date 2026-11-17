@@ -2,7 +2,7 @@
 //  SixOneSchemaV2.swift
 //  SixOne
 //
-//  V2 已冻结：不要再改这里的字段或索引。当前版本见 `SixOneSchemaV4`。
+//  V2 已冻结：不要再改这里的字段或索引。当前版本见 `SixOneSchemaV5`。
 //  V2 在 V1 上增加去重 key 版本字段与 `contentKeySnapshot` 索引。
 //
 
@@ -292,4 +292,4 @@ nonisolated enum SixOneSchemaV2: VersionedSchema {
     }
 }
 
-// 类型别名在 `SixOneSchemaV4.swift`；V2 只供迁移使用。
+// 类型别名在 `SixOneSchemaV5.swift`；V2 只供迁移使用。

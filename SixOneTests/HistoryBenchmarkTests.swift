@@ -90,7 +90,7 @@ struct HistoryBenchmarkTests {
         var browseCount = 0
         for limit in [200, 500, 1000] {
             let rows = try await timed("浏览：取最近 \(limit) 条") {
-                try await repository.latest(query: "", limit: limit)
+                try await repository.latest(query: HistoryQuery(text: ""), limit: limit)
             }
             let thumbBytes = rows.reduce(0) { $0 + ($1.thumbnailData?.count ?? 0) }
             let thumbCount = rows.lazy.filter { $0.thumbnailData != nil }.count
@@ -103,7 +103,7 @@ struct HistoryBenchmarkTests {
             _ = try await repository.row(id: probeRowID)
         }
         try await timed("复制后刷新：整窗 1000 行（旧路径对照）") {
-            _ = try await repository.latest(query: "", limit: 1000)
+            _ = try await repository.latest(query: HistoryQuery(text: ""), limit: 1000)
         }
 
         let docBytes = Self.documentThumbnail?.count ?? 0
@@ -113,7 +113,7 @@ struct HistoryBenchmarkTests {
 
         for (label, query) in [("无命中", "绝对不存在的关键词"), ("常见词（约半数命中）", "常见词"), ("罕见词（约 0.1% 命中）", "罕见标记")] {
             let rows = try await timed("搜索：\(label)") {
-                try await repository.latest(query: query, limit: 500)
+                try await repository.latest(query: HistoryQuery(text: query), limit: 500)
             }
             print("BENCH   命中 \(rows.count) 行")
         }

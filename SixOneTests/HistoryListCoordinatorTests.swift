@@ -96,12 +96,33 @@ struct HistoryListCoordinatorTests {
             deletedID: deleted.id,
             deletedIndex: 1,
             replacementID: fixture.rows[2].id,
-            query: ""
+            query: HistoryQuery()
         )
 
         let match = HistoryRow.stub(title: "命中")
         await fixture.repository.setRows([match], for: "abc")
         fixture.store.setSearchQuery("abc")
+        await fixture.store.waitForPendingLoad()
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.pendingDeletionSelection == nil)
+        #expect(fixture.context.navigationState.selectedItemID == nil)
+    }
+
+    @Test("换分组后丢弃待接替选中")
+    func dropsPendingSelectionAfterCollectionChange() async throws {
+        let fixture = try await makeFixture()
+        let deleted = fixture.rows[1]
+        fixture.context.navigationState.selectedItemID = deleted.id
+        fixture.context.navigationState.isSelectionActive = true
+        fixture.context.navigationState.requestSelectionAfterDeletion(
+            deletedID: deleted.id,
+            deletedIndex: 1,
+            replacementID: fixture.rows[2].id,
+            query: fixture.store.rowsActiveQuery
+        )
+
+        fixture.store.setQuery(HistoryQuery(collection: .collection(UUID())))
         await fixture.store.waitForPendingLoad()
         fixture.coordinator.handleDataRevisionChange()
 

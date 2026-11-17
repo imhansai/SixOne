@@ -33,6 +33,18 @@ final class PanelSearchSession {
         deliver("", debounced: false)
     }
 
+    /// 切分组：立即应用当前输入词与分组，清选中并回顶。
+    func collectionFilterDidChange(_ filter: CollectionFilter) {
+        debouncer.cancel()
+        let query = HistoryQuery(
+            text: HistoryListStore.normalizedQuery(searchState.text),
+            collection: filter
+        )
+        guard !store.matches(query) else { return }
+        resetNavigationForQueryChange()
+        store.setQuery(query)
+    }
+
     func syncToStore() {
         deliver(searchState.text, debounced: false)
     }
@@ -45,10 +57,7 @@ final class PanelSearchSession {
     private func deliver(_ raw: String, debounced: Bool) {
         debouncer.cancel()
         guard !store.matchesQuery(raw) else { return }
-        // 列表随即整份换掉：只能回到顶部，选中一并摘掉。
-        navigationState.selectedItemID = nil
-        navigationState.isSelectionActive = false
-        navigationState.requestScrollToTop()
+        resetNavigationForQueryChange()
         // 纯空白与立即入口都直接落库。
         guard debounced, !HistoryListStore.normalizedQuery(raw).isEmpty else {
             store.setSearchQuery(raw)
@@ -59,5 +68,12 @@ final class PanelSearchSession {
             guard let self, self.searchState.text == raw else { return }
             self.store.setSearchQuery(raw)
         }
+    }
+
+    /// 列表随即整份换掉：只能回到顶部，选中一并摘掉。
+    private func resetNavigationForQueryChange() {
+        navigationState.selectedItemID = nil
+        navigationState.isSelectionActive = false
+        navigationState.requestScrollToTop()
     }
 }

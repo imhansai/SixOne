@@ -16,7 +16,9 @@ struct ClipboardTopBar: View {
     private var navigationState: NavigationState { context.navigationState }
     private var searchSession: PanelSearchSession { context.searchSession }
     private var searchActions: SearchActionHandling? { context.searchActions }
+    private var collectionActions: CollectionActionHandling? { context.collectionActions }
     private var shellActions: ShellActionHandling? { context.shellActions }
+    private var store: HistoryListStore { context.store }
 
     @FocusState private var isMoreActionsFocused: Bool
 
@@ -44,7 +46,7 @@ struct ClipboardTopBar: View {
             searchSession.textDidChange()
         }
         .onChange(of: searchState.isFocused) { _, focused in
-            // 搜索框获得焦点时保留列表选中并让出更多操作站，Tab/↑↓ 可复用原选中项。
+            // 搜索框获得焦点时保留列表选中并让出菜单站，Tab/↑↓ 可复用原选中项。
             if focused {
                 moreActionsState.resignFocus()
                 navigationState.isSelectionActive = false
@@ -61,7 +63,7 @@ struct ClipboardTopBar: View {
     private var searchField: some View {
         SearchField(
             text: searchState.text,
-            placeholder: Localizer.string("Search Clipboard"),
+            placeholder: searchPlaceholder,
             focusRequestID: searchState.focusRequestID,
             blurRequestID: searchState.blurRequestID,
             onTextChange: { newText in
@@ -83,6 +85,24 @@ struct ClipboardTopBar: View {
         )
     }
 
+    private var searchPlaceholder: String {
+        guard store.collectionFilter != .all else {
+            return Localizer.string("Search Clipboard")
+        }
+        return String(format: Localizer.string("Search in %@"), collectionTitle)
+    }
+
+    private var collectionTitle: String {
+        switch store.collectionFilter {
+        case .all:
+            return Localizer.string("All")
+        case .ungrouped:
+            return Localizer.string("Ungrouped")
+        case .collection(let id):
+            return context.collections?.group(id: id)?.name ?? Localizer.string("Group")
+        }
+    }
+
     // MARK: - 更多操作
 
     private var moreActionsMenu: some View {
@@ -93,7 +113,26 @@ struct ClipboardTopBar: View {
                 Label(Localizer.string("Clear History"), systemImage: "trash")
             }
 
+            if case .collection = store.collectionFilter {
+                Divider()
+                Menu {
+                    Button {
+                        collectionActions?.panelDidRequestRenameCollection()
+                    } label: {
+                        Label(Localizer.string("Rename Group…"), systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        collectionActions?.panelDidRequestDeleteCollection()
+                    } label: {
+                        Label(Localizer.string("Delete Group…"), systemImage: "trash")
+                    }
+                } label: {
+                    Label(Localizer.string("Groups"), systemImage: "folder")
+                }
+            }
+
             if shellActions?.canRequestSettings == true {
+                Divider()
                 Button {
                     shellActions?.panelDidRequestSettings()
                 } label: {

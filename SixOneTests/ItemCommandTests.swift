@@ -18,6 +18,7 @@ struct ItemCommandTests {
             .command(.copyAsPlainText),
             .separator,
             .command(.editAlias),
+            .command(.moveToGroup),
             .separator,
             .command(.delete),
         ])
@@ -30,6 +31,7 @@ struct ItemCommandTests {
             .command(.copy),
             .separator,
             .command(.editAlias),
+            .command(.moveToGroup),
             .separator,
             .command(.share),
             .command(.open),
@@ -65,6 +67,7 @@ struct ItemCommandTests {
             .command(.copyAsPlainText),
             .separator,
             .command(.editAlias),
+            .command(.moveToGroup),
             .separator,
             .command(.share),
             .command(.open),
@@ -82,9 +85,15 @@ struct ItemCommandTests {
             .command(.copyAsPlainText),
             .separator,
             .command(.editAlias),
+            .command(.moveToGroup),
             .separator,
             .command(.delete),
         ])
+    }
+
+    @Test("文件组网格菜单不出现「移到分组」")
+    func groupFileMenuHasNoMoveToGroup() {
+        #expect(!ItemCommand.groupFileMenuLayout.contains(.command(.moveToGroup)))
     }
 
     @Test("每个动作都有非空标题，且 ⇧ 备用项成对出现")

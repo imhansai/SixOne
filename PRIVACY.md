@@ -40,7 +40,7 @@ SixOne 每 0.5 秒轮询 `NSPasteboard`，剪贴板变化时记录一条，但�
 | **签名（沙盒）构建** | `~/Library/Containers/dev.sixone.SixOne/Data/Library/Application Support/SixOne/SixOne.store` |
 | **`CODE_SIGNING_ALLOWED=NO` 构建** | `~/Library/Application Support/SixOne/SixOne.store` |
 
-库文件名刻意带命名空间（`SixOne/SixOne.store`），没有使用 SwiftData 默认的共享位置 `~/Library/Application Support/default.store`。它是普通的 SQLite 数据库；库已版本化到 **V4**，通过 `SixOneMigrationPlan` 原地升级，迁移单向 —— 回退旧版本前请先备份。
+库文件名刻意带命名空间（`SixOne/SixOne.store`），没有使用 SwiftData 默认的共享位置 `~/Library/Application Support/default.store`。它是普通的 SQLite 数据库；库已版本化到 **V5**，通过 `SixOneMigrationPlan` 原地升级，迁移单向 —— 回退旧版本前请先备份。
 
 **除容器自身权限与 FileVault 外没有加密。** 图片与富文本正文还会写入库旁的 Core Data 外部存储文件。内存缓存（行内缩略图、文件组图标、查询缓存）从不落盘。
 

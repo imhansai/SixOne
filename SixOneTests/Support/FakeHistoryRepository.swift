@@ -9,17 +9,21 @@ import Foundation
 @testable import SixOne
 
 actor FakeHistoryRepository: ClipboardHistoryRepository {
-    /// 查询词 → 返回的行。
-    private var rowsByQuery: [String: [HistoryRow]]
-    /// 查询词 → 延迟，用来制造「先发的请求后返回」。
-    private var delaysByQuery: [String: Duration]
+    /// 查询 → 返回的行。
+    private var rowsByQuery: [HistoryQuery: [HistoryRow]]
+    /// 查询 → 延迟，用来制造「先发的请求后返回」。
+    private var delaysByQuery: [HistoryQuery: Duration]
+    /// 分组列表。
+    private var collectionRows: [CollectionRow] = []
     /// 条目 id → 延迟，用来制造单行刷新乱序。
     private var rowDelays: [UUID: Duration] = [:]
     /// 置位后所有查询都抛错。
     private var isFailing = false
-    /// 依次收到的查询词。
+    /// 依次收到的搜索词，兼容既有断言。
     private(set) var requestedQueries: [String] = []
-    /// 依次返回过结果的查询词。
+    /// 依次收到的完整查询条件。
+    private(set) var requestedHistoryQueries: [HistoryQuery] = []
+    /// 依次返回过结果的搜索词。
     private(set) var returnedQueries: [String] = []
     /// 依次收到的条数上限。
     private(set) var requestedLimits: [Int] = []
@@ -29,16 +33,40 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     private(set) var itemExistsRequests = 0
 
     init(rowsByQuery: [String: [HistoryRow]] = [:], delaysByQuery: [String: Duration] = [:]) {
-        self.rowsByQuery = rowsByQuery
-        self.delaysByQuery = delaysByQuery
+        self.rowsByQuery = Dictionary(uniqueKeysWithValues: rowsByQuery.map {
+            (HistoryQuery(text: $0.key), $0.value)
+        })
+        self.delaysByQuery = Dictionary(uniqueKeysWithValues: delaysByQuery.map {
+            (HistoryQuery(text: $0.key), $0.value)
+        })
+    }
+
+    init(
+        rowsByHistoryQuery: [HistoryQuery: [HistoryRow]],
+        delaysByHistoryQuery: [HistoryQuery: Duration] = [:]
+    ) {
+        self.rowsByQuery = rowsByHistoryQuery
+        self.delaysByQuery = delaysByHistoryQuery
     }
 
     func setQueryDelay(_ delay: Duration, for query: String) {
+        delaysByQuery[HistoryQuery(text: query)] = delay
+    }
+
+    func setQueryDelay(_ delay: Duration, for query: HistoryQuery) {
         delaysByQuery[query] = delay
     }
 
     func setRows(_ rows: [HistoryRow], for query: String) {
+        rowsByQuery[HistoryQuery(text: query)] = rows
+    }
+
+    func setRows(_ rows: [HistoryRow], for query: HistoryQuery) {
         rowsByQuery[query] = rows
+    }
+
+    func setCollections(_ rows: [CollectionRow]) {
+        collectionRows = rows
     }
 
     /// 让之后的查询都失败。
@@ -50,8 +78,9 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         isFailing = false
     }
 
-    func latest(query: String, limit: Int) async throws -> [HistoryRow] {
-        requestedQueries.append(query)
+    func latest(query: HistoryQuery, limit: Int) async throws -> [HistoryRow] {
+        requestedQueries.append(query.text)
+        requestedHistoryQueries.append(query)
         requestedLimits.append(limit)
         if let delay = delaysByQuery[query] {
             try? await Task.sleep(for: delay)
@@ -59,12 +88,13 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         if isFailing {
             throw FakeHistoryError.readFailed
         }
-        returnedQueries.append(query)
+        returnedQueries.append(query.text)
         return Array((rowsByQuery[query] ?? []).prefix(limit))
     }
 
-    func rows(after cursor: UUID, query: String, limit: Int) async throws -> [HistoryRow] {
-        requestedQueries.append(query)
+    func rows(after cursor: UUID, query: HistoryQuery, limit: Int) async throws -> [HistoryRow] {
+        requestedQueries.append(query.text)
+        requestedHistoryQueries.append(query)
         requestedLimits.append(limit)
         if let delay = delaysByQuery[query] {
             try? await Task.sleep(for: delay)
@@ -72,7 +102,7 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         if isFailing {
             throw FakeHistoryError.readFailed
         }
-        returnedQueries.append(query)
+        returnedQueries.append(query.text)
         let all = rowsByQuery[query] ?? []
         guard let index = all.firstIndex(where: { $0.recencyID == cursor }) else { return [] }
         return Array(all[(index + 1)...].prefix(limit))
@@ -102,7 +132,7 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         rowDelays[id] = delay
     }
 
-    func rowMatches(id: UUID, query: String) async throws -> Bool {
+    func rowMatches(id: UUID, query: HistoryQuery) async throws -> Bool {
         if isFailing {
             throw FakeHistoryError.readFailed
         }
@@ -141,6 +171,13 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     func itemExistsRequestCount() -> Int {
         itemExistsRequests
     }
+
+    func collections() async throws -> [CollectionRow] {
+        if isFailing {
+            throw FakeHistoryError.readFailed
+        }
+        return collectionRows
+    }
 }
 
 /// 替身专用读失败。
@@ -150,7 +187,12 @@ enum FakeHistoryError: Error {
 
 extension HistoryRow {
     /// 只带标题的测试行。
-    static func stub(title: String, id: UUID = UUID(), alias: String? = nil) -> HistoryRow {
+    static func stub(
+        title: String,
+        id: UUID = UUID(),
+        alias: String? = nil,
+        collectionID: UUID? = nil
+    ) -> HistoryRow {
         HistoryRow(
             id: id,
             recencyID: id,
@@ -163,7 +205,8 @@ extension HistoryRow {
             thumbnailData: nil,
             thumbnailVersion: nil,
             sourceAppBundleIdentifier: nil,
-            lastActivityAt: Date()
+            lastActivityAt: Date(),
+            collectionID: collectionID
         )
     }
 }

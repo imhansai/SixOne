@@ -74,6 +74,29 @@ struct PanelSearchSessionTests {
         )
     }
 
+    @Test("切换分组立即清选中并回顶，保留搜索词")
+    func collectionChangeResetsSelectionAndKeepsSearchText() async throws {
+        let fixture = makeFixture()
+        fixture.searchState.text = "abc"
+        fixture.session.textDidChange()
+        await Wait.until { fixture.store.query == "abc" }
+        fixture.navigationState.selectedItemID = UUID()
+        fixture.navigationState.isSelectionActive = true
+        _ = fixture.navigationState.takePendingScrollCommands()
+
+        let filter = CollectionFilter.collection(UUID())
+        fixture.session.collectionFilterDidChange(filter)
+
+        #expect(fixture.navigationState.selectedItemID == nil)
+        #expect(!fixture.navigationState.isSelectionActive)
+        #expect(
+            fixture.navigationState.takePendingScrollCommands().last?.target == .top
+        )
+        #expect(fixture.store.collectionFilter == filter)
+        #expect(fixture.store.query == "abc", "切换分组不该清掉搜索词")
+        await fixture.store.waitForPendingLoad()
+    }
+
     @Test("Esc 清空立即落库，不等防抖")
     func clearAppliesImmediately() async throws {
         let fixture = makeFixture()

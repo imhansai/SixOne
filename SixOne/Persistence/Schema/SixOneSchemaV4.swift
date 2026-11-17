@@ -2,8 +2,8 @@
 //  SixOneSchemaV4.swift
 //  SixOne
 //
-//  当前模型定义（V4）。V4 在 V3 上新增用户别名；V3 → V4 只做轻量结构迁移。
-//  V1/V2/V3 已冻结，改字段从 V4 复制出新版本。
+//  V4 已冻结：V4 在 V3 上新增用户别名；不要再改这里的字段或索引。
+//  当前版本见 `SixOneSchemaV5`。
 //
 
 import Foundation
@@ -238,6 +238,3 @@ nonisolated enum SixOneSchemaV4: VersionedSchema {
         }
     }
 }
-
-/// 当前版本：业务代码只认这个名字；升级 schema 时改这里，不要改已冻结的旧版本。
-typealias ClipboardItem = SixOneSchemaV4.ClipboardItem

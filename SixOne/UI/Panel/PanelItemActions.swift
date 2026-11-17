@@ -283,7 +283,7 @@ final class PanelItemActions {
             deletedID: id,
             deletedIndex: deletedIndex,
             replacementID: replacementID,
-            query: store.rowsQuery
+            query: store.rowsActiveQuery
         )
     }
 

@@ -25,6 +25,17 @@ struct HistoryListRefreshTests {
         #expect(!harness.store.matchesQuery("复制 "))
     }
 
+    @Test("分组数据变化后重载窗口")
+    func reloadsAfterCollectionsChanged() async throws {
+        let harness = try Harness(itemCount: 3)
+        await harness.store.loadLatestAndWait()
+        let revision = harness.store.dataRevision
+
+        harness.events.post(.collectionsChanged)
+
+        #expect(await Wait.until { harness.store.dataRevision != revision })
+    }
+
     @Test("停在顶部时收到新拷贝立刻重载")
     func refreshesAtTop() async throws {
         let harness = try Harness(itemCount: 250)

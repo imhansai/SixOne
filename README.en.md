@@ -7,7 +7,8 @@ A macOS menu-bar clipboard history tool. Press `⌃⌘V` (default) to open a flo
 - Left-click the menu-bar icon to toggle the panel, right-click for a menu (Clipboard / Settings… / Quit). The panel anchors to the summon point: under the status item, under the pointer, or centred on screen.
 - Native search field: filters body text, titles, and file paths, debounced 200 ms before querying the store.
 - Previews: text (rich text, in-place editing, `⌘F` find), image (zoom / pan), file (image / video / web page / PDF / text / Quick Look), multi-file list (filter by name / path), link, colour. File and on-disk image previews show the source path at the bottom, draggable or copyable in one click.
-- Item actions: copy back to the clipboard, paste into the previous app (synthesizes `⌘V`), share, open with the default app / reveal in Finder, delete, and plain-text copy / paste (`⇧⌘C` / `⇧⌘V`). If the previous app has quit or does not come forward, SixOne beeps and leaves the item on the clipboard rather than pasting into whatever is frontmost.
+- User groups: when groups exist, a filter bar appears between the top-bar divider and the history list; right-click a group chip to rename / delete it, and use the trailing button to create a group; the row context menu can move an item into a group or create a new group and move it in; More Actions can also manage the current group. Deleting a group returns its items to ungrouped.
+- Item actions: copy back to the clipboard, paste into the previous app (synthesizes `⌘V`), share, open with the default app / reveal in Finder, move to a group, delete, and plain-text copy / paste (`⇧⌘C` / `⇧⌘V`). If the previous app has quit or does not come forward, SixOne beeps and leaves the item on the clipboard rather than pasting into whatever is frontmost.
 - Settings: ignored apps, retention, storage limit, global hotkey, launch at login, clear history. Language follows the per-app language set in System Settings → General → Language & Region → Applications; reopen SixOne after changing it.
 
 ## Screenshots
@@ -22,7 +23,7 @@ A short clip: open the panel, preview and zoom an image, copy its source path, t
 
 ## Status
 
-**1.0.0, source release.** No prebuilt binaries. The store is versioned (schema **V4**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading.
+**1.0.0, source release.** No prebuilt binaries. The store is versioned (schema **V5**) and opened through `SixOneMigrationPlan`; upgrading from V1 migrates in place, so a schema change no longer requires clearing history. Migration is forward-only: back up the store before downgrading.
 
 **Non-goals:** cloud sync, accounts, multi-device history, an iOS client, auto-update. SixOne is deliberately a local-only, single-Mac tool.
 
@@ -115,11 +116,12 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 | Touch panel activation / preview pinch gestures / status-item click | Gesture events only reach the active app: make the panel key and main when summoning, and drop the Settings window from the key/main candidates when hiding; see `PanelWindowLifecycle` and `SettingsWindowController` |
 | Change the Settings window's activation / Dock icon | `AppActivationPolicy` (register regular-identity holders; return to `.accessory` only when the last one leaves; bring the window forward and make it key first, then activate) + `SettingsWindowController.showSettings` / `windowWillClose` + `AppDelegate.openSettings` (hide the panel and hand activation back to the previous app, then present the window once the app resigns active); Dock / Finder reopen goes through `applicationShouldHandleReopen`. Approach borrowed from Shottr |
 | Change the query pipeline (debounce / clear / alignment) | `PanelSearchSession` + `PanelSearchSessionTests`; the top bar only hands in "the input changed" |
+| Change user-group filtering / creation / assignment / management | `HistoryQuery` + `CollectionFilter`, `HistoryListStore`, `CollectionListStore` + `CollectionFilterBar` / `ClipboardTopBar` / `RowMenuBuilder` / `CollectionEditor`; writes go through `ClipboardHistoryWriter`. Tests: `HistoryListCollectionFilterTests` / `CollectionListStoreTests` / `RowMenuBuilderTests` / `ClipboardCollectionTests` |
 | Add a context-menu item | `ItemCommand` (title, shortcut, layout) + `ItemCommandTests`, with behavior in `RowMenuBuilder` / `FileGroupPreview` |
 | Add a view-side action (copy, save, copy text) | Emit an intent through `PanelContext.copyItem` / `copyText` / `saveEditedText`, backed by `PanelActionHandler`; do not call `ClipboardManager` mutators from views |
 | Add a setting | Add a typed accessor to `Preferences`, then `SettingsStore` + the matching pane (`Views/Settings/*SettingsView.swift`) |
 | Change the global hotkey (registration / key events) | `HotKeyManager` + `HotKeyRegistering` (registration, can fail) / `HotKeyEventMonitoring` (per-instance dispatch) + `HotKeyManagerTests` |
-| Add / change a model field | Copy the current `Persistence/Schema/SixOneSchemaV4.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
+| Add / change a model field | Copy the current `Persistence/Schema/SixOneSchemaV5.swift` into a new `SixOneSchemaV<N>` (never edit a frozen version), add a `MigrationStage` to `SixOneMigrationPlan`, then point the `ClipboardItem` typealias at the new version. Tests: `SchemaMigrationTests` / `SchemaIndexTests` |
 | Change a fetch path | Decide "need the whole item" vs "only identity/paths": `ClipboardManager.fetchFullItem` / `fetchLightItem`; the list window uses `ClipboardHistoryRepository.latest` on the background actor |
 | Change where the store lives, or the "won't open → rename aside and rebuild" fallback | `AppModelContainer` + the `历史库位置与兜底` suite. The store must keep its own file name; the fallback may only touch `SixOne.store` and its external-storage directory `.SixOne_SUPPORT` |
 | Change how a file is reached after the fact (moved / renamed / after a restart) | `SecurityScopedFileAccess`: bookmark first, original path as fallback, at most 100 bookmarks per copy; stale bookmarks are re-created and written back. Covered by `ItemOpenabilityTests` / `PreviewLauncherTests` / `FileGroupPreviewModelTests` / `BookmarkRefreshTests` |
@@ -142,7 +144,7 @@ The former god objects are split by responsibility: `ClipboardManager` is a faç
 
 ## Testing
 
-The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 757 tests in 123 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
+The test target is `SixOneTests`, written with [swift-testing](https://github.com/apple/swift-testing); the command is in **Quick start**. It is about 788 tests in 127 suites, roughly 13 seconds. The test host runs in the same process as the real app (`TEST_HOST` = `SixOne.app`), so `AppDelegate.isRunningUnitTests` switches to an in-memory store and skips monitoring, the hotkey, and the status bar; `TestHostTests` is the sentinel that guards that check.
 
 System resources are driven by doubles under `SixOneTests/Support/`: `FakePasteboard`, `InMemorySettingsStorage`, `FakeHotKeyEventMonitor`, `FakeHistoryRepository`, `OffscreenHost` / `TestPanel`, `TemporaryFiles`, and `Wait`. The benchmarks in `HistoryBenchmarkTests` / `MigrationBenchmarkTests` run only when `.benchmark-history` exists at the repo root or `/tmp/sixone-benchmark` does; delete the switch file afterwards.
 

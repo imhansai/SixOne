@@ -25,6 +25,10 @@ protocol ItemActionHandling: AnyObject {
     func panelDidRequestThumbnailRefresh(id: UUID)
     /// 添加或编辑条目别名；`currentAlias` 由调用方提供，避免再次查库。
     func panelDidRequestEditAlias(id: UUID, currentAlias: String?)
+    /// 把条目移到指定分组；nil 表示未分组。
+    func panelDidRequestAssignCollection(itemID: UUID, collectionID: UUID?)
+    /// 新建分组并把当前条目移进去。
+    func panelDidRequestNewCollection(assigningItemID: UUID)
 }
 
 /// 预览编辑：退出、取消与保存。
@@ -50,6 +54,16 @@ protocol GroupActionHandling: AnyObject {
     func panelDidInvokeGroupFileCommand(_ command: GroupFileCommand, index: Int)
 }
 
+/// 用户分组的筛选、新建与管理。
+protocol CollectionActionHandling: AnyObject {
+    func panelDidRequestCollectionFilter(_ filter: CollectionFilter)
+    func panelDidRequestNewCollection()
+    func panelDidRequestRenameCollection()
+    func panelDidRequestDeleteCollection()
+    func panelDidRequestRenameCollection(id: UUID)
+    func panelDidRequestDeleteCollection(id: UUID)
+}
+
 /// 面板外壳：设置入口、交棒外部应用、交还内容焦点与清空历史。
 protocol ShellActionHandling: AnyObject {
     /// 是否接上了设置入口；没接上时「更多操作」不显示该项。
@@ -63,13 +77,15 @@ protocol ShellActionHandling: AnyObject {
 
 /// 面板动作的完整集合；控制器实现它，视图只依赖上面用得到的窄协议。
 protocol PanelActionHandler: ItemActionHandling, EditingActionHandling, SearchActionHandling,
-    GroupActionHandling, ShellActionHandling {}
+    GroupActionHandling, CollectionActionHandling, ShellActionHandling {}
 
 @Observable
 final class PanelContext {
     let manager: ClipboardManager
     let store: HistoryListStore
     let caches: PanelCaches
+    /// 分组列表；测试可省略。
+    let collections: CollectionListStore?
 
     let panelState = PanelState()
     let confirmationState = ConfirmationState()
@@ -97,12 +113,19 @@ final class PanelContext {
     var editingActions: EditingActionHandling? { actions }
     var searchActions: SearchActionHandling? { actions }
     var groupActions: GroupActionHandling? { actions }
+    var collectionActions: CollectionActionHandling? { actions }
     var shellActions: ShellActionHandling? { actions }
 
-    init(manager: ClipboardManager, store: HistoryListStore, caches: PanelCaches) {
+    init(
+        manager: ClipboardManager,
+        store: HistoryListStore,
+        caches: PanelCaches,
+        collections: CollectionListStore? = nil
+    ) {
         self.manager = manager
         self.store = store
         self.caches = caches
+        self.collections = collections
         self.fileCapabilities = PanelFileCapabilityCache(
             onBookmarksRefreshed: { [weak manager] itemID, refreshes in
                 manager?.refreshSecurityScopeBookmarks(id: itemID, refreshes)

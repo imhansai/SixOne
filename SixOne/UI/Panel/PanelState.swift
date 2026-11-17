@@ -54,6 +54,7 @@ final class MoreActionsState {
     }
 }
 
+
 /// 复制反馈：SwiftUI 据此显示 checkmark 动画。
 @Observable
 final class CopyState {
@@ -122,8 +123,8 @@ struct PendingDeletionSelection: Equatable {
     let deletedIndex: Int
     /// 删除时的下一条；行序变化时优先用它。
     let replacementID: UUID?
-    /// 删除时的查询词；换词后不再接替。
-    let query: String
+    /// 删除时的完整查询条件；换词或换分组后不再接替。
+    let query: HistoryQuery
 }
 
 /// 键盘导航状态：选中、待滚动行与列表发布的首个完整可见行。
@@ -183,7 +184,7 @@ final class NavigationState {
         deletedID: UUID,
         deletedIndex: Int,
         replacementID: UUID? = nil,
-        query: String = ""
+        query: HistoryQuery = HistoryQuery()
     ) {
         pendingDeletionSelection = PendingDeletionSelection(
             deletedID: deletedID,

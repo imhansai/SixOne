@@ -141,7 +141,7 @@ struct ClipboardHistoryWriterTests {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema([ClipboardItem.self])
+        let schema = Schema([ClipboardItem.self, ClipboardCollection.self])
         return try ModelContainer(
             for: schema,
             configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
