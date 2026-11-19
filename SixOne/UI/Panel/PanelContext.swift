@@ -54,14 +54,12 @@ protocol GroupActionHandling: AnyObject {
     func panelDidInvokeGroupFileCommand(_ command: GroupFileCommand, index: Int)
 }
 
-/// 用户分组的筛选、新建与管理。
+/// 用户分组的筛选、重命名、删除与排序。
 protocol CollectionActionHandling: AnyObject {
     func panelDidRequestCollectionFilter(_ filter: CollectionFilter)
-    func panelDidRequestNewCollection()
-    func panelDidRequestRenameCollection()
-    func panelDidRequestDeleteCollection()
     func panelDidRequestRenameCollection(id: UUID)
     func panelDidRequestDeleteCollection(id: UUID)
+    func panelDidRequestReorderCollections(movingIDs: [UUID], before targetID: UUID?)
 }
 
 /// 面板外壳：设置入口、交棒外部应用、交还内容焦点与清空历史。
@@ -102,6 +100,8 @@ final class PanelContext {
     let scrollerLayout = ScrollerLayoutState()
     /// 搜索词到库查询链路：输入变化、Esc 清空与唤出对齐。
     let searchSession: PanelSearchSession
+    /// 分组拖拽进行中；拖拽期间不收起面板。
+    let collectionDragState = CollectionDragState()
     /// 菜单校验用的文件能力缓存：校验只读，解析在后台。
     let fileCapabilities: PanelFileCapabilityCache
 

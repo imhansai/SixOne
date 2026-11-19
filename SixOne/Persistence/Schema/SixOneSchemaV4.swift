@@ -3,7 +3,7 @@
 //  SixOne
 //
 //  V4 已冻结：V4 在 V3 上新增用户别名；不要再改这里的字段或索引。
-//  当前版本见 `SixOneSchemaV5`。
+//  当前版本见 `SixOneSchemaV6`。
 //
 
 import Foundation

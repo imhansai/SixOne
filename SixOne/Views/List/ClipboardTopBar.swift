@@ -16,7 +16,6 @@ struct ClipboardTopBar: View {
     private var navigationState: NavigationState { context.navigationState }
     private var searchSession: PanelSearchSession { context.searchSession }
     private var searchActions: SearchActionHandling? { context.searchActions }
-    private var collectionActions: CollectionActionHandling? { context.collectionActions }
     private var shellActions: ShellActionHandling? { context.shellActions }
     private var store: HistoryListStore { context.store }
 
@@ -66,6 +65,7 @@ struct ClipboardTopBar: View {
             placeholder: searchPlaceholder,
             focusRequestID: searchState.focusRequestID,
             blurRequestID: searchState.blurRequestID,
+            resignOnOutsideClick: true,
             onTextChange: { newText in
                 searchState.text = newText
             },
@@ -86,21 +86,16 @@ struct ClipboardTopBar: View {
     }
 
     private var searchPlaceholder: String {
-        guard store.collectionFilter != .all else {
+        guard let title = selectedCollectionTitle else {
             return Localizer.string("Search Clipboard")
         }
-        return String(format: Localizer.string("Search in %@"), collectionTitle)
+        return String(format: Localizer.string("Search in %@"), title)
     }
 
-    private var collectionTitle: String {
-        switch store.collectionFilter {
-        case .all:
-            return Localizer.string("All")
-        case .ungrouped:
-            return Localizer.string("Ungrouped")
-        case .collection(let id):
-            return context.collections?.group(id: id)?.name ?? Localizer.string("Group")
-        }
+    /// 当前筛选的分组名；没有分组筛选时为 nil，搜索范围就是全部数据。
+    private var selectedCollectionTitle: String? {
+        guard case .collection(let id) = store.collectionFilter else { return nil }
+        return context.collections?.group(id: id)?.name ?? Localizer.string("Group")
     }
 
     // MARK: - 更多操作
@@ -111,24 +106,6 @@ struct ClipboardTopBar: View {
                 shellActions?.panelDidRequestClearHistory()
             } label: {
                 Label(Localizer.string("Clear History"), systemImage: "trash")
-            }
-
-            if case .collection = store.collectionFilter {
-                Divider()
-                Menu {
-                    Button {
-                        collectionActions?.panelDidRequestRenameCollection()
-                    } label: {
-                        Label(Localizer.string("Rename Group…"), systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        collectionActions?.panelDidRequestDeleteCollection()
-                    } label: {
-                        Label(Localizer.string("Delete Group…"), systemImage: "trash")
-                    }
-                } label: {
-                    Label(Localizer.string("Groups"), systemImage: "folder")
-                }
             }
 
             if shellActions?.canRequestSettings == true {

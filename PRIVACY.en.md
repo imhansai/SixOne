@@ -40,7 +40,7 @@ Once a copy passes both filters, parsing happens off the main thread: HTML-to-ri
 | **Signed (sandboxed) build** | `~/Library/Containers/dev.sixone.SixOne/Data/Library/Application Support/SixOne/SixOne.store` |
 | **`CODE_SIGNING_ALLOWED=NO` build** | `~/Library/Application Support/SixOne/SixOne.store` |
 
-The store is deliberately namespaced (`SixOne/SixOne.store`) rather than using SwiftData's shared default `~/Library/Application Support/default.store`. It is a plain SQLite database; the store is versioned to **V5** and upgraded in place through `SixOneMigrationPlan`. Migration is forward-only — back up the store before downgrading.
+The store is deliberately namespaced (`SixOne/SixOne.store`) rather than using SwiftData's shared default `~/Library/Application Support/default.store`. It is a plain SQLite database; the store is versioned to **V6** and upgraded in place through `SixOneMigrationPlan`. Migration is forward-only — back up the store before downgrading.
 
 **There is no encryption beyond the container's own permissions and FileVault.** Image and rich-text bodies are also written to Core Data external-storage files beside the store. In-memory caches (thumbnails, file-group icons, query caches) never touch the disk.
 

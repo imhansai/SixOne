@@ -105,7 +105,7 @@ nonisolated protocol ClipboardHistoryRepository: Sendable {
     /// 条目是否还在库里，用于校验预览/选中是否失效。
     func itemExists(id: UUID) async throws -> Bool
 
-    /// 用户分组列表；按名称本地化排序。
+    /// 用户分组列表；按用户排序，旧数据按名称本地化兜底。
     func collections() async throws -> [CollectionRow]
 }
 
@@ -158,13 +158,9 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
         ]
         guard let item = try context.fetch(descriptor).first else { return false }
 
-        switch query.collection {
-        case .all:
-            break
-        case .ungrouped:
-            guard item.collectionID == nil else { return false }
-        case .collection(let collectionID):
-            guard item.collectionID == collectionID else { return false }
+        if case .collection(let collectionID) = query.collection,
+           item.collectionID != collectionID {
+            return false
         }
 
         guard !query.text.isEmpty else { return true }
@@ -188,13 +184,10 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
     func collections() async throws -> [CollectionRow] {
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<ClipboardCollection>()
-        descriptor.propertiesToFetch = [\.id, \.name, \.createdAt]
-        let rows = try context.fetch(descriptor).map(CollectionRow.init)
-        return rows.sorted {
-            let order = $0.name.localizedStandardCompare($1.name)
-            if order == .orderedSame { return $0.createdAt < $1.createdAt }
-            return order == .orderedAscending
-        }
+        descriptor.propertiesToFetch = [\.id, \.name, \.createdAt, \.sortOrder]
+        return try context.fetch(descriptor)
+            .map(CollectionRow.init)
+            .sorted(by: CollectionRow.displayOrder)
     }
 
     // MARK: - 查询谓词
@@ -212,18 +205,6 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
                 if text.isEmpty { return #Predicate { $0.recencyID < cursor } }
                 return #Predicate { item in
                     item.recencyID < cursor
-                        && ((item.searchText?.localizedStandardContains(text) ?? false)
-                            || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
-                            || (item.alias?.localizedStandardContains(text) ?? false)
-                            || (item.filePathsSearchText?.localizedStandardContains(text) ?? false))
-                }
-            case .ungrouped:
-                if text.isEmpty {
-                    return #Predicate { $0.recencyID < cursor && $0.collectionID == nil }
-                }
-                return #Predicate { item in
-                    item.recencyID < cursor
-                        && item.collectionID == nil
                         && ((item.searchText?.localizedStandardContains(text) ?? false)
                             || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
                             || (item.alias?.localizedStandardContains(text) ?? false)
@@ -254,15 +235,6 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
                     || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
                     || (item.alias?.localizedStandardContains(text) ?? false)
                     || (item.filePathsSearchText?.localizedStandardContains(text) ?? false)
-            }
-        case .ungrouped:
-            if text.isEmpty { return #Predicate { $0.collectionID == nil } }
-            return #Predicate { item in
-                item.collectionID == nil
-                    && ((item.searchText?.localizedStandardContains(text) ?? false)
-                        || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
-                        || (item.alias?.localizedStandardContains(text) ?? false)
-                        || (item.filePathsSearchText?.localizedStandardContains(text) ?? false))
             }
         case .collection(let collectionID):
             if text.isEmpty { return #Predicate { $0.collectionID == collectionID } }

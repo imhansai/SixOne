@@ -83,6 +83,15 @@ extension NoticeState {
     func showGroupPreviewRequiresList() {
         message = Localizer.string("Select the file group in the history list to preview it.")
     }
+
+    /// 移到分组成功后的短反馈；nil 表示未分组。
+    func showMovedToCollection(named name: String?) {
+        guard let name, !name.isEmpty else {
+            message = Localizer.string("Moved to Ungrouped")
+            return
+        }
+        message = String(format: Localizer.string("Moved to %@"), name)
+    }
 }
 
 /// 分享进行期间面板不因失焦收起；外部分享界面抢焦点属于本次操作。

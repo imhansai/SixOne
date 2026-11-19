@@ -21,8 +21,6 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     private var isFailing = false
     /// 依次收到的搜索词，兼容既有断言。
     private(set) var requestedQueries: [String] = []
-    /// 依次收到的完整查询条件。
-    private(set) var requestedHistoryQueries: [HistoryQuery] = []
     /// 依次返回过结果的搜索词。
     private(set) var returnedQueries: [String] = []
     /// 依次收到的条数上限。
@@ -41,28 +39,12 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         })
     }
 
-    init(
-        rowsByHistoryQuery: [HistoryQuery: [HistoryRow]],
-        delaysByHistoryQuery: [HistoryQuery: Duration] = [:]
-    ) {
-        self.rowsByQuery = rowsByHistoryQuery
-        self.delaysByQuery = delaysByHistoryQuery
-    }
-
     func setQueryDelay(_ delay: Duration, for query: String) {
         delaysByQuery[HistoryQuery(text: query)] = delay
     }
 
-    func setQueryDelay(_ delay: Duration, for query: HistoryQuery) {
-        delaysByQuery[query] = delay
-    }
-
     func setRows(_ rows: [HistoryRow], for query: String) {
         rowsByQuery[HistoryQuery(text: query)] = rows
-    }
-
-    func setRows(_ rows: [HistoryRow], for query: HistoryQuery) {
-        rowsByQuery[query] = rows
     }
 
     func setCollections(_ rows: [CollectionRow]) {
@@ -80,7 +62,6 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
 
     func latest(query: HistoryQuery, limit: Int) async throws -> [HistoryRow] {
         requestedQueries.append(query.text)
-        requestedHistoryQueries.append(query)
         requestedLimits.append(limit)
         if let delay = delaysByQuery[query] {
             try? await Task.sleep(for: delay)
@@ -94,7 +75,6 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
 
     func rows(after cursor: UUID, query: HistoryQuery, limit: Int) async throws -> [HistoryRow] {
         requestedQueries.append(query.text)
-        requestedHistoryQueries.append(query)
         requestedLimits.append(limit)
         if let delay = delaysByQuery[query] {
             try? await Task.sleep(for: delay)

@@ -123,6 +123,30 @@ struct SchemaMigrationTests {
         #expect(collections.isEmpty)
     }
 
+    @Test("V5 库升级到 V6：条目与分组保留，旧分组从同一排序位置开始")
+    func migratesV5ToV6() throws {
+        let fixture = try MigrationFixture()
+        defer { fixture.cleanUp() }
+        let seeded = try fixture.seedV5Store()
+
+        let container = AppModelContainer.make(
+            isStoredInMemoryOnly: false,
+            storeURL: fixture.storeURL
+        )
+        let items = try container.mainContext.fetch(FetchDescriptor<ClipboardItem>())
+        #expect(items.count == 1)
+
+        let item = try #require(items.first { $0.id == seeded.itemID })
+        #expect(item.text == "v5 text")
+        #expect(item.collectionID == seeded.collectionID)
+
+        let collections = try container.mainContext.fetch(
+            FetchDescriptor<ClipboardCollection>()
+        )
+        #expect(collections.map(\.id) == [seeded.collectionID])
+        #expect(collections.map(\.sortOrder) == [0], "旧分组迁移后应从同一位置开始")
+    }
+
     @Test("全新库按当前版本创建，写入后重新打开仍在")
     func freshStoreUsesCurrentSchema() throws {
         let fixture = try MigrationFixture()
@@ -246,6 +270,29 @@ private struct MigrationFixture {
 
         try context.save()
         return item.id
+    }
+
+    /// 用冻结的 V5 schema 建库，验证新增分组排序位置的轻量迁移。
+    func seedV5Store() throws -> (itemID: UUID, collectionID: UUID) {
+        let schema = Schema(versionedSchema: SixOneSchemaV5.self)
+        let configuration = ModelConfiguration(schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+
+        let collection = SixOneSchemaV5.ClipboardCollection(name: "旧分组")
+        context.insert(collection)
+
+        let item = SixOneSchemaV5.ClipboardItem(
+            kind: .text,
+            text: "v5 text",
+            collectionID: collection.id
+        )
+        item.refreshTitleSnapshot()
+        item.refreshContentKey()
+        context.insert(item)
+
+        try context.save()
+        return (item.id, collection.id)
     }
 
     func seedCurrentStore() throws {

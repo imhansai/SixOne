@@ -12,7 +12,32 @@ import Testing
 @Suite("列表分组筛选")
 @MainActor
 struct HistoryListCollectionFilterTests {
-    @Test("切分组只加载组内条目，切回全部恢复")
+    @Test("点分组只切换该组：再点同一组回到全部数据")
+    func togglingCollectionFilter() {
+        let first = UUID()
+        let second = UUID()
+
+        #expect(CollectionFilter.all.toggled(first) == .collection(first))
+        #expect(CollectionFilter.collection(first).toggled(second) == .collection(second))
+        #expect(CollectionFilter.collection(first).toggled(first) == .all)
+    }
+
+    @Test("收起期间有新复制：唤出时放弃分组筛选；没有新内容则保留")
+    func restoresFilterOnShow() {
+        let collectionID = UUID()
+
+        #expect(
+            CollectionFilter.collection(collectionID).restoredOnShow(hasNewContent: true)
+                == .all
+        )
+        #expect(
+            CollectionFilter.collection(collectionID).restoredOnShow(hasNewContent: false)
+                == .collection(collectionID)
+        )
+        #expect(CollectionFilter.all.restoredOnShow(hasNewContent: true) == .all)
+    }
+
+    @Test("切分组只加载组内条目，取消筛选恢复全部")
     func loadsFilteredWindow() async throws {
         let env = try Env()
         let work = env.collection("Work")
@@ -27,12 +52,10 @@ struct HistoryListCollectionFilterTests {
         #expect(env.store.rows.map(\.id) == [workItem.id])
         #expect(env.store.rows.allSatisfy { $0.collectionID == work.id })
 
-        env.store.setQuery(HistoryQuery(collection: .ungrouped))
+        // 再点一次选中的分组：取消筛选，全部数据（含未分组）回来。
+        env.store.setQuery(HistoryQuery(collection: env.store.collectionFilter.toggled(work.id)))
         await env.store.waitForPendingLoad()
-        #expect(env.store.rows.map(\.id) == [ungrouped.id])
-
-        env.store.setQuery(HistoryQuery(collection: .all))
-        await env.store.waitForPendingLoad()
+        #expect(env.store.collectionFilter == .all)
         #expect(
             Set(env.store.rows.map(\.id))
                 == Set([workItem.id, personalItem.id, ungrouped.id])

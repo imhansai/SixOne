@@ -97,6 +97,30 @@ struct PanelSearchSessionTests {
         await fixture.store.waitForPendingLoad()
     }
 
+    @Test("取消分组筛选：保留搜索词并回到全部数据")
+    func clearingCollectionFilterKeepsSearchText() async throws {
+        let fixture = makeFixture()
+        fixture.searchState.text = "abc"
+        fixture.session.textDidChange()
+        await Wait.until { fixture.store.query == "abc" }
+        await fixture.store.waitForPendingLoad()
+
+        let collectionID = UUID()
+        fixture.session.collectionFilterDidChange(
+            fixture.store.collectionFilter.toggled(collectionID)
+        )
+        await fixture.store.waitForPendingLoad()
+        #expect(fixture.store.collectionFilter == .collection(collectionID))
+
+        // 再点一次同一分组：取消筛选，搜索词不动。
+        fixture.session.collectionFilterDidChange(
+            fixture.store.collectionFilter.toggled(collectionID)
+        )
+        await fixture.store.waitForPendingLoad()
+        #expect(fixture.store.collectionFilter == .all)
+        #expect(fixture.store.query == "abc", "取消筛选不该清掉搜索词")
+    }
+
     @Test("Esc 清空立即落库，不等防抖")
     func clearAppliesImmediately() async throws {
         let fixture = makeFixture()

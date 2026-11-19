@@ -394,8 +394,6 @@ final class HistoryListStore {
         switch collectionFilter {
         case .all:
             return true
-        case .ungrouped:
-            return row.collectionID == nil
         case .collection(let collectionID):
             return row.collectionID == collectionID
         }

@@ -141,22 +141,57 @@ final class ClipboardHistoryWriter {
 
     // MARK: - 用户分组
 
-    /// 新建分组；名称归一化后要求非空且不重名。
+    /// 新建分组；名称归一化后要求非空且不重名，位置追加到末尾。
     @discardableResult
     func createCollection(named raw: String) -> Result<UUID, CollectionMutationFailure> {
         guard let name = CollectionNameNormalizer.normalized(raw) else {
             return .failure(.emptyName)
         }
-        guard let duplicate = collectionNameExists(name) else {
+        guard let collections = fetchCollections() else {
             return .failure(.persistence)
         }
-        guard !duplicate else { return .failure(.duplicateName) }
+        guard !collectionNameExists(name, in: collections) else {
+            return .failure(.duplicateName)
+        }
 
-        let collection = ClipboardCollection(name: name)
+        let nextOrder = collections.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+        let collection = ClipboardCollection(name: name, sortOrder: nextOrder)
         context.insert(collection)
         guard save("新增分组") else { return .failure(.persistence) }
         events.post(.collectionsChanged)
         return .success(collection.id)
+    }
+
+    /// 按完整顺序快照重写位置；顺序只影响展示，不广播事件。
+    @discardableResult
+    func setCollectionOrder(_ orderedIDs: [UUID]) -> Bool {
+        guard !orderedIDs.isEmpty,
+              Set(orderedIDs).count == orderedIDs.count,
+              let collections = fetchCollections()
+        else { return false }
+
+        let byID = Dictionary(uniqueKeysWithValues: collections.map { ($0.id, $0) })
+        var ordered: [ClipboardCollection] = []
+        ordered.reserveCapacity(collections.count)
+        for id in orderedIDs {
+            guard let collection = byID[id] else { return false }
+            ordered.append(collection)
+        }
+        // 列表重载尚未到达时，库里多出的分组按现有顺序追加到末尾。
+        let known = Set(orderedIDs)
+        ordered += collections
+            .filter { !known.contains($0.id) }
+            .map(CollectionRow.init)
+            .sorted(by: CollectionRow.displayOrder)
+            .compactMap { byID[$0.id] }
+
+        var changed = false
+        for (index, collection) in ordered.enumerated() where collection.sortOrder != index {
+            collection.sortOrder = index
+            changed = true
+        }
+        guard changed else { return true }
+        return save("调整分组顺序")
     }
 
     /// 重命名分组；只改元数据，不触碰分组成员。
@@ -165,14 +200,16 @@ final class ClipboardHistoryWriter {
         id: UUID,
         named raw: String
     ) -> Result<Void, CollectionMutationFailure> {
-        guard let collection = fetchCollection(id: id) else { return .failure(.notFound) }
+        guard let collections = fetchCollections() else { return .failure(.persistence) }
+        guard let collection = collections.first(where: { $0.id == id }) else {
+            return .failure(.notFound)
+        }
         guard let name = CollectionNameNormalizer.normalized(raw) else {
             return .failure(.emptyName)
         }
-        guard let duplicate = collectionNameExists(name, excluding: id) else {
-            return .failure(.persistence)
+        guard !collectionNameExists(name, in: collections, excluding: id) else {
+            return .failure(.duplicateName)
         }
-        guard !duplicate else { return .failure(.duplicateName) }
         guard collection.name != name else { return .success(()) }
 
         collection.name = name
@@ -222,19 +259,22 @@ final class ClipboardHistoryWriter {
         return fetchLogged("按 id 取分组") { try context.fetch(descriptor).first }
     }
 
-    /// 返回 nil 表示读取失败；名称比较忽略大小写。
+    private func fetchCollections() -> [ClipboardCollection]? {
+        var descriptor = FetchDescriptor<ClipboardCollection>()
+        descriptor.propertiesToFetch = [\.id, \.name, \.createdAt, \.sortOrder]
+        return fetchLogged("取分组列表") { try context.fetch(descriptor) }
+    }
+
+    /// 名称比较忽略大小写；与弹窗内联校验共用同一规则。
     private func collectionNameExists(
         _ name: String,
+        in collections: [ClipboardCollection],
         excluding excludedID: UUID? = nil
-    ) -> Bool? {
-        guard let collections = fetchLogged(
-            "检查分组名",
-            { try context.fetch(FetchDescriptor<ClipboardCollection>()) }
-        ) else { return nil }
-        return collections.contains { collection in
-            collection.id != excludedID
-                && collection.name.localizedCaseInsensitiveCompare(name) == .orderedSame
-        }
+    ) -> Bool {
+        CollectionNameRules.isDuplicate(
+            name,
+            among: collections.filter { $0.id != excludedID }.map(\.name)
+        )
     }
 
     /// 本会话已回写过的 item+路径键，防止陈旧 bookmark 反复重取写盘。

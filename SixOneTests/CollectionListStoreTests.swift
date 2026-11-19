@@ -20,15 +20,109 @@ struct CollectionListStoreTests {
 
         await store.waitForPendingLoad()
         #expect(store.groups.map(\.name) == ["Work"])
+        #expect(store.groupNamesByID == [store.groups[0].id: "Work"], "名字索引随加载一起就绪")
 
         await repository.setCollections([row("Work"), row("Personal")])
         events.post(.collectionsChanged)
 
         #expect(await Wait.until { store.groups.count == 2 })
         #expect(store.groups.map(\.name) == ["Work", "Personal"])
+        #expect(
+            store.groupNamesByID == Dictionary(
+                uniqueKeysWithValues: store.groups.map { ($0.id, $0.name) }
+            ),
+            "重载后名字索引与分组列表同步"
+        )
+    }
+
+    @Test("拖拽落位先改内存顺序并刷新位置，已到位返回 false")
+    func movesGroupsInMemory() async throws {
+        let repository = FakeHistoryRepository()
+        await repository.setCollections([row("Work"), row("Personal")])
+        let store = CollectionListStore(repository: repository, events: ClipboardHistoryEventBus())
+        await store.waitForPendingLoad()
+        let original = store.groups
+
+        #expect(store.move([original[1].id], before: original[0].id))
+        #expect(store.groups.map(\.name) == ["Personal", "Work"])
+        #expect(store.groups.map(\.sortOrder) == [0, 1], "落位后行快照也更新位置")
+        #expect(
+            store.groupNamesByID == Dictionary(
+                uniqueKeysWithValues: store.groups.map { ($0.id, $0.name) }
+            ),
+            "落位后名字索引仍然对齐"
+        )
+
+        #expect(!store.move([original[0].id], before: nil), "Work 已在末尾")
+        #expect(store.groups.map(\.name) == ["Personal", "Work"])
+    }
+
+    @Test("迟到的旧加载不会覆盖较新的加载结果")
+    func staleLoadDoesNotOverwriteNewerResult() async throws {
+        let repository = GatedCollectionsRepository()
+        await repository.gateNextCall()
+        await repository.setResponse([row("Old")])
+        await repository.setResponse([row("New")])
+
+        let store = CollectionListStore(
+            repository: repository,
+            events: ClipboardHistoryEventBus()
+        )
+        // init 已经发起第一次加载；等它被闸住再开始第二次。
+        #expect(await Wait.untilAsync { await repository.startedCalls == 1 })
+        store.reload()
+        #expect(await Wait.untilAsync { await repository.startedCalls == 2 })
+        #expect(await Wait.until { store.groups.map(\.name) == ["New"] })
+
+        await repository.releaseGate()
+        #expect(await Wait.untilAsync { await repository.finishedCalls == 2 })
+        #expect(store.groups.map(\.name) == ["New"], "旧结果回来晚了，但读取代号已经不匹配")
     }
 
     private func row(_ name: String) -> CollectionRow {
         CollectionRow(id: UUID(), name: name, createdAt: Date())
     }
+}
+
+/// 可控时序的分组读取：第一次调用可被闸住，验证迟到的旧结果被丢弃。
+private actor GatedCollectionsRepository: ClipboardHistoryRepository {
+    private var responses: [[CollectionRow]] = []
+    private var gatedCalls = 0
+    private var gate: CheckedContinuation<Void, Never>?
+    private(set) var startedCalls = 0
+    private(set) var finishedCalls = 0
+
+    func setResponse(_ rows: [CollectionRow]) {
+        responses.append(rows)
+    }
+
+    func gateNextCall() {
+        gatedCalls += 1
+    }
+
+    func releaseGate() {
+        gate?.resume()
+        gate = nil
+    }
+
+    func collections() async throws -> [CollectionRow] {
+        startedCalls += 1
+        let rows = responses.isEmpty ? [] : responses.removeFirst()
+        if gatedCalls > 0 {
+            gatedCalls -= 1
+            await withCheckedContinuation { gate = $0 }
+        }
+        finishedCalls += 1
+        return rows
+    }
+
+    func latest(query: HistoryQuery, limit: Int) async throws -> [HistoryRow] { [] }
+
+    func rows(after cursor: UUID, query: HistoryQuery, limit: Int) async throws -> [HistoryRow] { [] }
+
+    func row(id: UUID) async throws -> HistoryRow? { nil }
+
+    func rowMatches(id: UUID, query: HistoryQuery) async throws -> Bool { false }
+
+    func itemExists(id: UUID) async throws -> Bool { false }
 }

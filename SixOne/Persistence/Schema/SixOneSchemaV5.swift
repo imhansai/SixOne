@@ -2,9 +2,8 @@
 //  SixOneSchemaV5.swift
 //  SixOne
 //
-//  当前模型定义（V5）。V5 在 V4 上新增用户分组归属与分组表；
-//  V4 → V5 只做轻量结构迁移，旧条目保持未分组。
-//  V1/V2/V3/V4 已冻结，改字段从 V5 复制出新版本。
+//  V5 已冻结：V5 在 V4 上新增用户分组归属与分组表；不要再改这里的字段或索引。
+//  当前版本见 `SixOneSchemaV6`。
 //
 
 import Foundation
@@ -261,7 +260,3 @@ nonisolated enum SixOneSchemaV5: VersionedSchema {
         }
     }
 }
-
-/// 当前版本：业务代码只认这个名字；升级 schema 时改这里，不要改已冻结的旧版本。
-typealias ClipboardItem = SixOneSchemaV5.ClipboardItem
-typealias ClipboardCollection = SixOneSchemaV5.ClipboardCollection

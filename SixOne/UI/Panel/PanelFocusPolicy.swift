@@ -15,6 +15,8 @@ nonisolated struct PanelFocusSnapshot: Equatable {
     var hasApplicationSheet = false
     var isEditingText = false
     var clickedOutside = false
+    /// 按住分组拖拽中；拖拽会跑出窗口。
+    var isDraggingCollection = false
     /// 前台是别的进程的系统辅助面板（自动填充、指纹认证等）。
     var isSystemHelperFrontmost = false
     var hasKeyWindow = true
@@ -25,6 +27,7 @@ nonisolated enum PanelFocusPolicy {
     static func shouldHide(_ snapshot: PanelFocusSnapshot) -> Bool {
         if snapshot.isSharing { return false }
         if snapshot.hasAttachedSheet { return false }
+        if snapshot.isDraggingCollection { return false }
         if snapshot.isPressingStatusItem { return false }
         if snapshot.isAppFrontmost, snapshot.isPanelKeyWindow { return false }
         if snapshot.isTextAuxiliaryPanelKey { return false }

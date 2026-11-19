@@ -12,12 +12,12 @@ enum RowAccessibility {
     static func label(title: String, detail: String) -> String {
         detail.isEmpty ? title : "\(title), \(detail)"
     }
-}
 
-/// 行外观常量：两套列表共用，避免选中底色各自漂移。
-enum RowAppearance {
-    static let activeSelection = Color(.sRGB, red: 84 / 255, green: 140 / 255, blue: 235 / 255)
-    static let inactiveSelection = Color(.sRGB, white: 0.45).opacity(0.30)
+    /// 详情末尾补分组名；分组视图里每行相同，仍保留给 VoiceOver 交代归属。
+    static func detail(_ detail: String, groupName: String?) -> String {
+        guard let groupName, !groupName.isEmpty else { return detail }
+        return detail + ", " + String(format: Localizer.string("Group: %@"), groupName)
+    }
 }
 
 /// 行容器：首末行留白折进行高，内容只提供图标与标题/副标题。
@@ -203,10 +203,10 @@ struct ListRowShell<Leading: View>: View {
         Group {
             if isActiveSelection {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(RowAppearance.activeSelection)
+                    .fill(PanelSelectionAppearance.active)
             } else if isSelected {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(RowAppearance.inactiveSelection)
+                    .fill(PanelSelectionAppearance.inactive)
             }
         }
         .padding(.top, listTopPadding)

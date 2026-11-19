@@ -285,16 +285,6 @@
         }
       }
     },
-    "All" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部"
-          }
-        }
-      }
-    },
     "All Files" : {
       "localizations" : {
         "zh-Hans" : {
@@ -401,6 +391,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法打开 Shottr"
+          }
+        }
+      }
+    },
+    "Character Count" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字符数"
           }
         }
       }
@@ -681,6 +681,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法重命名分组。"
+          }
+        }
+      }
+    },
+    "Could not reorder groups." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法调整分组顺序。"
           }
         }
       }
@@ -998,16 +1008,6 @@
         }
       }
     },
-    "Group created." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已创建分组。"
-          }
-        }
-      }
-    },
     "Group Name" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1028,12 +1028,12 @@
         }
       }
     },
-    "Groups" : {
+    "Group: %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分组"
+            "value" : "分组：%@"
           }
         }
       }
@@ -1265,6 +1265,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到分组"
+          }
+        }
+      }
+    },
+    "Moved to %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移到“%@”"
+          }
+        }
+      }
+    },
+    "Moved to Ungrouped" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移出分组"
           }
         }
       }

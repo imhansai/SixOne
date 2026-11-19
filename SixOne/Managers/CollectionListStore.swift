@@ -17,8 +17,12 @@ final class CollectionListStore {
     private var eventObservation: ClipboardHistoryEventBus.Observation?
     private let logger = AppLog.logger("Collections")
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    /// 读取代号：迟到的旧结果直接丢弃，避免覆盖较新的一次加载。
+    @ObservationIgnored private var loadGeneration = 0
 
     private(set) var groups: [CollectionRow] = []
+    /// 分组名按 id 索引：列表逐行查表，避免每行扫描全部分组。
+    private(set) var groupNamesByID: [UUID: String] = [:]
 
     init(repository: ClipboardHistoryRepository, events: ClipboardHistoryEventBus) {
         self.repository = repository
@@ -37,15 +41,21 @@ final class CollectionListStore {
     }
 
     func reload() {
+        loadGeneration &+= 1
+        let generation = loadGeneration
         loadTask = Task { [weak self] in
-            await self?.load()
+            guard let self else { return }
+            await self.load(generation: generation)
         }
     }
 
-    func load() async {
+    private func load(generation: Int) async {
         do {
-            groups = try await repository.collections()
+            let rows = try await repository.collections()
+            guard generation == loadGeneration else { return }
+            apply(rows)
         } catch {
+            guard generation == loadGeneration else { return }
             logger.error("读取分组列表失败：\(error.localizedDescription, privacy: .public)")
         }
     }
@@ -54,7 +64,36 @@ final class CollectionListStore {
         await loadTask?.value
     }
 
+    /// 落位先改内存；返回是否换了位置，失败由重载回滚。
+    @discardableResult
+    func move(_ movingIDs: [UUID], before targetID: UUID?) -> Bool {
+        guard let reordered = CollectionReorder.apply(
+            movingIDs: movingIDs,
+            before: targetID,
+            to: groups
+        ), reordered.map(\.id) != groups.map(\.id) else { return false }
+
+        apply(reordered.enumerated().map { index, row in
+            CollectionRow(
+                id: row.id,
+                name: row.name,
+                createdAt: row.createdAt,
+                sortOrder: index
+            )
+        })
+        return true
+    }
+
     func group(id: UUID) -> CollectionRow? {
         groups.first { $0.id == id }
+    }
+
+    /// 顺序与名字索引一起更新，避免分叉。
+    private func apply(_ rows: [CollectionRow]) {
+        groups = rows
+        groupNamesByID = Dictionary(
+            rows.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 }

@@ -27,6 +27,16 @@ struct PanelFocusPolicyTests {
         }))
     }
 
+    @Test("分组拖拽中不收起：拖拽会跑出窗口，等松手再说")
+    func collectionDragKeepsPanel() {
+        #expect(!PanelFocusPolicy.shouldHide(snapshot {
+            $0.isDraggingCollection = true
+            $0.isAppFrontmost = false
+            $0.isPanelKeyWindow = false
+            $0.clickedOutside = true
+        }))
+    }
+
     @Test("面板挂着 sheet 不收起")
     func attachedSheetKeepsPanel() {
         #expect(!PanelFocusPolicy.shouldHide(snapshot {

@@ -22,7 +22,7 @@ struct FilePathBar: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                        .help(String(
+                        .appTooltip(String(
                             format: Localizer.string("File no longer exists: %@"),
                             location.name
                         ))

@@ -24,6 +24,7 @@ final class PanelWindowLifecycle {
     private let quickPasteHintState: QuickPasteHintState
     private let cursor: PanelSelectionCursor
     private let sharing: PanelSharing
+    private let collectionDragState: CollectionDragState
 
     private let focusGuard: PanelFocusGuard
     private let quickLook: PanelQuickLookPlayback
@@ -56,7 +57,8 @@ final class PanelWindowLifecycle {
         shareState: ShareState,
         quickPasteHintState: QuickPasteHintState,
         cursor: PanelSelectionCursor,
-        sharing: PanelSharing
+        sharing: PanelSharing,
+        collectionDragState: CollectionDragState
     ) {
         self.panel = panel
         self.manager = manager
@@ -72,11 +74,13 @@ final class PanelWindowLifecycle {
         self.quickPasteHintState = quickPasteHintState
         self.cursor = cursor
         self.sharing = sharing
+        self.collectionDragState = collectionDragState
         self.focusGuard = PanelFocusGuard(
             panel: panel,
             shareState: shareState,
             previewState: previewState,
-            searchState: searchState
+            searchState: searchState,
+            collectionDragState: collectionDragState
         )
         self.quickLook = PanelQuickLookPlayback(panel: panel)
 
@@ -95,6 +99,9 @@ final class PanelWindowLifecycle {
                 self.sharing.finishPickingSessions()
             }
         )
+        collectionDragState.onChange = { [weak self] isDragging in
+            self?.collectionDragDidChange(isDragging)
+        }
     }
 
     isolated deinit {
@@ -166,6 +173,8 @@ final class PanelWindowLifecycle {
         shareState.stage = .idle
         orderOutPanel()
         panelState.isVisible = false
+        // 会话结束回调可能随视图移除丢失，兜底放开收起。
+        collectionDragState.isDragging = false
         store.setListVisible(false)
         removeMonitors()
         manager.setPasteboardCaptureSuspended(false)
@@ -222,6 +231,11 @@ final class PanelWindowLifecycle {
         let hasNewContent = storeHasNewContent
             || hadUnpolledPasteboardChange
             || manager.hasUnpolledPasteboardChange
+        // 收起期间有新复制：放弃分组筛选，否则新条目（默认未分组）会被藏在组外。
+        let restoredFilter = store.collectionFilter.restoredOnShow(hasNewContent: hasNewContent)
+        if restoredFilter != store.collectionFilter {
+            store.setQuery(HistoryQuery(text: store.query, collection: restoredFilter))
+        }
         if hasNewContent || !(session?.isDeepScroll ?? false) {
             store.loadLatest()
         }
@@ -256,6 +270,13 @@ final class PanelWindowLifecycle {
         } else {
             panel.makeFirstResponder(panel.contentView)
         }
+    }
+
+    /// 拖拽结束把面板设回 key：拖拽会话可能抢走 key。
+    /// 收起判定交给 `PanelFocusPolicy`，这里不补，免得单击 chip 也查一次焦点。
+    private func collectionDragDidChange(_ isDragging: Bool) {
+        guard !isDragging, panel.isVisible, isAppFrontmost else { return }
+        panel.makeKey()
     }
 
     // MARK: - 焦点判定

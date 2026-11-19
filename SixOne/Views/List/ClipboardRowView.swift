@@ -45,7 +45,7 @@ struct ClipboardRowView: View {
             title: titleText,
             titleTooltipDetail: titleTooltipDetail,
             accessibilityDetail: accessibilityDetail,
-            subtitle: AnyView(Text(subtitleText)),
+            subtitle: AnyView(subtitleContent),
             onCopy: onCopy,
             onSelect: onSelect,
             onActivate: onActivate,
@@ -147,18 +147,59 @@ struct ClipboardRowView: View {
         "\(typeLabelKey) · copied at \(copyTime)"
     }
 
+    /// 「全部」视图里行尾补一个很轻的分组标记；分组视图里每行都一样，不重复显示。
+    private var subtitleContent: some View {
+        HStack(spacing: 4) {
+            Text(subtitleText)
+                .layoutPriority(1)
+            if let markerName {
+                Text(verbatim: "·")
+                    .opacity(0.7)
+                Image(systemName: "folder")
+                    .font(.system(size: 9.5, weight: .medium))
+                    .accessibilityHidden(true)
+                Text(verbatim: markerName)
+                    .font(.system(size: 11.5))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .appTooltip(markerName)
+            }
+        }
+    }
+
+    private var collectionName: String? {
+        guard let collectionID = row.collectionID else { return nil }
+        return context.collections?.groupNamesByID[collectionID]
+    }
+
+    private var markerName: String? {
+        RowCollectionMarker.name(
+            for: row,
+            filter: context.store.collectionFilter,
+            groupNames: context.collections?.groupNamesByID ?? [:]
+        )
+    }
+
     private var accessibilityDetail: String {
         var resource = typeLabelKey
         resource.locale = RuntimeLanguage.shared.locale
         let typeAndTime = "\(String(localized: resource)), \(copyTime)"
         // 别名替换标题后补上原标题；文件组用当前语言现算，避免旧快照。
-        guard AliasNormalizer.displayable(row.alias) != nil else { return typeAndTime }
-        let originalTitle: String? = {
-            if case .fileGroup = rowType { return fallbackTitle }
-            return row.title
-        }()
-        guard let originalTitle, !originalTitle.isEmpty else { return typeAndTime }
-        return "\(originalTitle), \(typeAndTime)"
+        let base: String
+        if AliasNormalizer.displayable(row.alias) != nil {
+            let originalTitle: String? = {
+                if case .fileGroup = rowType { return fallbackTitle }
+                return row.title
+            }()
+            if let originalTitle, !originalTitle.isEmpty {
+                base = "\(originalTitle), \(typeAndTime)"
+            } else {
+                base = typeAndTime
+            }
+        } else {
+            base = typeAndTime
+        }
+        return RowAccessibility.detail(base, groupName: collectionName)
     }
 
     private var typeLabelKey: LocalizedStringResource {

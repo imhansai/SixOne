@@ -21,6 +21,8 @@ struct SearchField: NSViewRepresentable {
     var identifier: NSUserInterfaceItemIdentifier?
     /// 首次挂载即聚焦；按需重建的搜索框可能错过 `focusRequestID`。
     var focusOnAppear = false
+    /// 点击框外（含右键）时主动失焦。
+    var resignOnOutsideClick = false
     var onTextChange: (String) -> Void = { _ in }
     var onFocusChange: (Bool) -> Void = { _ in }
     var onCancel: () -> Void = {}
@@ -59,6 +61,7 @@ struct SearchField: NSViewRepresentable {
         field.identifier = identifier
         field.font = .systemFont(ofSize: fontSize)
         field.focusRingType = .none
+        context.coordinator.resignOnOutsideClick = resignOnOutsideClick
 
         context.coordinator.searchField = field
         context.coordinator.updateCallbacks(
@@ -86,9 +89,14 @@ struct SearchField: NSViewRepresentable {
         return field
     }
 
+    static func dismantleNSView(_ nsView: NSTextField, coordinator: Coordinator) {
+        coordinator.stopOutsideClickMonitoring()
+    }
+
     func updateNSView(_ field: NSTextField, context: Context) {
         let coordinator = context.coordinator
         coordinator.searchField = field
+        coordinator.resignOnOutsideClick = resignOnOutsideClick
         coordinator.updateCallbacks(
             onTextChange: onTextChange,
             onFocusChange: onFocusChange,
@@ -157,6 +165,8 @@ struct SearchField: NSViewRepresentable {
         var lastSyncedText = ""
         var lastFocusRequestID: Int?
         var lastBlurRequestID: Int?
+        var resignOnOutsideClick = false
+        private var outsideClickMonitor: Any?
 
         func updateCallbacks(
             onTextChange: @escaping (String) -> Void,
@@ -216,7 +226,34 @@ struct SearchField: NSViewRepresentable {
         }
 
         fileprivate func reportFocus(_ focused: Bool) {
+            if focused {
+                startOutsideClickMonitoring()
+            } else {
+                stopOutsideClickMonitoring()
+            }
             onFocusChange(focused)
+        }
+
+        private func startOutsideClickMonitoring() {
+            guard resignOnOutsideClick, outsideClickMonitor == nil else { return }
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown]
+            ) { [weak self] event in
+                guard let self,
+                      let field = self.searchField,
+                      event.window === field.window else { return event }
+                let point = field.convert(event.locationInWindow, from: nil)
+                if !field.bounds.contains(point) {
+                    field.window?.makeFirstResponder(nil)
+                }
+                return event
+            }
+        }
+
+        func stopOutsideClickMonitoring() {
+            guard let outsideClickMonitor else { return }
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
         }
 
         private func sync(_ field: NSTextField) {

@@ -44,7 +44,8 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         shareState: shareState,
         quickPasteHintState: quickPasteHintState,
         cursor: cursor,
-        sharing: sharing
+        sharing: sharing,
+        collectionDragState: context.collectionDragState
     )
 
     private lazy var itemActions = PanelItemActions(
@@ -247,25 +248,22 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         searchSession.collectionFilterDidChange(filter)
     }
 
-    func panelDidRequestNewCollection() {
-        createCollection(assigningItemID: nil)
-    }
-
     func panelDidRequestNewCollection(assigningItemID: UUID) {
         createCollection(assigningItemID: assigningItemID)
     }
 
     func panelDidRequestAssignCollection(itemID: UUID, collectionID: UUID?) {
+        let currentCollectionID = manager.fetchLightItem(id: itemID)?.collectionID
+        guard currentCollectionID != collectionID else { return }
         guard manager.assignCollection(itemID: itemID, collectionID: collectionID) else {
             noticeState.message = Localizer.string("Could not move item to group.")
             context.collections?.reload()
             return
         }
-    }
-
-    func panelDidRequestRenameCollection() {
-        guard let group = selectedCollection else { return }
-        renameCollection(group)
+        // 分组视图里行会移出/出现，已经看得到结果；全部视图没有可见变化，补一条短提示。
+        guard store.collectionFilter == .all else { return }
+        let name = collectionID.flatMap { context.collections?.group(id: $0)?.name }
+        noticeState.showMovedToCollection(named: name)
     }
 
     func panelDidRequestRenameCollection(id: UUID) {
@@ -273,26 +271,33 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         renameCollection(group)
     }
 
-    func panelDidRequestDeleteCollection() {
-        guard let group = selectedCollection else { return }
-        deleteCollection(group)
-    }
-
     func panelDidRequestDeleteCollection(id: UUID) {
         guard let group = context.collections?.group(id: id) else { return }
         deleteCollection(group)
     }
 
-    /// 管理命令默认作用于当前选中的具体分组。
-    private var selectedCollection: CollectionRow? {
-        guard case .collection(let id) = store.collectionFilter else { return nil }
-        return context.collections?.group(id: id)
+    func panelDidRequestReorderCollections(movingIDs: [UUID], before targetID: UUID?) {
+        guard context.collections?.move(movingIDs, before: targetID) == true,
+              let order = context.collections?.groups.map(\.id),
+              !order.isEmpty
+        else { return }
+        // 下一轮写库，避免拖慢落位动画。
+        Task { @MainActor in
+            guard manager.setCollectionOrder(order) else {
+                noticeState.message = Localizer.string("Could not reorder groups.")
+                context.collections?.reload()
+                return
+            }
+        }
     }
 
     private func renameCollection(_ group: CollectionRow) {
         CollectionEditor.present(
             on: panel,
-            mode: .rename(currentName: group.name)
+            mode: .rename(currentName: group.name),
+            existingNames: (context.collections?.groups ?? [])
+                .filter { $0.id != group.id }
+                .map(\.name)
         ) { [weak self] name in
             guard let self else { return }
             switch self.manager.renameCollection(id: group.id, named: name) {
@@ -330,15 +335,15 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         )
     }
 
-    private func createCollection(assigningItemID: UUID?) {
-        CollectionEditor.present(on: panel, mode: .create) { [weak self] name in
+    private func createCollection(assigningItemID: UUID) {
+        CollectionEditor.present(
+            on: panel,
+            mode: .create,
+            existingNames: (context.collections?.groups ?? []).map(\.name)
+        ) { [weak self] name in
             guard let self else { return }
             switch self.manager.createCollection(named: name) {
             case .success(let id):
-                guard let assigningItemID else {
-                    self.noticeState.message = Localizer.string("Group created.")
-                    return
-                }
                 guard self.manager.assignCollection(
                     itemID: assigningItemID,
                     collectionID: id

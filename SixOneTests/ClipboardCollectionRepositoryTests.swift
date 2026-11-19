@@ -12,8 +12,8 @@ import Testing
 @Suite("分组读取")
 @MainActor
 struct ClipboardCollectionRepositoryTests {
-    @Test("分组筛选只返回组内条目，未分组按 nil 归集")
-    func filtersByCollectionAndUngrouped() async throws {
+    @Test("分组筛选只返回组内条目；全部数据包含未分组")
+    func filtersByCollection() async throws {
         let env = try Env()
         let work = env.collection("Work")
         let personal = env.collection("Personal")
@@ -27,12 +27,6 @@ struct ClipboardCollectionRepositoryTests {
             limit: 10
         )
         #expect(workRows.map(\.id) == [workItem.id])
-
-        let ungroupedRows = try await env.repository.latest(
-            query: HistoryQuery(collection: .ungrouped),
-            limit: 10
-        )
-        #expect(ungroupedRows.map(\.id) == [ungrouped.id])
 
         let allRows = try await env.repository.latest(
             query: HistoryQuery(collection: .all),
@@ -48,7 +42,7 @@ struct ClipboardCollectionRepositoryTests {
         let personal = env.collection("Personal")
         let workReport = env.text("季度报告", collection: work)
         _ = env.text("周报", collection: work)
-        _ = env.text("季度报告", collection: personal)
+        let personalReport = env.text("季度报告", collection: personal)
         try env.save()
 
         let workRows = try await env.repository.latest(
@@ -57,11 +51,11 @@ struct ClipboardCollectionRepositoryTests {
         )
         #expect(workRows.map(\.id) == [workReport.id])
 
-        let ungroupedRows = try await env.repository.latest(
-            query: HistoryQuery(text: "季度", collection: .ungrouped),
+        let allRows = try await env.repository.latest(
+            query: HistoryQuery(text: "季度", collection: .all),
             limit: 10
         )
-        #expect(ungroupedRows.isEmpty)
+        #expect(Set(allRows.map(\.id)) == Set([workReport.id, personalReport.id]))
     }
 
     @Test("游标补位遵循分组条件")
@@ -97,8 +91,8 @@ struct ClipboardCollectionRepositoryTests {
         ))
         #expect(try await env.repository.rowMatches(
             id: item.id,
-            query: HistoryQuery(collection: .ungrouped)
-        ) == false)
+            query: HistoryQuery(collection: .all)
+        ))
         #expect(try await env.repository.rowMatches(
             id: item.id,
             query: HistoryQuery(collection: .collection(other.id))
@@ -120,8 +114,44 @@ struct ClipboardCollectionRepositoryTests {
         #expect(row.collectionID == work.id)
     }
 
-    @Test("分组列表按名称本地化排序")
-    func collectionsAreSortedByName() async throws {
+    @Test("分组列表按用户排序位置")
+    func collectionsFollowUserOrder() async throws {
+        let env = try Env()
+        let beta = env.collection("Beta")
+        let alpha = env.collection("alpha")
+        let gamma = env.collection("Gamma")
+        alpha.sortOrder = 0
+        gamma.sortOrder = 1
+        beta.sortOrder = 2
+        try env.save()
+
+        #expect(try await env.repository.collections().map(\.name) == ["alpha", "Gamma", "Beta"])
+    }
+
+    @Test("行分组标记只在全部视图显示，且找不到分组时不显示")
+    func rowMarkerOnlyShowsInAllView() {
+        let group = CollectionRow(id: UUID(), name: "Work", createdAt: Date())
+        let grouped = HistoryRow.stub(title: "工作条目", collectionID: group.id)
+        let ungrouped = HistoryRow.stub(title: "未分组条目")
+        let names = [group.id: "Work"]
+
+        #expect(
+            RowCollectionMarker.name(for: grouped, filter: .all, groupNames: names) == "Work"
+        )
+        #expect(
+            RowCollectionMarker.name(
+                for: grouped,
+                filter: .collection(group.id),
+                groupNames: names
+            ) == nil,
+            "分组视图里每行都带同一个名字，只会变成噪音"
+        )
+        #expect(RowCollectionMarker.name(for: ungrouped, filter: .all, groupNames: names) == nil)
+        #expect(RowCollectionMarker.name(for: grouped, filter: .all, groupNames: [:]) == nil)
+    }
+
+    @Test("旧分组没有排序位置时按名称本地化排序")
+    func collectionsWithoutOrderFallBackToName() async throws {
         let env = try Env()
         _ = env.collection("Beta")
         _ = env.collection("alpha")
@@ -129,7 +159,6 @@ struct ClipboardCollectionRepositoryTests {
         try env.save()
 
         let names = try await env.repository.collections().map(\.name)
-        #expect(Set(names) == Set(["Beta", "alpha", "Gamma"]))
         #expect(names == names.sorted {
             $0.localizedStandardCompare($1) == .orderedAscending
         })
