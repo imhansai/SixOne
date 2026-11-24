@@ -53,6 +53,22 @@ struct PasteboardWriteBackTests {
         #expect(harness.pasteboard.lastWrite == .image(bitmap, type: .png))
     }
 
+    @Test("ICNS 图标条目：按 com.apple.icns 写回，贴回访达图标位仍有效")
+    func writesICNSImageWithItsPasteboardType() throws {
+        let harness = try ClipboardHarness()
+        let icon = Data([0x69, 0x63, 0x6E, 0x73])
+        let item = try insert(
+            ClipboardItem(kind: .image, imageData: icon, contentType: "ICNS"),
+            into: harness
+        )
+
+        harness.manager.copy(item)
+
+        #expect(
+            harness.pasteboard.lastWrite == .image(icon, type: PasteboardFormat.icnsPasteboardType)
+        )
+    }
+
     @Test("文件组：解析得到几个就写几个 URL，顺序不变")
     func writesFileGroupInOrder() throws {
         let harness = try ClipboardHarness()

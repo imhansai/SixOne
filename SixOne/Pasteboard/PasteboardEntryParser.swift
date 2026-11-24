@@ -109,6 +109,15 @@ enum PasteboardEntryParser {
            PasteboardFormat.isBitmap(tiffData) {
             return Entry(kind: .image, imageData: tiffData, contentType: "TIFF")
         }
+        // 访达「显示简介」的图标拷贝只给 ICNS，没有 PNG/TIFF 副本。
+        if let icnsData = primary.data(PasteboardFormat.icnsPasteboardType),
+           PasteboardFormat.isBitmap(icnsData) {
+            return Entry(
+                kind: .image,
+                imageData: icnsData,
+                contentType: PasteboardFormat.icnsContentType
+            )
+        }
         // 颜色类型是 NSColor 归档，统一剥成归档本体。
         if let raw = primary.data(.color), let colorData = PasteboardFormat.colorArchive(from: raw) {
             return Entry(kind: .color, colorData: colorData)

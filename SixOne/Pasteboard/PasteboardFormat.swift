@@ -15,12 +15,27 @@ nonisolated enum PasteboardFormat {
         "png", "jpg", "jpeg", "gif", "tif", "tiff", "webp", "heic",
     ]
 
-    /// 位图粘贴板类型：TIFF 或 PNG。
+    /// 访达「显示简介」图标拷贝只写这一种类型；ICNS 没有标准 PasteboardType 常量。
+    static var icnsPasteboardType: NSPasteboard.PasteboardType {
+        NSPasteboard.PasteboardType("com.apple.icns")
+    }
+
+    static let icnsContentType = "ICNS"
+
+    /// 位图粘贴板类型：TIFF、ICNS 或 PNG。
     static func pasteboardType(forContentType contentType: String?) -> NSPasteboard.PasteboardType {
         switch (contentType ?? "").uppercased() {
         case "TIFF", "TIF": return .tiff
+        case icnsContentType: return icnsPasteboardType
         default: return .png
         }
+    }
+
+    /// 条目标题里的扩展名：ICNS 单独认，未知类型沿用 png。
+    static func titleExtension(forContentType contentType: String?) -> String {
+        let name = (contentType ?? "").lowercased()
+        if name == icnsContentType.lowercased() { return name }
+        return imageFileExtensions.contains(name) ? name : "png"
     }
 
     /// 是否可用位图；只解析容器头不解码像素，避免主线程轮询卡顿。

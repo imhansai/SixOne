@@ -147,9 +147,9 @@ nonisolated enum ItemTitleFormatter {
                     return fileName
                 }
             }
-            let extensionName = (contentType ?? "").lowercased()
-            let suffix = PasteboardFormat.imageFileExtensions.contains(extensionName) ? extensionName : "png"
-            return timestampNameFormatter.string(from: lastActivityAt) + "." + suffix
+            return timestampNameFormatter.string(from: lastActivityAt)
+                + "."
+                + PasteboardFormat.titleExtension(forContentType: contentType)
         case .file:
             let name = URL(fileURLWithPath: filePaths.first ?? "").lastPathComponent
             guard !name.isEmpty else { return Localizer.string("File") }

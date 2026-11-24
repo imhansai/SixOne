@@ -32,8 +32,10 @@ nonisolated struct PasteboardSnapshot: Sendable {
 
     /// 字符串类类型，读时让 AppKit 转换编码；`.URL` 是 public.url。
     private static let stringTypes: [NSPasteboard.PasteboardType] = [.string, .fileURL, .URL]
-    /// 字节类类型：PNG/TIFF、RTF、HTML、颜色。
-    private static let dataTypes: [NSPasteboard.PasteboardType] = [.png, .tiff, .rtf, .html, .color]
+    /// 字节类类型：PNG/TIFF、ICNS、RTF、HTML、颜色。
+    private static let dataTypes: [NSPasteboard.PasteboardType] = [
+        .png, .tiff, PasteboardFormat.icnsPasteboardType, .rtf, .html, .color,
+    ]
 
     /// 「不要记录」类型（nspasteboard.org 约定）；只按来源忽略会漏掉密码管理器。
     static let doNotRecordTypes: Set<String> = [

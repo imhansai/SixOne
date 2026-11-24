@@ -469,6 +469,23 @@ struct ClipboardCaptureTests {
         #expect(items.last?.kind == .image)
     }
 
+    @Test("访达「显示简介」图标拷贝：只有 com.apple.icns 也记成图片条目")
+    func capturesICNSIcon() async throws {
+        let harness = try ClipboardHarness()
+        let item = NSPasteboardItem()
+        item.setData(Self.icnsBytes, forType: PasteboardFormat.icnsPasteboardType)
+        harness.pasteboard.simulateCopy([item])
+        await harness.pollAndWait()
+        await harness.drainThumbnails()
+
+        let captured = try #require(harness.itemsNewestFirst().first)
+        #expect(captured.kind == .image)
+        #expect(captured.imageData == Self.icnsBytes)
+        #expect(captured.contentType == "ICNS")
+        #expect(captured.titleSnapshot?.hasSuffix(".icns") == true)
+        #expect(captured.thumbnailData != nil)
+    }
+
     @Test("颜色复制（系统属性列表路径）：归为 color，标题是十六进制")
     func capturesColor() async throws {
         let harness = try ClipboardHarness()
@@ -686,6 +703,20 @@ struct ClipboardCaptureTests {
         iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
         """
     )!
+
+    /// 访达「显示简介」图标拷贝的形态：ICNS 容器里放一张 PNG（ic07）。
+    private static let icnsBytes = makeICNS(embedding: solidRedPNG)
+
+    private static func makeICNS(embedding png: Data) -> Data {
+        var data = Data("icns".utf8)
+        var total = UInt32(8 + 8 + png.count).bigEndian
+        data.append(Data(bytes: &total, count: 4))
+        data.append(Data("ic07".utf8))
+        var chunkLength = UInt32(8 + png.count).bigEndian
+        data.append(Data(bytes: &chunkLength, count: 4))
+        data.append(png)
+        return data
+    }
 
     private static let solidRedPNG: Data = {
         let side = 128
