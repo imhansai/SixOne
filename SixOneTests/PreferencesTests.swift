@@ -19,6 +19,7 @@ struct PreferencesTests {
         #expect(preferences.storageLimit == Preferences.defaultStorageLimit)
         #expect(preferences.hotKey == HotKeySettings.default)
         #expect(preferences.ignoredAppsData == nil)
+        #expect(preferences.recordsUniversalClipboard == false)
     }
 
     @Test("沿用既有 key，升级后配置照常读得到")
@@ -27,6 +28,7 @@ struct PreferencesTests {
             "historyRetention": HistoryRetention.unlimited.rawValue,
             "historyStorageLimit": HistoryStorageLimit.gigabytes10.rawValue,
             "privacyIgnoredApps": Data([1, 2, 3]),
+            "privacyRecordsUniversalClipboard": true,
             "globalHotKeyConfigured": false,
             "globalHotKeyCode": 8,
             "globalHotKeyModifiers": 0x0100,
@@ -37,6 +39,7 @@ struct PreferencesTests {
         #expect(preferences.historyRetention == .unlimited)
         #expect(preferences.storageLimit == .gigabytes10)
         #expect(preferences.ignoredAppsData == Data([1, 2, 3]))
+        #expect(preferences.recordsUniversalClipboard)
         #expect(preferences.hotKey == HotKeySettings(
             isConfigured: false,
             keyCode: 8,
@@ -52,6 +55,7 @@ struct PreferencesTests {
         preferences.historyRetention = .oneYear
         preferences.storageLimit = .megabytes500
         preferences.ignoredAppsData = Data([4, 5])
+        preferences.recordsUniversalClipboard = true
         preferences.hotKey = HotKeySettings(
             isConfigured: true,
             keyCode: 7,
@@ -62,6 +66,7 @@ struct PreferencesTests {
         #expect(reopened.historyRetention == .oneYear)
         #expect(reopened.storageLimit == .megabytes500)
         #expect(reopened.ignoredAppsData == Data([4, 5]))
+        #expect(reopened.recordsUniversalClipboard)
         #expect(reopened.hotKey == HotKeySettings(
             isConfigured: true,
             keyCode: 7,

@@ -35,20 +35,23 @@ protocol PasteboardAccessing {
     /// 变化计数，轮询据此判断是否有新内容。
     var changeCount: Int { get }
     /// 一次读取：先判「不要记录」，再由同一份 items 生成快照。
-    /// 「不要记录」的判定必须先于读内容，且不能与快照各读一次剪贴板。
-    func readRecordableSnapshot() -> PasteboardReadResult
+    /// 判定必须先于读内容且不能重复读剪贴板；通用剪贴板读取会触发设备传输。
+    func readRecordableSnapshot(recordsUniversalClipboard: Bool) -> PasteboardReadResult
     func write(_ payload: PasteboardPayload)
 }
 
 struct SystemPasteboard: PasteboardAccessing {
     var changeCount: Int { NSPasteboard.general.changeCount }
 
-    func readRecordableSnapshot() -> PasteboardReadResult {
+    func readRecordableSnapshot(recordsUniversalClipboard: Bool) -> PasteboardReadResult {
         let pasteboard = NSPasteboard.general
         let changeCount = pasteboard.changeCount
         // 只读一次剪贴板：判定与快照共用这份 items，避免两次读取之间的 TOCTOU。
         let items = pasteboard.pasteboardItems ?? []
-        guard !PasteboardSnapshot.isMarkedDoNotRecord(items) else {
+        guard !PasteboardSnapshot.isMarkedDoNotRecord(
+            items,
+            recordsUniversalClipboard: recordsUniversalClipboard
+        ) else {
             return .markedDoNotRecord(changeCount: changeCount)
         }
         guard !items.isEmpty else { return .empty(changeCount: changeCount) }

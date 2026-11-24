@@ -21,9 +21,11 @@ SixOne 每 0.5 秒轮询 `NSPasteboard`，剪贴板变化时记录一条，但�
    | `de.petermaurer.TransientPasteboardType` | 多个来源 |
    | `com.typeit4me.clipping` | TypeIt4Me |
    | `Pasteboard generator type` | 多个来源 |
-   | `com.apple.is-remote-clipboard` | 来自其它设备的通用剪贴板 |
+   | `com.apple.is-remote-clipboard` | 来自其它设备的通用剪贴板（默认忽略） |
 
    清单只有一处：`PasteboardSnapshot.doNotRecordTypes`。
+
+   通用剪贴板默认忽略；在 **设置 → 隐私 → 通用剪贴板** 打开「记录通用剪贴板」后放行该标记。远程内容是惰性 promise，读取时会触发从设备传输，设备不在附近或传输较慢时可能需要等待。
 
 2. **来源应用忽略列表。** 列表内应用在前台时发生的复制，既不读取也不记录。在 **设置 → 隐私** 管理，默认忽略 **「密码」** 与 **「钥匙串访问」**。
 

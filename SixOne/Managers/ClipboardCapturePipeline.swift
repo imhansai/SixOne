@@ -12,6 +12,7 @@ final class ClipboardCapturePipeline {
     private let pasteboard: PasteboardAccessing
     private let frontmostApplication: () -> SourceApplication?
     private let isIgnoredSource: (SourceApplication?) -> Bool
+    private let recordsUniversalClipboard: () -> Bool
     private let writer: ClipboardHistoryWriter
     private let logger = AppLog.logger("ClipboardCapture")
     private var timer: Timer?
@@ -28,12 +29,14 @@ final class ClipboardCapturePipeline {
         pasteboard: PasteboardAccessing,
         frontmostApplication: @escaping () -> SourceApplication?,
         isIgnoredSource: @escaping (SourceApplication?) -> Bool,
+        recordsUniversalClipboard: @escaping () -> Bool,
         writer: ClipboardHistoryWriter,
         pollInterval: TimeInterval?
     ) {
         self.pasteboard = pasteboard
         self.frontmostApplication = frontmostApplication
         self.isIgnoredSource = isIgnoredSource
+        self.recordsUniversalClipboard = recordsUniversalClipboard
         self.writer = writer
         // 只响应启动后的新复制，避免清空历史后重启又补录残留内容。
         self.lastChangeCount = pasteboard.changeCount
@@ -90,7 +93,9 @@ final class ClipboardCapturePipeline {
             return
         }
 
-        switch pasteboard.readRecordableSnapshot() {
+        switch pasteboard.readRecordableSnapshot(
+            recordsUniversalClipboard: recordsUniversalClipboard()
+        ) {
         case let .captured(snapshot, capturedChangeCount):
             lastChangeCount = capturedChangeCount
             scheduleCapture(snapshot: snapshot, source: source)

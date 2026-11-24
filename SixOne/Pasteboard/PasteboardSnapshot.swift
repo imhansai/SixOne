@@ -37,7 +37,10 @@ nonisolated struct PasteboardSnapshot: Sendable {
         .png, .tiff, PasteboardFormat.icnsPasteboardType, .rtf, .html, .color,
     ]
 
-    /// 「不要记录」类型（nspasteboard.org 约定）；只按来源忽略会漏掉密码管理器。
+    /// 通用剪贴板标记；内容为惰性 promise，读取时才从其它设备传输。
+    static let universalClipboardType = "com.apple.is-remote-clipboard"
+
+    /// 「不要记录」类型（nspasteboard.org 约定，外加通用剪贴板标记）。
     static let doNotRecordTypes: Set<String> = [
         "org.nspasteboard.ConcealedType",
         "org.nspasteboard.TransientType",
@@ -46,14 +49,21 @@ nonisolated struct PasteboardSnapshot: Sendable {
         "de.petermaurer.TransientPasteboardType",
         "com.typeit4me.clipping",
         "Pasteboard generator type",
-        "com.apple.is-remote-clipboard",
+        universalClipboardType,
     ]
 
-    /// 这次复制是否被标记为「不要记录」。只看类型、不读任何字节。
+    /// 只看类型、不读字节；记录通用剪贴板时放行对应标记。
     @MainActor
-    static func isMarkedDoNotRecord(_ items: [NSPasteboardItem]) -> Bool {
-        items.contains { item in
-            item.types.contains { doNotRecordTypes.contains($0.rawValue) }
+    static func isMarkedDoNotRecord(
+        _ items: [NSPasteboardItem],
+        recordsUniversalClipboard: Bool
+    ) -> Bool {
+        var skipped = doNotRecordTypes
+        if recordsUniversalClipboard {
+            skipped.remove(universalClipboardType)
+        }
+        return items.contains { item in
+            item.types.contains { skipped.contains($0.rawValue) }
         }
     }
 

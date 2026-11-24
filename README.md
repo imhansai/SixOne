@@ -38,7 +38,8 @@ macOS 菜单栏剪贴板历史工具。按 `⌃⌘V`（默认）唤出浮层面�
 完整规则见 **[PRIVACY.md](PRIVACY.md)**。要点：
 
 - **数据只在本机。** 无遥测、账号、云同步、自动更新或第三方 SDK。库位于 `~/Library/Application Support/SixOne/SixOne.store`（签名后位于沙盒容器内）。
-- **两道过滤都在读取剪贴板字节之前完成：** 密码管理器写入的「不要记录」标记，以及来源应用忽略列表（默认忽略「密码」与「钥匙串访问」）。标记判定才是关键，见 PRIVACY.md §1。
+- **默认情况下，两道过滤都在读取剪贴板字节之前完成：** 密码管理器写入的「不要记录」标记，以及来源应用忽略列表（默认忽略「密码」与「钥匙串访问」）。标记判定才是关键，见 PRIVACY.md §1。
+- **通用剪贴板默认忽略。** 在 **设置 → 隐私 → 通用剪贴板** 开启「记录通用剪贴板」后，iPhone/iPad 上复制的内容才会被读取并写入历史；读取会触发从设备的传输。
 - **除容器权限与 FileVault 外不额外加密。**
 - **唯一能联网的是 HTML 预览，且已围栏：** 不执行内容脚本、不允许离开本地文件，外传通道（`document`、`script`、`raw`、`popup`）全部阻断。远程图片与样式有意放行，代价是远程请求会暴露你的 IP。
 - **辅助功能权限只用于一件事：** 向唤出面板前的应用合成一次 `⌘V`。
@@ -145,7 +146,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 820 项用例、130 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 823 项用例、130 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
 
 系统资源一律用 `SixOneTests/Support/` 下的替身：`FakePasteboard`、`InMemorySettingsStorage`、`FakeHotKeyEventMonitor`、`FakeHistoryRepository`、`OffscreenHost` / `TestPanel`、`TemporaryFiles`、`Wait`。性能基准（`HistoryBenchmarkTests` / `MigrationBenchmarkTests`）只有在仓库根存在 `.benchmark-history` 或 `/tmp/sixone-benchmark` 时才跑，跑完请删掉开关文件。
 

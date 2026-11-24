@@ -16,13 +16,16 @@ final class FakePasteboard: PasteboardAccessing {
     /// 模拟读取期间剪贴板又被改写：接下来的这么多次读取返回 unstable。
     var unstableReadsRemaining = 0
 
-    func readRecordableSnapshot() -> PasteboardReadResult {
+    func readRecordableSnapshot(recordsUniversalClipboard: Bool) -> PasteboardReadResult {
         if unstableReadsRemaining > 0 {
             unstableReadsRemaining -= 1
             return .unstable
         }
         let changeCount = changeCount
-        guard !PasteboardSnapshot.isMarkedDoNotRecord(items) else {
+        guard !PasteboardSnapshot.isMarkedDoNotRecord(
+            items,
+            recordsUniversalClipboard: recordsUniversalClipboard
+        ) else {
             return .markedDoNotRecord(changeCount: changeCount)
         }
         guard !items.isEmpty else { return .empty(changeCount: changeCount) }

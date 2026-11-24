@@ -1539,6 +1539,16 @@
         }
       }
     },
+    "Record Universal Clipboard" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记录通用剪贴板"
+          }
+        }
+      }
+    },
     "Records" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1972,6 +1982,16 @@
         }
       }
     },
+    "Universal Clipboard" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用剪贴板"
+          }
+        }
+      }
+    },
     "Unlimited" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1998,6 +2018,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "版本 %@"
+          }
+        }
+      }
+    },
+    "When enabled, copies made on your iPhone or iPad are fetched from the device and saved to history." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启后，在 iPhone 或 iPad 上拷贝的内容会从设备读取并写入历史。"
           }
         }
       }

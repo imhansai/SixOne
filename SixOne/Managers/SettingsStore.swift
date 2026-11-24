@@ -151,6 +151,14 @@ final class SettingsStore {
         }
     }
 
+    /// 默认关闭：读取通用剪贴板会触发从其它设备的实际传输。
+    var recordsUniversalClipboard: Bool {
+        didSet {
+            guard recordsUniversalClipboard != oldValue else { return }
+            preferences.recordsUniversalClipboard = recordsUniversalClipboard
+        }
+    }
+
     convenience init(storage: SettingsStorage = UserDefaults.standard) {
         self.init(preferences: Preferences(storage: storage))
     }
@@ -160,6 +168,7 @@ final class SettingsStore {
         historyRetention = preferences.historyRetention
         storageLimit = preferences.storageLimit
         ignoredApps = Self.loadIgnoredApps(from: preferences)
+        recordsUniversalClipboard = preferences.recordsUniversalClipboard
     }
 
     private static func loadIgnoredApps(from preferences: Preferences) -> [IgnoredApplication] {

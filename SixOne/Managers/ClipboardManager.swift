@@ -70,6 +70,9 @@ final class ClipboardManager {
                 guard let settings, let bundleIdentifier = source?.bundleIdentifier else { return false }
                 return settings.ignoredApps.contains { $0.bundleIdentifier == bundleIdentifier }
             },
+            recordsUniversalClipboard: { [weak settings] in
+                settings?.recordsUniversalClipboard ?? false
+            },
             writer: writer,
             pollInterval: pollInterval
         )

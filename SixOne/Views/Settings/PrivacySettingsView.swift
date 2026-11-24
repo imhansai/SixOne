@@ -14,6 +14,18 @@ struct PrivacySettingsView: View {
 
     var body: some View {
         Section {
+            Toggle("Record Universal Clipboard", isOn: Binding(
+                get: { settings.recordsUniversalClipboard },
+                set: { settings.recordsUniversalClipboard = $0 }
+            ))
+            .toggleStyle(.switch)
+        } header: {
+            Text("Universal Clipboard")
+        } footer: {
+            Text("When enabled, copies made on your iPhone or iPad are fetched from the device and saved to history.")
+        }
+
+        Section {
             Table(settings.ignoredApps, selection: $selectedAppIDs) {
                 TableColumn("Application") { app in
                     HStack(spacing: 8) {

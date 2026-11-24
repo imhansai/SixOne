@@ -25,6 +25,7 @@ struct SettingsStoreTests {
         #expect(store.ignoredApps.map(\.bundleIdentifier) == [
             "com.apple.Passwords", "com.apple.keychainaccess",
         ])
+        #expect(store.recordsUniversalClipboard == false)
     }
 
     @Test("读：非法值一律回落默认，不崩")
@@ -120,6 +121,21 @@ struct SettingsStoreTests {
 
         #expect(reopened.ignoredApps.map(\.bundleIdentifier) == ["com.example.a"])
         #expect(reopened.ignoredApps.first?.displayName == "A")
+    }
+
+    @Test("通用剪贴板默认关闭；开启后落盘并读回")
+    func persistsUniversalClipboardSetting() {
+        let (store, storage) = makeStore()
+        #expect(!store.recordsUniversalClipboard)
+
+        store.recordsUniversalClipboard = true
+
+        #expect(storage.object(forKey: "privacyRecordsUniversalClipboard") as? Bool == true)
+        #expect(SettingsStore(storage: storage).recordsUniversalClipboard)
+
+        let writesAfterFirst = storage.setCount
+        store.recordsUniversalClipboard = true
+        #expect(storage.setCount == writesAfterFirst)
     }
 
     @Test("恢复默认忽略列表")

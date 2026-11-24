@@ -317,6 +317,42 @@ struct ClipboardCaptureTests {
         #expect(harness.recorder.events.isEmpty)
     }
 
+    @Test("通用剪贴板默认忽略；打开开关后记录")
+    func capturesUniversalClipboardWhenEnabled() async throws {
+        let harness = try ClipboardHarness()
+        let remoteType = NSPasteboard.PasteboardType(PasteboardSnapshot.universalClipboardType)
+        let item = NSPasteboardItem()
+        item.setString("from iPhone", forType: .string)
+        item.setString("1", forType: remoteType)
+
+        harness.pasteboard.simulateCopy([item])
+        await harness.pollAndWait()
+        #expect(harness.itemsNewestFirst().isEmpty)
+
+        harness.settings.recordsUniversalClipboard = true
+        harness.pasteboard.simulateCopy([item])
+        await harness.pollAndWait()
+
+        let captured = try #require(harness.itemsNewestFirst().first)
+        #expect(captured.kind == .text)
+        #expect(captured.text == "from iPhone")
+    }
+
+    @Test("打开通用剪贴板后，其它「不要记录」标记仍然生效")
+    func universalClipboardSwitchKeepsOtherSkipTypes() async throws {
+        let harness = try ClipboardHarness()
+        harness.settings.recordsUniversalClipboard = true
+        let item = NSPasteboardItem()
+        item.setString("secret", forType: .string)
+        item.setString("1", forType: NSPasteboard.PasteboardType(PasteboardSnapshot.universalClipboardType))
+        item.setString("1", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+
+        harness.pasteboard.simulateCopy([item])
+        await harness.pollAndWait()
+
+        #expect(harness.itemsNewestFirst().isEmpty)
+    }
+
     @Test("「不要记录」独立于来源判定：前台应用不在忽略列表里也照样跳过")
     func concealedWinsOverSourceCheck() async throws {
         let harness = try ClipboardHarness()

@@ -26,6 +26,7 @@ final class Preferences {
         static let retention = "historyRetention"
         static let storageLimit = "historyStorageLimit"
         static let ignoredApps = "privacyIgnoredApps"
+        static let recordsUniversalClipboard = "privacyRecordsUniversalClipboard"
         static let hotKeyConfigured = "globalHotKeyConfigured"
         static let hotKeyCode = "globalHotKeyCode"
         static let hotKeyModifiers = "globalHotKeyModifiers"
@@ -33,6 +34,7 @@ final class Preferences {
 
     static let defaultRetention: HistoryRetention = .threeMonths
     static let defaultStorageLimit: HistoryStorageLimit = .gigabytes2
+    static let defaultRecordsUniversalClipboard = false
 
     private let storage: SettingsStorage
 
@@ -63,6 +65,16 @@ final class Preferences {
     var ignoredAppsData: Data? {
         get { storage.object(forKey: Key.ignoredApps) as? Data }
         set { storage.set(newValue, forKey: Key.ignoredApps) }
+    }
+
+    var recordsUniversalClipboard: Bool {
+        get {
+            storage.object(forKey: Key.recordsUniversalClipboard) as? Bool
+                ?? Self.defaultRecordsUniversalClipboard
+        }
+        set {
+            storage.set(newValue, forKey: Key.recordsUniversalClipboard)
+        }
     }
 
     var hotKey: HotKeySettings {
