@@ -174,4 +174,63 @@ struct PanelSearchSessionTests {
         let queries = await fixture.repository.requestedQueries
         #expect(queries.count == 1, "与当前查询一致就不该再查一次")
     }
+
+    @Test("定位清词：记住目标、清空搜索且不先回顶")
+    func clearForLocationKeepsPendingAndSkipsTop() async throws {
+        let fixture = makeFixture()
+        fixture.searchState.text = "abc"
+        fixture.session.textDidChange()
+        await Wait.until { fixture.store.query == "abc" }
+        await fixture.store.waitForPendingLoad()
+        _ = fixture.navigationState.takePendingScrollCommands()
+
+        let target = UUID()
+        fixture.session.clearForLocation(id: target, rowsAbove: 2)
+
+        #expect(fixture.searchState.text == "")
+        #expect(fixture.store.query == "", "定位要先把搜索词清回全部历史")
+        #expect(
+            fixture.navigationState.pendingLocate
+                == PendingHistoryLocation(itemID: target, rowsAbove: 2)
+        )
+        #expect(
+            fixture.navigationState.takePendingScrollCommands().isEmpty,
+            "定位前不该先回顶，避免闪一下再跳走"
+        )
+        await fixture.store.waitForPendingLoad()
+    }
+
+    @Test("定位清词后重新输入搜索词会作废待定位目标")
+    func typingAfterLocationClearsPending() async throws {
+        let fixture = makeFixture()
+        fixture.searchState.text = "abc"
+        fixture.session.textDidChange()
+        await Wait.until { fixture.store.query == "abc" }
+        await fixture.store.waitForPendingLoad()
+        fixture.session.clearForLocation(id: UUID(), rowsAbove: 0)
+
+        fixture.searchState.text = "xyz"
+        fixture.session.textDidChange()
+
+        #expect(fixture.navigationState.pendingLocate == nil)
+        fixture.session.cancelPendingWork()
+    }
+
+    @Test("定位清词后换筛选会作废待定位目标")
+    func filterChangeAfterLocationClearsPending() async throws {
+        let fixture = makeFixture()
+        fixture.searchState.text = "abc"
+        fixture.session.textDidChange()
+        await Wait.until { fixture.store.query == "abc" }
+        await fixture.store.waitForPendingLoad()
+        fixture.session.clearForLocation(id: UUID(), rowsAbove: 0)
+        await fixture.store.waitForPendingLoad()
+
+        fixture.session.filterDidChange(
+            fixture.store.filter.toggled(kind: .text)
+        )
+
+        #expect(fixture.navigationState.pendingLocate == nil)
+        await fixture.store.waitForPendingLoad()
+    }
 }

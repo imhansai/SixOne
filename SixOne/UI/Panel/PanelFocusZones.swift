@@ -93,8 +93,8 @@ final class PanelFocusZones {
         moreActionsState.focusRequestID += 1
     }
 
-    /// 进入列表站：解除控件焦点，无选中时落到第一条。
-    func focusList() {
+    /// 进入列表站：解除控件焦点；清搜索定位时不替用户选第一行。
+    func focusList(selectingFirstRow: Bool = true) {
         searchState.resignFocus()
         moreActionsState.resignFocus()
         filterState.resignFocus()
@@ -103,7 +103,7 @@ final class PanelFocusZones {
         if let selectedID = cursor.selectedItemID {
             navigationState.selectedItemID = selectedID
             navigationState.isSelectionActive = true
-        } else {
+        } else if selectingFirstRow {
             cursor.move(to: 0)
         }
     }

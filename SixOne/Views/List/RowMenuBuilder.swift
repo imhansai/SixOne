@@ -19,6 +19,8 @@ struct RowMenuBuilder {
     let deleteRow: (UUID) -> Void
     /// 分组子菜单的数据源；测试可省略。
     var collections: () -> [CollectionRow] = { [] }
+    /// 搜索态且条目落在清空搜索后的窗口内；测试可省略。
+    var canLocateInHistory: (HistoryRow) -> Bool = { _ in false }
 
     func makeMenu(for row: HistoryRow, anchor: RowInteractionHost.HostView) -> NSMenu {
         selectRow(row.id)
@@ -45,7 +47,11 @@ struct RowMenuBuilder {
     private func menuItems(for row: HistoryRow, anchor: RowInteractionHost.HostView) -> [NSMenuItem] {
         let capabilities = resolvedCapabilities(for: row)
         let canReveal = (row.kind == .file || row.kind == .image) && capabilities.canReveal
-        let layout = ItemCommand.rowMenuLayout(for: row.kind, canReveal: canReveal)
+        let layout = ItemCommand.rowMenuLayout(
+            for: row.kind,
+            canReveal: canReveal,
+            canLocateInHistory: canLocateInHistory(row)
+        )
         let needsReachableFile = layout.contains { entry in
             guard case .command(let command) = entry else { return false }
             return command.requiresReachableFile
@@ -186,6 +192,8 @@ struct RowMenuBuilder {
             actions?.panelDidRequestReveal(id: row.id)
         case .delete:
             deleteRow(row.id)
+        case .showInHistory:
+            actions?.panelDidRequestShowInHistory(id: row.id)
         case .moveToGroup:
             assertionFailure("分组子菜单应直接落到面板动作")
         case .preview:

@@ -422,6 +422,15 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         itemActions.requestEditAlias(id: id, currentAlias: currentAlias)
     }
 
+    /// 搜索命中回到历史：清空搜索，待窗口落定后把条目放回视口里的同一行位置。
+    func panelDidRequestShowInHistory(id: UUID) {
+        guard store.isSearching else { return }
+        let rowsAbove = store.rows.firstIndex { $0.id == id }
+            .map { max(0, $0 - navigationState.fullyVisibleFirstIndex) } ?? 0
+        searchSession.clearForLocation(id: id, rowsAbove: rowsAbove)
+        focusZones.focusList(selectingFirstRow: false)
+    }
+
     func panelDidRequestSearchCancel() {
         // Esc 先关筛选层，再清搜索词，避免一次按键连消两层。
         if filterState.isPresented {

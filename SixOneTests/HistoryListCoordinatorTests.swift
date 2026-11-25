@@ -282,6 +282,55 @@ struct HistoryListCoordinatorTests {
         #expect(fixture.context.copyState.feedbackItemID == row.id)
     }
 
+    @Test("清空搜索后的窗口落定，选中并滚到目标条目")
+    func locatesPendingItemAfterWindowLands() async throws {
+        let fixture = try await makeFixture()
+        let target = fixture.rows[1].id
+        fixture.context.navigationState.requestLocateInHistory(id: target, rowsAbove: 2)
+
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.pendingLocate == nil)
+        #expect(fixture.context.navigationState.selectedItemID == target)
+        #expect(fixture.context.navigationState.isSelectionActive)
+        #expect(
+            fixture.context.navigationState.takePendingScrollCommands().map(\.target)
+                == [.rowWithContext(target, rowsAbove: 2)]
+        )
+    }
+
+    @Test("清空后的窗口未落定时不定位，避免拿搜索结果的行号滚动")
+    func waitsForClearedQueryBeforeLocating() async throws {
+        let fixture = try await makeFixture()
+        let match = HistoryRow.stub(title: "命中")
+        await fixture.repository.setRows([match], for: "abc")
+        fixture.store.setSearchQuery("abc")
+        await fixture.store.waitForPendingLoad()
+        fixture.coordinator.handleDataRevisionChange()
+        _ = fixture.context.navigationState.takePendingScrollCommands()
+
+        fixture.context.navigationState.requestLocateInHistory(id: match.id, rowsAbove: 0)
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.pendingLocate?.itemID == match.id)
+        #expect(fixture.context.navigationState.takePendingScrollCommands().isEmpty)
+    }
+
+    @Test("定位目标已被顶出窗口时提示并放弃")
+    func dropsLocateWhenItemMissing() async throws {
+        let fixture = try await makeFixture()
+        fixture.context.navigationState.requestLocateInHistory(id: UUID(), rowsAbove: 0)
+
+        fixture.coordinator.handleDataRevisionChange()
+
+        #expect(fixture.context.navigationState.pendingLocate == nil)
+        #expect(
+            fixture.context.noticeState.message
+                == Localizer.string("The item is no longer within the 1000 most recent entries.")
+        )
+        #expect(fixture.context.navigationState.takePendingScrollCommands().isEmpty)
+    }
+
     // MARK: - 夹具
 
     private struct Fixture {

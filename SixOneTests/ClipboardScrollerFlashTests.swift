@@ -41,6 +41,8 @@ struct ClipboardScrollerFlashTests {
                     isEndpointJump: isEndpointJump,
                     isSelectionAlreadyAtEndpoint: isSelectionAlreadyAtEndpoint
                 )
+            case .rowWithContext(let id, let rowsAbove):
+                context.navigationState.requestScroll(toRow: id, rowsAbove: rowsAbove)
             case .top:
                 context.navigationState.requestScrollToTop(isEndpointJump: isEndpointJump)
             }

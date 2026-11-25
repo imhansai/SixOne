@@ -135,8 +135,16 @@ final class ShareState {
 enum HistoryListScrollTarget: Equatable {
     /// 滚到某一行；用 id 而非行号，因为列表随时会被置顶、裁剪或换掉。
     case row(UUID)
+    /// 滚到某一行，并让它上方保留与来源窗口相同的行数；跨窗口定位用。
+    case rowWithContext(UUID, rowsAbove: Int)
     /// 滚回顶部；换搜索词时列表整份替换，没有行 id 可用。
     case top
+}
+
+/// 清空搜索后待定位的条目，以及它在来源窗口里上方的行数。
+struct PendingHistoryLocation: Equatable {
+    let itemID: UUID
+    let rowsAbove: Int
 }
 
 /// 列表的一次滚动命令；排队保证快速 ⌘↑/⌘↓ 的中间按键不丢。
@@ -167,6 +175,8 @@ final class NavigationState {
     private(set) var scrollRevision = 0
     /// 复制 / 粘贴置顶后，等条目到第 0 行再滚进视野（用 id，置顶会换行号）。
     private(set) var pendingRevealItemID: UUID?
+    /// 清空搜索后待定位的条目；等无搜索词的窗口落定再选中并滚入视野。
+    private(set) var pendingLocate: PendingHistoryLocation?
     /// 删除后待接替的行；等被删行离开窗口再应用。
     @ObservationIgnored private(set) var pendingDeletionSelection: PendingDeletionSelection?
     /// 首个完整可见行；会话锚点与「是否滚到深处」都只认它。
@@ -208,6 +218,23 @@ final class NavigationState {
 
     func clearPendingReveal() {
         pendingRevealItemID = nil
+    }
+
+    func requestLocateInHistory(id: UUID, rowsAbove: Int) {
+        pendingLocate = PendingHistoryLocation(itemID: id, rowsAbove: max(0, rowsAbove))
+    }
+
+    func clearPendingLocate() {
+        pendingLocate = nil
+    }
+
+    /// 滚到某行并让它上方保留 `rowsAbove` 行，保持来源窗口的视口位置。
+    func requestScroll(toRow id: UUID, rowsAbove: Int) {
+        enqueueScrollCommand(
+            HistoryListScrollCommand(
+                target: .rowWithContext(id, rowsAbove: max(0, rowsAbove))
+            )
+        )
     }
 
     func requestSelectionAfterDeletion(

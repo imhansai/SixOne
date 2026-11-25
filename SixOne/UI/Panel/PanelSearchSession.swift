@@ -33,6 +33,13 @@ final class PanelSearchSession {
         deliver("", debounced: false)
     }
 
+    /// 搜索命中回到历史：记住目标与它的视口偏移再清空搜索，窗口落定后由列表选中定位。
+    func clearForLocation(id: UUID, rowsAbove: Int) {
+        navigationState.requestLocateInHistory(id: id, rowsAbove: rowsAbove)
+        searchState.text = ""
+        deliver("", debounced: false)
+    }
+
     /// 换筛选：各区一起生效，只发一次查询。
     func filterDidChange(_ filter: HistoryFilter) {
         debouncer.cancel()
@@ -41,7 +48,7 @@ final class PanelSearchSession {
             filter: filter
         )
         guard !store.matches(query) else { return }
-        resetNavigationForQueryChange()
+        resetNavigationForQueryChange(preserveLocate: false)
         store.setQuery(query)
     }
 
@@ -57,9 +64,11 @@ final class PanelSearchSession {
     private func deliver(_ raw: String, debounced: Bool) {
         debouncer.cancel()
         guard !store.matchesQuery(raw) else { return }
-        resetNavigationForQueryChange()
+        let normalized = HistoryListStore.normalizedQuery(raw)
+        let isLocating = normalized.isEmpty && navigationState.pendingLocate != nil
+        resetNavigationForQueryChange(preserveLocate: isLocating)
         // 纯空白与立即入口都直接落库。
-        guard debounced, !HistoryListStore.normalizedQuery(raw).isEmpty else {
+        guard debounced, !normalized.isEmpty else {
             store.setSearchQuery(raw)
             return
         }
@@ -70,10 +79,15 @@ final class PanelSearchSession {
         }
     }
 
-    /// 列表随即整份换掉：只能回到顶部，选中一并摘掉。
-    private func resetNavigationForQueryChange() {
+    /// 列表整份换掉：回顶并清选中；定位清词保留目标，且不先回顶。
+    private func resetNavigationForQueryChange(preserveLocate: Bool) {
+        if !preserveLocate {
+            navigationState.clearPendingLocate()
+        }
         navigationState.selectedItemID = nil
         navigationState.isSelectionActive = false
-        navigationState.requestScrollToTop()
+        if !preserveLocate {
+            navigationState.requestScrollToTop()
+        }
     }
 }

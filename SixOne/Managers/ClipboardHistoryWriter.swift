@@ -296,6 +296,17 @@ final class ClipboardHistoryWriter {
 
     // MARK: - 取数
 
+    /// 比该行更新、且命中筛选的条目数；最多数到 `limit`，够判断是否在窗口内即可。
+    func historyRank(ofRowWith recencyID: UUID, filter: HistoryFilter, upTo limit: Int) -> Int? {
+        guard let predicate = ClipboardHistoryPredicate.make(
+            query: HistoryQuery(text: "", filter: filter),
+            newerThan: recencyID
+        ) else { return nil }
+        var descriptor = FetchDescriptor<ClipboardItem>(predicate: predicate)
+        descriptor.fetchLimit = limit
+        return fetchLogged("统计历史名次") { try context.fetchCount(descriptor) }
+    }
+
     private func existingItem(forContentKey key: String) -> ClipboardItem? {
         var descriptor = FetchDescriptor<ClipboardItem>(
             predicate: #Predicate { $0.contentKeySnapshot == key },

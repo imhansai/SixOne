@@ -160,6 +160,35 @@ struct RowMenuBuilderTests {
         #expect(spy.newGroupItemID == item.id)
     }
 
+    @Test("搜索态可定位时出现「在历史记录中显示」，动作落到面板")
+    func showInHistoryAppearsAndWiresToPanel() throws {
+        let harness = try ClipboardHarness()
+        let item = try insert(ClipboardItem(kind: .text, text: "定位"), into: harness)
+        let spy = SpyItemActions()
+        var locatable = true
+        let builder = RowMenuBuilder(
+            manager: harness.manager,
+            fileCapabilities: makeCache(),
+            panelActions: { spy },
+            selectRow: { _ in },
+            copyFeedback: { _ in },
+            copyItem: { _ in },
+            copyItemAsPlainText: { _ in },
+            deleteRow: { _ in },
+            canLocateInHistory: { _ in locatable }
+        )
+        let anchor = RowInteractionHost.HostView()
+
+        let menu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
+        #expect(try menuItem(ItemCommand.showInHistory, in: menu).keyEquivalent == "g")
+        try run(ItemCommand.showInHistory, in: menu)
+        #expect(spy.locatedItemID == item.id)
+
+        locatable = false
+        let hiddenMenu = builder.makeMenu(for: HistoryRow(item), anchor: anchor)
+        #expect(!hiddenMenu.items.contains { $0.title == ItemCommand.showInHistory.title })
+    }
+
     @Test("源文件还在：分享与打开可用；文件没了：探测落定后置灰")
     func reachableFileGatesShareAndOpen() async throws {
         let harness = try ClipboardHarness()
@@ -243,6 +272,7 @@ struct RowMenuBuilderTests {
         var assignedItemID: UUID?
         var assignedCollectionID: UUID?
         var newGroupItemID: UUID?
+        var locatedItemID: UUID?
 
         func panelDidActivate(id: UUID, asPlainText: Bool) {}
         func panelDidPasteAsPlainText(id: UUID) {}
@@ -264,6 +294,10 @@ struct RowMenuBuilderTests {
 
         func panelDidRequestNewCollection(assigningItemID: UUID) {
             newGroupItemID = assigningItemID
+        }
+
+        func panelDidRequestShowInHistory(id: UUID) {
+            locatedItemID = id
         }
     }
 }

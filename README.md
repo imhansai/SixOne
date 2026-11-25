@@ -5,7 +5,7 @@
 macOS 菜单栏剪贴板历史工具。按 `⌃⌘V`（默认）唤出浮层面板，浏览、搜索、预览、就地编辑并粘回历史条目。支持五类内容：**文本 / 图片 / 文件（含多文件组）/ 链接 / 颜色**。
 
 - 菜单栏图标左键开关面板，右键打开菜单（剪贴板 / 设置… / 退出）。面板贴在唤出处：状态栏图标下方、指针处或屏幕居中。
-- 原生搜索框：按正文、标题与文件路径过滤，输入经 200 ms 防抖后查询数据库。
+- 原生搜索框：按正文、标题与文件路径过滤，输入经 200 ms 防抖后查询数据库。搜索有结果时，行右键菜单提供「在历史记录中显示」（`⌘G`）：清空搜索并定位到该条目在最近一窗历史里的上下文位置，同时保持在视口里的同一行位置（条目需在最近 1000 条内）。
 - 筛选：搜索框右侧筛选按钮打开系统 popover（原生箭头与定位），分「类型 / 来源 / 分组 / 日期」四区。四区均可多选，同一区内取并集。生效条件会铺在顶栏下方的筛选条上：点任意 chip 移除，只要有条件生效就显示「清除筛选」按钮；弹层统一由顶栏筛选按钮打开。来源较多时先显示前 8 个，与「更多」在三列网格里凑满三整行，可展开 / 收起，已选来源始终可见；内容按三列固定宽排布并常驻一条滚动条通道，超过高度上限后在弹层内滚动。有筛选生效时按钮变为实心；筛选跨收起 / 唤出保留，收起期间有新复制则自动清除。来源候选只列最近一窗出现过的 App。
 - 预览：文本（富文本、就地编辑、`⌘F` 查找）、图片（缩放 / 平移）、文件（图片 / 视频 / 网页 / PDF / 文本 / Quick Look）、多文件列表（组内按名称 / 路径筛选）、链接、颜色。文件与磁盘图片预览底部显示来源路径，可拖选片段或一键拷贝完整路径。
 - 用户分组：在「更多操作 → 分组」里新建、按组重命名 / 删除；分组顺序按创建顺序，拖拽排序已移除。筛选弹层的分组区可选择多个分组；行右键菜单仍可把条目移到分组，或新建分组并直接移入。全部视图里，已分组条目的副标题会带一个很轻的分组名标记；移入成功且行仍留在当前视图时给短暂提示。分组筛选跨收起 / 唤出保留；若收起期间有新复制，唤出时自动清除全部筛选。删除分组后条目回到未分组。
@@ -119,7 +119,7 @@ open build/Build/Products/Debug/SixOne.app
 | 动面板激活 / 预览捏合手势 / 状态栏点击 | 手势只投递给激活的应用：唤出时设为 key 与 main，收起时把设置窗口摘出 key/main 候选；见 `PanelWindowLifecycle` 与 `SettingsWindowController` |
 | 改设置窗口的激活 / Dock 图标 | `AppActivationPolicy`（常规身份按窗口登记，最后一个离场才回 `.accessory`；窗口先前移成为 key，再激活）+ `SettingsWindowController.showSettings` / `windowWillClose` + `AppDelegate.openSettings`（收起面板并把激活交还唤出前的应用，等应用退出激活后再显示设置窗口）；Dock / Finder 重开走 `applicationShouldHandleReopen`。做法参考 Shottr |
 | 改搜索词管道（防抖 / 清空 / 对齐） | `PanelSearchSession` + `PanelSearchSessionTests`；顶栏只交入「输入变了」 |
-| 改筛选（类型 / 来源 / 分组 / 日期） | `HistoryQuery` + `HistoryFilter`、`HistoryListStore`、`ClipboardHistoryRepository.searchPredicate`（每维单独谓词再合取；可空来源列不能走 IN，逐来源等值取并集）+ `HistoryFilterPopover` / `ClipboardTopBar`（来源折叠在 `FilterSourceListLayout`，候选由 `FilterSourceCatalog` 在面板唤出时预热）。来源候选走 `sourceApplications(limit:)`，只覆盖最近一窗。弹层挂在筛选按钮上，用系统 popover；内容为三列固定宽网格，超过 480pt 高度上限后在弹层内滚动。系统 popover 会短暂成为 key：`PanelFocusPolicy.isFilterPopoverPresented` 阻止面板误收，关闭时 `ClipboardPanelController.panelDidDismissFilterPopover` 按鼠标是否在面板内决定收回 key 或收起。测试：`HistoryFilterTests` / `HistoryListFilterTests` / `HistoryFilterPopoverTests` / `ActiveFilterBarTests` / `PanelFocusPolicyTests` / `ClipboardHistoryRepositoryTests` / `PanelKeyRouterTests` |
+| 改筛选（类型 / 来源 / 分组 / 日期） | `HistoryQuery` + `HistoryFilter`、`HistoryListStore`、`ClipboardHistoryPredicate`（每维单独谓词再合取；可空来源列不能走 IN，逐来源等值取并集；仓库取窗与「在历史记录中显示」的名次统计共用同一口径）+ `HistoryFilterPopover` / `ClipboardTopBar`（来源折叠在 `FilterSourceListLayout`，候选由 `FilterSourceCatalog` 在面板唤出时预热）。来源候选走 `sourceApplications(limit:)`，只覆盖最近一窗。弹层挂在筛选按钮上，用系统 popover；内容为三列固定宽网格，超过 480pt 高度上限后在弹层内滚动。系统 popover 会短暂成为 key：`PanelFocusPolicy.isFilterPopoverPresented` 阻止面板误收，关闭时 `ClipboardPanelController.panelDidDismissFilterPopover` 按鼠标是否在面板内决定收回 key 或收起。测试：`HistoryFilterTests` / `HistoryListFilterTests` / `HistoryFilterPopoverTests` / `ActiveFilterBarTests` / `PanelFocusPolicyTests` / `ClipboardHistoryRepositoryTests` / `PanelKeyRouterTests` |
 | 改用户分组的筛选 / 新建 / 归属 / 管理 | `HistoryQuery` + `CollectionFilter`、`HistoryListStore`、`CollectionListStore` + `ActiveFilterBar` / `HistoryFilterPopover` / `ClipboardTopBar` / `RowMenuBuilder` / `CollectionEditor`；分组的新建 / 重命名 / 删除入口在顶栏「更多操作 → 分组」。行副标题的分组标记在 `RowCollectionMarker`；收起期间有新复制时由 `HistoryFilter.restoredOnShow` + `PanelWindowLifecycle.restoreSession` 清掉全部筛选。测试：`HistoryListCollectionFilterTests` / `CollectionListStoreTests` / `ActiveFilterBarTests` / `HistoryFilterPopoverTests` / `RowMenuBuilderTests` / `ClipboardCollectionTests` |
 | 改活跃筛选条的横向滚动 | `HorizontalScrollBridge`（纵向滚轮转横向，经 SwiftUI `ScrollPosition`）+ `ActiveFilterBar`；测试：`ActiveFilterBarTests` |
 | 加一个右键菜单项 | `ItemCommand`（标题、快捷键、布局）+ `ItemCommandTests`，动作落在 `RowMenuBuilder` / `FileGroupPreview` |
@@ -149,7 +149,7 @@ open build/Build/Products/Debug/SixOne.app
 
 ## 测试
 
-单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 845 项用例、133 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
+单测目标 `SixOneTests`，用 [swift-testing](https://github.com/apple/swift-testing) 编写；命令见 **快速开始**。约 857 项用例、134 个 suite，13 秒左右跑完。测试宿主与真实应用同进程（`TEST_HOST` = `SixOne.app`），`AppDelegate.isRunningUnitTests` 会切到内存库并跳过监控、快捷键与状态栏；`TestHostTests` 是哨兵。
 
 系统资源一律用 `SixOneTests/Support/` 下的替身：`FakePasteboard`、`InMemorySettingsStorage`、`FakeHotKeyEventMonitor`、`FakeHistoryRepository`、`OffscreenHost` / `TestPanel`、`TemporaryFiles`、`Wait`。性能基准（`HistoryBenchmarkTests` / `MigrationBenchmarkTests`）只有在仓库根存在 `.benchmark-history` 或 `/tmp/sixone-benchmark` 时才跑，跑完请删掉开关文件。
 

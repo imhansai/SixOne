@@ -24,6 +24,16 @@ enum HistoryListScrollGeometry {
         }
         return visible.minY
     }
+
+    /// 把行放到视口顶部；跨窗口定位靠它保住来源窗口里上方的行数。
+    static func topAlignedOriginY(
+        paddedRow: CGRect,
+        visible: CGRect,
+        documentHeight: CGFloat
+    ) -> CGFloat {
+        let maxY = max(0, documentHeight - visible.height)
+        return min(max(0, paddedRow.minY), maxY)
+    }
 }
 
 struct HistoryListTableView: NSViewRepresentable {
@@ -308,10 +318,16 @@ struct HistoryListTableView: NSViewRepresentable {
             guard !rows.isEmpty else { return }
 
             let index: Int
+            var alignsContext = false
             switch command.target {
             case .row(let id):
                 guard let found = rows.firstIndex(where: { $0.id == id }) else { return }
                 index = found
+            case .rowWithContext(let id, let rowsAbove):
+                guard let found = rows.firstIndex(where: { $0.id == id }) else { return }
+                // 让目标行上方保留同样多的行：视口位置与来源窗口一致。
+                index = max(0, found - rowsAbove)
+                alignsContext = true
             case .top:
                 index = 0
             }
@@ -321,11 +337,17 @@ struct HistoryListTableView: NSViewRepresentable {
             guard visible.height > 0 else { return }
             let paddedRect = tableView.rect(ofRow: index)
                 .insetBy(dx: 0, dy: -ClipboardLayout.verticalPadding)
-            let targetY = HistoryListScrollGeometry.targetOriginY(
-                paddedRow: paddedRect,
-                visible: visible,
-                documentHeight: tableView.frame.height
-            )
+            let targetY = alignsContext
+                ? HistoryListScrollGeometry.topAlignedOriginY(
+                    paddedRow: paddedRect,
+                    visible: visible,
+                    documentHeight: tableView.frame.height
+                )
+                : HistoryListScrollGeometry.targetOriginY(
+                    paddedRow: paddedRect,
+                    visible: visible,
+                    documentHeight: tableView.frame.height
+                )
             if scrollView.scrollViewport(toY: targetY) {
                 return
             }

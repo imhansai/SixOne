@@ -405,6 +405,11 @@ final class ClipboardManager {
         writer.fetchLightItem(id: id)
     }
 
+    /// 行在清空搜索后窗口里的名次，最多数到 `limit`；读库失败返回 nil。
+    func historyRank(ofRowWith recencyID: UUID, filter: HistoryFilter, upTo limit: Int) -> Int? {
+        writer.historyRank(ofRowWith: recencyID, filter: filter, upTo: limit)
+    }
+
     func hasInlineImage(id: UUID) -> Bool {
         writer.hasInlineImage(id: id)
     }

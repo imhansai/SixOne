@@ -29,6 +29,8 @@ protocol ItemActionHandling: AnyObject {
     func panelDidRequestAssignCollection(itemID: UUID, collectionID: UUID?)
     /// 新建分组并把当前条目移进去。
     func panelDidRequestNewCollection(assigningItemID: UUID)
+    /// 搜索命中回到历史列表：清空搜索并定位该条目。
+    func panelDidRequestShowInHistory(id: UUID)
 }
 
 /// 预览编辑：退出、取消与保存。

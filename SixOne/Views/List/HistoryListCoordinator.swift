@@ -93,6 +93,7 @@ final class HistoryListCoordinator {
         discardOrphanedSelection()
         discardDeletedPreview()
         revealTouchedItemIfNeeded()
+        revealLocatedItemIfNeeded()
     }
 
     /// 被删行离开窗口后，把选中接到接替行。
@@ -156,6 +157,28 @@ final class HistoryListCoordinator {
         }
     }
 
+    /// 清空搜索后的窗口落定再定位；目标已被顶出窗口或删除时提示并放弃。
+    private func revealLocatedItemIfNeeded() {
+        guard let pending = navigationState.pendingLocate else { return }
+        // 清词后 rows 仍是搜索结果：等无搜索词的新窗口落定再找行。
+        guard store.rowsActiveQuery.text.isEmpty else { return }
+        if store.rows.contains(where: { $0.id == pending.itemID }) {
+            navigationState.clearPendingLocate()
+            navigationState.selectedItemID = pending.itemID
+            navigationState.isSelectionActive = true
+            navigationState.requestScroll(
+                toRow: pending.itemID,
+                rowsAbove: pending.rowsAbove
+            )
+            return
+        }
+        guard !store.isLoading else { return }
+        navigationState.clearPendingLocate()
+        context.noticeState.message = Localizer.string(
+            "The item is no longer within the 1000 most recent entries."
+        )
+    }
+
     // MARK: - 预览关闭
 
     func markPreviewEdited() {
@@ -205,6 +228,7 @@ final class HistoryListCoordinator {
         feedback.cancel()
         copyState.feedbackItemID = nil
         navigationState.clearPendingReveal()
+        navigationState.clearPendingLocate()
         pendingTopFocusAfterEditedPreview = false
     }
 }

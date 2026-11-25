@@ -15,6 +15,7 @@ enum ItemCommand: String, CaseIterable {
     case copyAsPlainText
     case editAlias
     case moveToGroup
+    case showInHistory
     case share
     case open
     case revealInFinder
@@ -29,6 +30,7 @@ enum ItemCommand: String, CaseIterable {
         case .copyAsPlainText: Localizer.string("Copy as Plain Text")
         case .editAlias: Localizer.string("Edit Alias…")
         case .moveToGroup: Localizer.string("Move to Group")
+        case .showInHistory: Localizer.string("Show in History")
         case .share: Localizer.string("Share")
         case .open: Localizer.string("Open")
         case .revealInFinder: Localizer.string("Reveal in Finder")
@@ -41,6 +43,7 @@ enum ItemCommand: String, CaseIterable {
         switch self {
         case .paste, .pasteAsPlainText: "v"
         case .copy, .copyAsPlainText: "c"
+        case .showInHistory: "g"
         case .preview, .editAlias, .moveToGroup, .share, .open, .revealInFinder, .delete: nil
         }
     }
@@ -48,7 +51,7 @@ enum ItemCommand: String, CaseIterable {
     var modifiers: NSEvent.ModifierFlags {
         switch self {
         case .pasteAsPlainText, .copyAsPlainText: [.command, .shift]
-        case .paste, .copy: .command
+        case .paste, .copy, .showInHistory: .command
         case .preview, .editAlias, .moveToGroup, .share, .open, .revealInFinder, .delete: []
         }
     }
@@ -86,8 +89,12 @@ extension ItemCommand {
         return Localizer.string(AliasNormalizer.displayable(alias) == nil ? "Add Alias…" : "Edit Alias…")
     }
 
-    /// 列表行菜单布局：链接/图片/文件多分享与打开，图片与文件另有在访达中显示。
-    static func rowMenuLayout(for kind: ClipboardItemKind, canReveal: Bool = true) -> [ItemMenuEntry] {
+    /// 列表行菜单布局：链接 / 图片 / 文件多分享与打开，图片与文件另有在访达中显示；搜索态多定位项。
+    static func rowMenuLayout(
+        for kind: ClipboardItemKind,
+        canReveal: Bool = true,
+        canLocateInHistory: Bool = false
+    ) -> [ItemMenuEntry] {
         var entries: [ItemMenuEntry] = []
         entries.append(.command(.paste))
         if kind.hasPlainText { entries.append(.command(.pasteAsPlainText)) }
@@ -96,6 +103,10 @@ extension ItemCommand {
         entries.append(.separator)
         entries.append(.command(.editAlias))
         entries.append(.command(.moveToGroup))
+        if canLocateInHistory {
+            entries.append(.separator)
+            entries.append(.command(.showInHistory))
+        }
         if kind != .text && kind != .color {
             entries.append(.separator)
             entries.append(.command(.share))

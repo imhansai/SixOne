@@ -201,7 +201,17 @@ struct ClipboardListView: View {
             copyItem: { context.copyItem(id: $0) },
             copyItemAsPlainText: { context.copyItemAsPlainText(id: $0) },
             deleteRow: { coordinator.requestDelete(id: $0) },
-            collections: { context.collections?.groups ?? [] }
+            collections: { context.collections?.groups ?? [] },
+            canLocateInHistory: { row in
+                guard store.isSearching,
+                      let rank = manager.historyRank(
+                          ofRowWith: row.recencyID,
+                          filter: store.filter,
+                          upTo: store.windowLimit
+                      )
+                else { return false }
+                return rank < store.windowLimit
+            }
         )
     }
 

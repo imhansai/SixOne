@@ -257,6 +257,9 @@ final class PanelWindowLifecycle {
                 navigationState.requestScrollToTop()
             case .row(let rowID):
                 navigationState.requestScroll(toRow: rowID)
+            case .rowWithContext(let rowID, _):
+                // 会话恢复不产生带上下文的定位，按普通行定位处理。
+                navigationState.requestScroll(toRow: rowID)
             case nil:
                 break
             }

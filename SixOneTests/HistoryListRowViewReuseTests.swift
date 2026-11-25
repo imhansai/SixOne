@@ -26,6 +26,8 @@ struct HistoryListRowViewReuseTests {
             switch target {
             case .row(let id):
                 context.navigationState.requestScroll(toRow: id)
+            case .rowWithContext(let id, let rowsAbove):
+                context.navigationState.requestScroll(toRow: id, rowsAbove: rowsAbove)
             case .top:
                 context.navigationState.requestScrollToTop()
             }

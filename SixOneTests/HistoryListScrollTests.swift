@@ -25,6 +25,8 @@ struct HistoryListScrollTests {
             switch target {
             case .row(let id):
                 context.navigationState.requestScroll(toRow: id)
+            case .rowWithContext(let id, let rowsAbove):
+                context.navigationState.requestScroll(toRow: id, rowsAbove: rowsAbove)
             case .top:
                 context.navigationState.requestScrollToTop()
             }
@@ -156,6 +158,31 @@ struct HistoryListScrollTests {
         host.layoutSubtreeIfNeeded()
 
         #expect(scrollView.documentVisibleRect.contains(tableView.rect(ofRow: 40)), "没有滚到目标 id 的新行号")
+    }
+
+    @Test("跨窗口定位：目标行上方保留与来源窗口相同的行数")
+    func rowWithContextKeepsViewportOffset() async throws {
+        let context = try TestPanel.context()
+        let rows = (0..<200).map { HistoryRow.stub(title: "第 \($0) 行") }
+        let (host, window) = OffscreenHost.make(makeView(context, rows: rows, target: nil), size: Self.viewportSize)
+        defer { window.orderOut(nil) }
+        let scrollView = try #require(await OffscreenHost.waitForScrollView(in: host), "没找到滚动视图")
+        let tableView = try #require(scrollView.documentView as? NSTableView)
+
+        host.rootView = makeView(
+            context,
+            rows: rows,
+            target: .rowWithContext(rows[120].id, rowsAbove: 3)
+        )
+        host.layoutSubtreeIfNeeded()
+
+        // 让第 117 行贴住视口顶部：目标上方留出 3 行 + 留白。
+        let expectedY = tableView.rect(ofRow: 117).minY - ClipboardLayout.verticalPadding
+        #expect(
+            abs(scrollView.documentVisibleRect.minY - expectedY) < 0.5,
+            "目标行没有停在来源窗口里的同一位置"
+        )
+        assertNoBlankRegion(scrollView, tableView, targetRow: 120, comment: "定位目标不在视野里")
     }
 
     @Test("目标 id 已不在列表里时不滚动")

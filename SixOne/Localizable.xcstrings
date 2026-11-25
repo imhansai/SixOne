@@ -1909,6 +1909,16 @@
         }
       }
     },
+    "Show in History" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在历史记录中显示"
+          }
+        }
+      }
+    },
     "Show Less" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2028,6 +2038,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "别名会替换标题，也可以用来搜索，最多 %@ 个字符。"
+          }
+        }
+      }
+    },
+    "The item is no longer within the 1000 most recent entries." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该条目已不在最近 1000 条记录中。"
           }
         }
       }

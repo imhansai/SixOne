@@ -96,6 +96,34 @@ struct ItemCommandTests {
         #expect(!ItemCommand.groupFileMenuLayout.contains(.command(.moveToGroup)))
     }
 
+    @Test("搜索态且条目可定位时，行菜单多出「在历史记录中显示」（⌘G）")
+    func showInHistoryOnlyWhenLocatable() {
+        #expect(
+            ItemCommand.rowMenuLayout(for: .text, canLocateInHistory: true) == [
+                .command(.paste),
+                .command(.pasteAsPlainText),
+                .command(.copy),
+                .command(.copyAsPlainText),
+                .separator,
+                .command(.editAlias),
+                .command(.moveToGroup),
+                .separator,
+                .command(.showInHistory),
+                .separator,
+                .command(.delete),
+            ]
+        )
+        #expect(
+            !ItemCommand.rowMenuLayout(for: .text)
+                .contains(.command(.showInHistory)),
+            "默认（非搜索态）不出现定位项"
+        )
+        #expect(ItemCommand.showInHistory.keyEquivalent == "g")
+        #expect(ItemCommand.showInHistory.modifiers == .command)
+        #expect(!ItemCommand.showInHistory.isAlternate)
+        #expect(!ItemCommand.showInHistory.requiresReachableFile)
+    }
+
     @Test("每个动作都有非空标题，且 ⇧ 备用项成对出现")
     func everyCommandHasTitle() {
         for command in ItemCommand.allCases {
