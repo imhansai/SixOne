@@ -109,19 +109,17 @@ struct ClipboardTopBar: View {
 
     // MARK: - 筛选
 
-    /// 有任一筛选生效时用实心图标，避免收起的弹层让用户忘了筛选还在。
+    /// 有任一筛选生效时把线框染成选中蓝；不换实心图标，避免色块在暖色面板上过重。
     private var filterButton: some View {
         Button {
             filterState.toggle()
         } label: {
-            Image(
-                systemName: store.filter.isActive
-                    ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease.circle"
-            )
-            .font(.system(size: 20, weight: .medium))
-            .foregroundStyle(store.filter.isActive ? Color.accentColor : Color.secondary)
-            .contentShape(.focusEffect, Circle())
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(
+                    store.filter.isActive ? PanelSelectionAppearance.active : Color.secondary
+                )
+                .contentShape(.focusEffect, Circle())
         }
         .buttonStyle(.plain)
         .fixedSize()
