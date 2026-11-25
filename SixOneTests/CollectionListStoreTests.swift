@@ -35,28 +35,6 @@ struct CollectionListStoreTests {
         )
     }
 
-    @Test("拖拽落位先改内存顺序并刷新位置，已到位返回 false")
-    func movesGroupsInMemory() async throws {
-        let repository = FakeHistoryRepository()
-        await repository.setCollections([row("Work"), row("Personal")])
-        let store = CollectionListStore(repository: repository, events: ClipboardHistoryEventBus())
-        await store.waitForPendingLoad()
-        let original = store.groups
-
-        #expect(store.move([original[1].id], before: original[0].id))
-        #expect(store.groups.map(\.name) == ["Personal", "Work"])
-        #expect(store.groups.map(\.sortOrder) == [0, 1], "落位后行快照也更新位置")
-        #expect(
-            store.groupNamesByID == Dictionary(
-                uniqueKeysWithValues: store.groups.map { ($0.id, $0.name) }
-            ),
-            "落位后名字索引仍然对齐"
-        )
-
-        #expect(!store.move([original[0].id], before: nil), "Work 已在末尾")
-        #expect(store.groups.map(\.name) == ["Personal", "Work"])
-    }
-
     @Test("迟到的旧加载不会覆盖较新的加载结果")
     func staleLoadDoesNotOverwriteNewerResult() async throws {
         let repository = GatedCollectionsRepository()
@@ -125,4 +103,6 @@ private actor GatedCollectionsRepository: ClipboardHistoryRepository {
     func rowMatches(id: UUID, query: HistoryQuery) async throws -> Bool { false }
 
     func itemExists(id: UUID) async throws -> Bool { false }
+
+    func sourceApplications(limit: Int) async throws -> [String] { [] }
 }

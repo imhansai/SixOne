@@ -54,6 +54,27 @@ final class MoreActionsState {
     }
 }
 
+/// 顶栏筛选按钮与筛选弹层：开合、键盘焦点与关闭请求。
+@Observable
+final class FilterState {
+    var isPresented = false
+    var isFocused = false
+    var focusRequestID = 0
+
+    func toggle() {
+        isPresented.toggle()
+    }
+
+    func dismiss() {
+        guard isPresented else { return }
+        isPresented = false
+    }
+
+    func resignFocus() {
+        guard isFocused else { return }
+        isFocused = false
+    }
+}
 
 /// 复制反馈：SwiftUI 据此显示 checkmark 动画。
 @Observable

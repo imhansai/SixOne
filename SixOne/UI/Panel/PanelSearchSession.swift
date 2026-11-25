@@ -33,12 +33,12 @@ final class PanelSearchSession {
         deliver("", debounced: false)
     }
 
-    /// 切分组：立即应用当前输入词与分组，清选中并回顶。
-    func collectionFilterDidChange(_ filter: CollectionFilter) {
+    /// 换筛选：各区一起生效，只发一次查询。
+    func filterDidChange(_ filter: HistoryFilter) {
         debouncer.cancel()
         let query = HistoryQuery(
             text: HistoryListStore.normalizedQuery(searchState.text),
-            collection: filter
+            filter: filter
         )
         guard !store.matches(query) else { return }
         resetNavigationForQueryChange()

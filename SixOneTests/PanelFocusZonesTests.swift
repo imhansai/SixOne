@@ -14,6 +14,7 @@ struct PanelFocusZonesTests {
         let store: HistoryListStore
         let searchState: SearchState
         let moreActionsState: MoreActionsState
+        let filterState: FilterState
         let navigationState: NavigationState
     }
 
@@ -30,6 +31,7 @@ struct PanelFocusZonesTests {
 
         let searchState = SearchState()
         let moreActionsState = MoreActionsState()
+        let filterState = FilterState()
         let navigationState = NavigationState()
         let previewState = PreviewState()
         let cursor = PanelSelectionCursor(
@@ -47,6 +49,7 @@ struct PanelFocusZonesTests {
                 panel: PanelWindowFactory.makePanel(),
                 searchState: searchState,
                 moreActionsState: moreActionsState,
+                filterState: filterState,
                 navigationState: navigationState,
                 cursor: cursor,
                 isFullKeyboardAccessEnabled: { fullKeyboardAccess }
@@ -54,6 +57,7 @@ struct PanelFocusZonesTests {
             store: store,
             searchState: searchState,
             moreActionsState: moreActionsState,
+            filterState: filterState,
             navigationState: navigationState
         )
     }
@@ -127,7 +131,7 @@ struct PanelFocusZonesTests {
         #expect(noSelection.navigationState.isSelectionActive)
     }
 
-    @Test("Tab 从列表出发按 搜索 → 更多操作 → 列表 前进")
+    @Test("Tab 从列表出发按 搜索 → 筛选 → 更多操作 → 列表 前进")
     func cyclesForward() async throws {
         let fixture = try await makeFixture()
 
@@ -137,6 +141,11 @@ struct PanelFocusZonesTests {
         // 焦点落点由视图回写，这里显式模拟。
         fixture.searchState.isFocused = true
         fixture.zones.cycle(backwards: false)
+        #expect(fixture.filterState.focusRequestID == 1)
+        #expect(fixture.filterState.isFocused)
+
+        fixture.filterState.isFocused = true
+        fixture.zones.cycle(backwards: false)
         #expect(fixture.moreActionsState.focusRequestID == 1)
 
         fixture.moreActionsState.isFocused = true
@@ -144,7 +153,7 @@ struct PanelFocusZonesTests {
         #expect(fixture.navigationState.isSelectionActive, "回到列表要显示选中")
     }
 
-    @Test("Shift+Tab 从列表反向走到更多操作，再到搜索")
+    @Test("Shift+Tab 从列表反向走到更多操作，再到筛选与搜索")
     func cyclesBackwards() async throws {
         let fixture = try await makeFixture()
 
@@ -153,8 +162,27 @@ struct PanelFocusZonesTests {
 
         fixture.moreActionsState.isFocused = true
         fixture.zones.cycle(backwards: true)
-        #expect(fixture.searchState.focusRequestID == 1)
+        #expect(fixture.filterState.focusRequestID == 1)
         #expect(!fixture.moreActionsState.isFocused)
+
+        fixture.filterState.isFocused = true
+        fixture.zones.cycle(backwards: true)
+        #expect(fixture.searchState.focusRequestID == 1)
+        #expect(!fixture.filterState.isFocused)
+    }
+
+    @Test("离开筛选站会收起弹层")
+    func leavingFilterDismissesPopover() async throws {
+        let fixture = try await makeFixture()
+        fixture.filterState.isPresented = true
+        fixture.filterState.isFocused = true
+
+        fixture.zones.focusSearch()
+        #expect(!fixture.filterState.isPresented)
+
+        fixture.filterState.isPresented = true
+        fixture.zones.focusList()
+        #expect(!fixture.filterState.isPresented)
     }
 
     @Test("完整键盘访问关闭：Tab 只在搜索与列表之间往返")
@@ -167,6 +195,7 @@ struct PanelFocusZonesTests {
         fixture.searchState.isFocused = true
         fixture.zones.cycle(backwards: false)
         #expect(!fixture.moreActionsState.isFocused)
+        #expect(!fixture.filterState.isFocused)
         #expect(fixture.navigationState.isSelectionActive)
 
         fixture.zones.cycle(backwards: true)

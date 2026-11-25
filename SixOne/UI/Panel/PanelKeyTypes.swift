@@ -76,6 +76,8 @@ enum PanelKeyAction: Equatable {
     case cycleFocus(backwards: Bool)
 
     case focusSearch
+    case toggleFilterPopover
+    case dismissFilterPopover
 
     case escape
     case cancelEditing
@@ -122,6 +124,8 @@ struct PanelKeyContext {
 
     var isSearchFocused = false
     var isMoreActionsFocused = false
+    var isFilterFocused = false
+    var isFilterPopoverPresented = false
     /// 完整可见行数；⌘+数字只在这段范围内生效。
     var visibleRowCount = 0
 

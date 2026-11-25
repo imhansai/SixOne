@@ -17,6 +17,7 @@ final class PanelKeyActionExecutor {
     private let pasteFlow: PanelPasteFlow
     private let focusZones: PanelFocusZones
     private let searchState: SearchState
+    private let filterState: FilterState
     private let hide: () -> Void
     private let fullItem: (UUID) -> ClipboardItem?
 
@@ -30,6 +31,7 @@ final class PanelKeyActionExecutor {
         pasteFlow: PanelPasteFlow,
         focusZones: PanelFocusZones,
         searchState: SearchState,
+        filterState: FilterState,
         hide: @escaping () -> Void,
         fullItem: @escaping (UUID) -> ClipboardItem?
     ) {
@@ -42,6 +44,7 @@ final class PanelKeyActionExecutor {
         self.pasteFlow = pasteFlow
         self.focusZones = focusZones
         self.searchState = searchState
+        self.filterState = filterState
         self.hide = hide
         self.fullItem = fullItem
     }
@@ -59,6 +62,10 @@ final class PanelKeyActionExecutor {
 
         case .focusSearch:
             focusZones.focusSearch()
+        case .toggleFilterPopover:
+            filterState.toggle()
+        case .dismissFilterPopover:
+            filterState.dismiss()
 
         case .escape:
             editingSession.handleEscape()

@@ -12,7 +12,7 @@ final class PanelFocusGuard {
     private let shareState: ShareState
     private let previewState: PreviewState
     private let searchState: SearchState
-    private let collectionDragState: CollectionDragState
+    private let filterState: FilterState
 
     /// 状态栏图标位置；用于判断用户是否正按着状态项。
     var positionProvider: (() -> NSRect?)?
@@ -22,13 +22,13 @@ final class PanelFocusGuard {
         shareState: ShareState,
         previewState: PreviewState,
         searchState: SearchState,
-        collectionDragState: CollectionDragState
+        filterState: FilterState
     ) {
         self.panel = panel
         self.shareState = shareState
         self.previewState = previewState
         self.searchState = searchState
-        self.collectionDragState = collectionDragState
+        self.filterState = filterState
     }
 
     /// 焦点真的离开时才隐藏；延后一拍，等新 key 窗口落定，避免辅助面板抢焦点时误收。
@@ -88,7 +88,7 @@ final class PanelFocusGuard {
             hasApplicationSheet: NSApp.keyWindow?.sheetParent != nil,
             isEditingText: isEditingText,
             clickedOutside: clickedOutside,
-            isDraggingCollection: collectionDragState.isDragging,
+            isFilterPopoverPresented: filterState.isPresented,
             isSystemHelperFrontmost: isSystemHelperFrontmost,
             hasKeyWindow: NSApp.keyWindow != nil
         )

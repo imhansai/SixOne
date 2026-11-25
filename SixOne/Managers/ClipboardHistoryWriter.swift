@@ -162,38 +162,6 @@ final class ClipboardHistoryWriter {
         return .success(collection.id)
     }
 
-    /// 按完整顺序快照重写位置；顺序只影响展示，不广播事件。
-    @discardableResult
-    func setCollectionOrder(_ orderedIDs: [UUID]) -> Bool {
-        guard !orderedIDs.isEmpty,
-              Set(orderedIDs).count == orderedIDs.count,
-              let collections = fetchCollections()
-        else { return false }
-
-        let byID = Dictionary(uniqueKeysWithValues: collections.map { ($0.id, $0) })
-        var ordered: [ClipboardCollection] = []
-        ordered.reserveCapacity(collections.count)
-        for id in orderedIDs {
-            guard let collection = byID[id] else { return false }
-            ordered.append(collection)
-        }
-        // 列表重载尚未到达时，库里多出的分组按现有顺序追加到末尾。
-        let known = Set(orderedIDs)
-        ordered += collections
-            .filter { !known.contains($0.id) }
-            .map(CollectionRow.init)
-            .sorted(by: CollectionRow.displayOrder)
-            .compactMap { byID[$0.id] }
-
-        var changed = false
-        for (index, collection) in ordered.enumerated() where collection.sortOrder != index {
-            collection.sortOrder = index
-            changed = true
-        }
-        guard changed else { return true }
-        return save("调整分组顺序")
-    }
-
     /// 重命名分组；只改元数据，不触碰分组成员。
     @discardableResult
     func renameCollection(

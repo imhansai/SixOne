@@ -40,7 +40,8 @@ struct TooltipAnchor: NSViewRepresentable {
                 options: [
                     .mouseEnteredAndExited,
                     .mouseMoved,
-                    .activeInKeyWindow,
+                    // 系统 popover 是子窗口，可能不是 key；是否真正展示交给 Presenter 判断。
+                    .activeAlways,
                     .inVisibleRect,
                 ],
                 owner: self,

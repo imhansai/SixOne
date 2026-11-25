@@ -27,21 +27,29 @@ struct PanelFocusPolicyTests {
         }))
     }
 
-    @Test("分组拖拽中不收起：拖拽会跑出窗口，等松手再说")
-    func collectionDragKeepsPanel() {
-        #expect(!PanelFocusPolicy.shouldHide(snapshot {
-            $0.isDraggingCollection = true
-            $0.isAppFrontmost = false
-            $0.isPanelKeyWindow = false
-            $0.clickedOutside = true
-        }))
-    }
-
     @Test("面板挂着 sheet 不收起")
     func attachedSheetKeepsPanel() {
         #expect(!PanelFocusPolicy.shouldHide(snapshot {
             $0.hasAttachedSheet = true
             $0.isAppFrontmost = false
+        }))
+    }
+
+    @Test("系统筛选 popover 打开时不收起：popover 可能自己成为 key")
+    func filterPopoverKeepsPanel() {
+        #expect(!PanelFocusPolicy.shouldHide(snapshot {
+            $0.isFilterPopoverPresented = true
+            $0.isAppFrontmost = true
+            $0.isPanelKeyWindow = false
+        }))
+    }
+
+    @Test("系统筛选 popover 打开但应用切走：面板照样收起")
+    func filterPopoverDoesNotFollowOtherApp() {
+        #expect(PanelFocusPolicy.shouldHide(snapshot {
+            $0.isFilterPopoverPresented = true
+            $0.isAppFrontmost = false
+            $0.isPanelKeyWindow = false
         }))
     }
 

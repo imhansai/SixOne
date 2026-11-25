@@ -84,15 +84,17 @@ struct PanelSearchSessionTests {
         fixture.navigationState.isSelectionActive = true
         _ = fixture.navigationState.takePendingScrollCommands()
 
-        let filter = CollectionFilter.collection(UUID())
-        fixture.session.collectionFilterDidChange(filter)
+        let collectionID = UUID()
+        fixture.session.filterDidChange(
+            fixture.store.filter.toggled(collectionID: collectionID)
+        )
 
         #expect(fixture.navigationState.selectedItemID == nil)
         #expect(!fixture.navigationState.isSelectionActive)
         #expect(
             fixture.navigationState.takePendingScrollCommands().last?.target == .top
         )
-        #expect(fixture.store.collectionFilter == filter)
+        #expect(fixture.store.filter.collections == [collectionID])
         #expect(fixture.store.query == "abc", "切换分组不该清掉搜索词")
         await fixture.store.waitForPendingLoad()
     }
@@ -106,18 +108,18 @@ struct PanelSearchSessionTests {
         await fixture.store.waitForPendingLoad()
 
         let collectionID = UUID()
-        fixture.session.collectionFilterDidChange(
-            fixture.store.collectionFilter.toggled(collectionID)
+        fixture.session.filterDidChange(
+            fixture.store.filter.toggled(collectionID: collectionID)
         )
         await fixture.store.waitForPendingLoad()
-        #expect(fixture.store.collectionFilter == .collection(collectionID))
+        #expect(fixture.store.filter.collections == [collectionID])
 
         // 再点一次同一分组：取消筛选，搜索词不动。
-        fixture.session.collectionFilterDidChange(
-            fixture.store.collectionFilter.toggled(collectionID)
+        fixture.session.filterDidChange(
+            fixture.store.filter.toggled(collectionID: collectionID)
         )
         await fixture.store.waitForPendingLoad()
-        #expect(fixture.store.collectionFilter == .all)
+        #expect(fixture.store.filter.collections.isEmpty)
         #expect(fixture.store.query == "abc", "取消筛选不该清掉搜索词")
     }
 

@@ -12,29 +12,27 @@ import Testing
 @Suite("列表分组筛选")
 @MainActor
 struct HistoryListCollectionFilterTests {
-    @Test("点分组只切换该组：再点同一组回到全部数据")
+    @Test("分组可多选：再点同一组取消该组")
     func togglingCollectionFilter() {
         let first = UUID()
         let second = UUID()
 
-        #expect(CollectionFilter.all.toggled(first) == .collection(first))
-        #expect(CollectionFilter.collection(first).toggled(second) == .collection(second))
-        #expect(CollectionFilter.collection(first).toggled(first) == .all)
+        var filter = HistoryFilter.none
+        filter = filter.toggled(collectionID: first)
+        #expect(filter.collections == [first])
+        filter = filter.toggled(collectionID: second)
+        #expect(filter.collections == [first, second])
+        filter = filter.toggled(collectionID: first)
+        #expect(filter.collections == [second])
     }
 
-    @Test("收起期间有新复制：唤出时放弃分组筛选；没有新内容则保留")
+    @Test("收起期间有新复制：唤出时放弃筛选；没有新内容则保留")
     func restoresFilterOnShow() {
-        let collectionID = UUID()
+        let filter = HistoryFilter(collections: [UUID()])
 
-        #expect(
-            CollectionFilter.collection(collectionID).restoredOnShow(hasNewContent: true)
-                == .all
-        )
-        #expect(
-            CollectionFilter.collection(collectionID).restoredOnShow(hasNewContent: false)
-                == .collection(collectionID)
-        )
-        #expect(CollectionFilter.all.restoredOnShow(hasNewContent: true) == .all)
+        #expect(filter.restoredOnShow(hasNewContent: true) == .none)
+        #expect(filter.restoredOnShow(hasNewContent: false) == filter)
+        #expect(HistoryFilter.none.restoredOnShow(hasNewContent: true) == .none)
     }
 
     @Test("切分组只加载组内条目，取消筛选恢复全部")
@@ -47,19 +45,39 @@ struct HistoryListCollectionFilterTests {
         let ungrouped = env.item("未分组")
         try env.save()
 
-        env.store.setQuery(HistoryQuery(collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
         #expect(env.store.rows.map(\.id) == [workItem.id])
         #expect(env.store.rows.allSatisfy { $0.collectionID == work.id })
 
         // 再点一次选中的分组：取消筛选，全部数据（含未分组）回来。
-        env.store.setQuery(HistoryQuery(collection: env.store.collectionFilter.toggled(work.id)))
+        env.store.setQuery(HistoryQuery(
+            filter: env.store.filter.toggled(collectionID: work.id)
+        ))
         await env.store.waitForPendingLoad()
-        #expect(env.store.collectionFilter == .all)
+        #expect(env.store.filter.collections.isEmpty)
         #expect(
             Set(env.store.rows.map(\.id))
                 == Set([workItem.id, personalItem.id, ungrouped.id])
         )
+    }
+
+    @Test("同时选多个分组：并集加载，未分组不进入")
+    func loadsMultipleCollections() async throws {
+        let env = try Env()
+        let work = env.collection("Work")
+        let personal = env.collection("Personal")
+        let workItem = env.item("工作", collection: work.id)
+        let personalItem = env.item("个人", collection: personal.id)
+        _ = env.item("未分组")
+        try env.save()
+
+        env.store.setQuery(HistoryQuery(
+            filter: HistoryFilter(collections: [work.id, personal.id])
+        ))
+        await env.store.waitForPendingLoad()
+
+        #expect(Set(env.store.rows.map(\.id)) == Set([workItem.id, personalItem.id]))
     }
 
     @Test("搜索词与分组一次落定，只命中组内匹配项")
@@ -71,14 +89,14 @@ struct HistoryListCollectionFilterTests {
         _ = env.item("季度报告")
         try env.save()
 
-        env.store.setQuery(HistoryQuery(text: "季度", collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(text: "季度", filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
 
         #expect(env.store.rows.map(\.id) == [match.id])
         #expect(env.store.matches(
-            HistoryQuery(text: "季度", collection: .collection(work.id))
+            HistoryQuery(text: "季度", filter: HistoryFilter(collections: [work.id]))
         ))
-        #expect(!env.store.matches(HistoryQuery(text: "季度", collection: .all)))
+        #expect(!env.store.matches(HistoryQuery(text: "季度")))
     }
 
     @Test("分组态收到组外新条目：不进入当前窗口")
@@ -88,7 +106,7 @@ struct HistoryListCollectionFilterTests {
         let inGroup = env.item("组内", collection: work.id)
         try env.save()
 
-        env.store.setQuery(HistoryQuery(collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
 
         let outside = env.item("组外")
@@ -107,7 +125,7 @@ struct HistoryListCollectionFilterTests {
         _ = env.item("已有", collection: work.id)
         try env.save()
 
-        env.store.setQuery(HistoryQuery(collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
 
         let newItem = env.item("新组内", collection: work.id)
@@ -126,7 +144,7 @@ struct HistoryListCollectionFilterTests {
         let outside = env.item("组外")
         try env.save()
 
-        env.store.setQuery(HistoryQuery(collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
         let revision = env.store.dataRevision
 
@@ -145,7 +163,7 @@ struct HistoryListCollectionFilterTests {
         let moving = env.item("待移动")
         try env.save()
 
-        env.store.setQuery(HistoryQuery(collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
         #expect(env.store.rows.map(\.id) == [inGroup.id])
 
@@ -171,7 +189,7 @@ struct HistoryListCollectionFilterTests {
         _ = env.item("组外")
         try env.save()
 
-        env.store.setQuery(HistoryQuery(collection: .collection(work.id)))
+        env.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [work.id])))
         await env.store.waitForPendingLoad()
 
         try env.delete(middle.id)

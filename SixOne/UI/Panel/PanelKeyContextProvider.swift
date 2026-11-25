@@ -9,6 +9,7 @@ struct PanelKeyContextProvider {
     let panel: ClipboardPanel
     let searchState: SearchState
     let moreActionsState: MoreActionsState
+    let filterState: FilterState
     let confirmationState: ConfirmationState
     let previewState: PreviewState
     /// 当前选中条目 id（列表只持轻量行，需要整条时按 id 补齐）。
@@ -41,6 +42,8 @@ struct PanelKeyContextProvider {
         context.isGroupFilterFocused = surface.isFocusedOnGroupFilter
 
         context.isMoreActionsFocused = moreActionsState.isFocused
+        context.isFilterFocused = filterState.isFocused
+        context.isFilterPopoverPresented = filterState.isPresented
         context.isModalPresented = Self.isModalPresented(
             confirmation: confirmationState,
             attachedSheet: panel.attachedSheet

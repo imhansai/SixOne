@@ -54,12 +54,17 @@ protocol GroupActionHandling: AnyObject {
     func panelDidInvokeGroupFileCommand(_ command: GroupFileCommand, index: Int)
 }
 
-/// 用户分组的筛选、重命名、删除与排序。
+/// 用户分组的新建、重命名与删除。
 protocol CollectionActionHandling: AnyObject {
-    func panelDidRequestCollectionFilter(_ filter: CollectionFilter)
+    func panelDidRequestCreateCollection()
     func panelDidRequestRenameCollection(id: UUID)
     func panelDidRequestDeleteCollection(id: UUID)
-    func panelDidRequestReorderCollections(movingIDs: [UUID], before targetID: UUID?)
+}
+
+/// 筛选弹层：应用或清除四区筛选。
+protocol FilterActionHandling: AnyObject {
+    func panelDidRequestHistoryFilter(_ filter: HistoryFilter)
+    func panelDidRequestClearHistoryFilters()
 }
 
 /// 面板外壳：设置入口、交棒外部应用、交还内容焦点与清空历史。
@@ -71,11 +76,13 @@ protocol ShellActionHandling: AnyObject {
     func panelDidHandOffToExternalApp()
     func panelDidRequestFocusContent()
     func panelDidRequestClearHistory()
+    /// 系统筛选 popover 关闭后重新按焦点决定面板是否收起。
+    func panelDidDismissFilterPopover()
 }
 
 /// 面板动作的完整集合；控制器实现它，视图只依赖上面用得到的窄协议。
 protocol PanelActionHandler: ItemActionHandling, EditingActionHandling, SearchActionHandling,
-    GroupActionHandling, CollectionActionHandling, ShellActionHandling {}
+    GroupActionHandling, CollectionActionHandling, FilterActionHandling, ShellActionHandling {}
 
 @Observable
 final class PanelContext {
@@ -84,11 +91,14 @@ final class PanelContext {
     let caches: PanelCaches
     /// 分组列表；测试可省略。
     let collections: CollectionListStore?
+    /// 筛选弹层的来源候选；面板唤出时刷新。
+    let filterSources: FilterSourceCatalog
 
     let panelState = PanelState()
     let confirmationState = ConfirmationState()
     let searchState = SearchState()
     let moreActionsState = MoreActionsState()
+    let filterState = FilterState()
     let previewState = PreviewState()
     let navigationState = NavigationState()
     let copyState = CopyState()
@@ -100,8 +110,6 @@ final class PanelContext {
     let scrollerLayout = ScrollerLayoutState()
     /// 搜索词到库查询链路：输入变化、Esc 清空与唤出对齐。
     let searchSession: PanelSearchSession
-    /// 分组拖拽进行中；拖拽期间不收起面板。
-    let collectionDragState = CollectionDragState()
     /// 菜单校验用的文件能力缓存：校验只读，解析在后台。
     let fileCapabilities: PanelFileCapabilityCache
 
@@ -114,6 +122,7 @@ final class PanelContext {
     var searchActions: SearchActionHandling? { actions }
     var groupActions: GroupActionHandling? { actions }
     var collectionActions: CollectionActionHandling? { actions }
+    var filterActions: FilterActionHandling? { actions }
     var shellActions: ShellActionHandling? { actions }
 
     init(
@@ -126,6 +135,7 @@ final class PanelContext {
         self.store = store
         self.caches = caches
         self.collections = collections
+        self.filterSources = FilterSourceCatalog(store: store)
         self.fileCapabilities = PanelFileCapabilityCache(
             onBookmarksRefreshed: { [weak manager] itemID, refreshes in
                 manager?.refreshSecurityScopeBookmarks(id: itemID, refreshes)

@@ -435,6 +435,16 @@
         }
       }
     },
+    "Clear Filters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除筛选"
+          }
+        }
+      }
+    },
     "Clear History" : {
       "localizations" : {
         "zh-Hans" : {
@@ -685,16 +695,6 @@
         }
       }
     },
-    "Could not reorder groups." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法调整分组顺序。"
-          }
-        }
-      }
-    },
     "Could not save clipboard history (%@). Your clipboard still works, but this change may not be kept." : {
       "localizations" : {
         "zh-Hans" : {
@@ -741,6 +741,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "剪切"
+          }
+        }
+      }
+    },
+    "Date" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日期"
           }
         }
       }
@@ -881,6 +891,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件不存在：%@"
+          }
+        }
+      }
+    },
+    "Filters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选"
           }
         }
       }
@@ -1038,6 +1058,16 @@
         }
       }
     },
+    "Groups" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分组"
+          }
+        }
+      }
+    },
     "Help" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1159,6 +1189,26 @@
         }
       }
     },
+    "Last 7 Days" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 7 天"
+          }
+        }
+      }
+    },
+    "Last 30 Days" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 30 天"
+          }
+        }
+      }
+    },
     "Last copied time: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1249,6 +1299,16 @@
         }
       }
     },
+    "More" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
+          }
+        }
+      }
+    },
     "More Actions" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1319,12 +1379,32 @@
         }
       }
     },
+    "No items match the filters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有符合筛选条件的内容"
+          }
+        }
+      }
+    },
     "No matches found" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "未找到匹配项"
+          }
+        }
+      }
+    },
+    "Older" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更早"
           }
         }
       }
@@ -1579,6 +1659,16 @@
         }
       }
     },
+    "Remove filter" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除筛选条件"
+          }
+        }
+      }
+    },
     "Remove Selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1819,6 +1909,16 @@
         }
       }
     },
+    "Show Less" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起"
+          }
+        }
+      }
+    },
     "Show Plain Text" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1878,6 +1978,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "源码"
+          }
+        }
+      }
+    },
+    "Source App" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
           }
         }
       }
@@ -1958,6 +2068,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此分组为空"
+          }
+        }
+      }
+    },
+    "Today" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天"
+          }
+        }
+      }
+    },
+    "Type" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类型"
           }
         }
       }
@@ -2048,6 +2178,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "窗口"
+          }
+        }
+      }
+    },
+    "Yesterday" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "昨天"
           }
         }
       }

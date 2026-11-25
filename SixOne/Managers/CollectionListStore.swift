@@ -64,26 +64,6 @@ final class CollectionListStore {
         await loadTask?.value
     }
 
-    /// 落位先改内存；返回是否换了位置，失败由重载回滚。
-    @discardableResult
-    func move(_ movingIDs: [UUID], before targetID: UUID?) -> Bool {
-        guard let reordered = CollectionReorder.apply(
-            movingIDs: movingIDs,
-            before: targetID,
-            to: groups
-        ), reordered.map(\.id) != groups.map(\.id) else { return false }
-
-        apply(reordered.enumerated().map { index, row in
-            CollectionRow(
-                id: row.id,
-                name: row.name,
-                createdAt: row.createdAt,
-                sortOrder: index
-            )
-        })
-        return true
-    }
-
     func group(id: UUID) -> CollectionRow? {
         groups.first { $0.id == id }
     }

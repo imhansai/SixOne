@@ -22,39 +22,14 @@ nonisolated struct CollectionRow: Identifiable, Equatable, Sendable {
     }
 }
 
-nonisolated enum CollectionReorder {
-    /// 把分组移到目标前；nil 表示末尾，目标不存在返回 nil。多选按 `sources` 顺序拼接。
-    static func apply(
-        movingIDs: [UUID],
-        before targetID: UUID?,
-        to rows: [CollectionRow]
-    ) -> [CollectionRow]? {
-        var seen = Set<UUID>()
-        let moving = movingIDs.compactMap { id -> CollectionRow? in
-            guard seen.insert(id).inserted else { return nil }
-            return rows.first { $0.id == id }
-        }
-        guard !moving.isEmpty else { return nil }
-
-        var rest = rows.filter { !seen.contains($0.id) }
-        if let targetID {
-            guard let index = rest.firstIndex(where: { $0.id == targetID }) else { return nil }
-            rest.insert(contentsOf: moving, at: index)
-        } else {
-            rest.append(contentsOf: moving)
-        }
-        return rest
-    }
-}
-
 /// 行副标题上的分组标记：只在「全部」视图显示，避免分组视图里每行重复同一个名字。
 nonisolated enum RowCollectionMarker {
     static func name(
         for row: HistoryRow,
-        filter: CollectionFilter,
+        isGroupFiltered: Bool,
         groupNames: [UUID: String]
     ) -> String? {
-        guard filter == .all, let collectionID = row.collectionID else { return nil }
+        guard !isGroupFiltered, let collectionID = row.collectionID else { return nil }
         return groupNames[collectionID]
     }
 }

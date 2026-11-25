@@ -314,11 +314,6 @@ final class ClipboardManager {
         writer.deleteCollection(id: id)
     }
 
-    @discardableResult
-    func setCollectionOrder(_ orderedIDs: [UUID]) -> Bool {
-        writer.setCollectionOrder(orderedIDs)
-    }
-
     /// 编辑保存：写入新正文并触达；链接不留 RTF，正文清空则删除条目。
     func updateEditedText(id: UUID, text: String, richText: Data?) {
         guard let item = writer.fetchFullItem(id: id) else { return }

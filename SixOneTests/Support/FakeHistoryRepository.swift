@@ -15,6 +15,8 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
     private var delaysByQuery: [HistoryQuery: Duration]
     /// 分组列表。
     private var collectionRows: [CollectionRow] = []
+    /// 来源列表；`sourceApplications` 按传入顺序返回。
+    private var sourceRows: [String] = []
     /// 条目 id → 延迟，用来制造单行刷新乱序。
     private var rowDelays: [UUID: Duration] = [:]
     /// 置位后所有查询都抛错。
@@ -49,6 +51,10 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
 
     func setCollections(_ rows: [CollectionRow]) {
         collectionRows = rows
+    }
+
+    func setSourceApplications(_ rows: [String]) {
+        sourceRows = rows
     }
 
     /// 让之后的查询都失败。
@@ -158,6 +164,13 @@ actor FakeHistoryRepository: ClipboardHistoryRepository {
         }
         return collectionRows
     }
+
+    func sourceApplications(limit: Int) async throws -> [String] {
+        if isFailing {
+            throw FakeHistoryError.readFailed
+        }
+        return Array(sourceRows.prefix(limit))
+    }
 }
 
 /// 替身专用读失败。
@@ -170,13 +183,16 @@ extension HistoryRow {
     static func stub(
         title: String,
         id: UUID = UUID(),
+        kind: ClipboardItemKind = .text,
         alias: String? = nil,
+        sourceAppBundleIdentifier: String? = nil,
+        lastActivityAt: Date = Date(),
         collectionID: UUID? = nil
     ) -> HistoryRow {
         HistoryRow(
             id: id,
             recencyID: id,
-            kind: .text,
+            kind: kind,
             title: title,
             alias: alias,
             filePath: nil,
@@ -184,8 +200,8 @@ extension HistoryRow {
             contentType: nil,
             thumbnailData: nil,
             thumbnailVersion: nil,
-            sourceAppBundleIdentifier: nil,
-            lastActivityAt: Date(),
+            sourceAppBundleIdentifier: sourceAppBundleIdentifier,
+            lastActivityAt: lastActivityAt,
             collectionID: collectionID
         )
     }

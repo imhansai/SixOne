@@ -30,29 +30,40 @@ final class HistoryListStore {
     /// 收起期间来过新的复制；唤出时据此放弃旧滚动锚点，停到新的顶部。
     private var receivedNewContentWhileHidden = false
     private(set) var query = ""
-    /// 当前分组筛选；与 `query` 一起构成后台查询条件。
-    private(set) var collectionFilter: CollectionFilter = .all
+    /// 当前全部筛选条件；与 `query` 一起构成后台查询条件。
+    private(set) var filter = HistoryFilter.none
+    /// 有分组筛选；行内分组标记据此隐藏。
+    var isGroupFiltering: Bool { !filter.collections.isEmpty }
     /// `rows` 对应的查询词；换词加载落定前沿用旧值。
     private var rowsQuery = ""
-    private var rowsCollectionFilter: CollectionFilter = .all
+    private var rowsFilter = HistoryFilter.none
     var isSearching: Bool { !query.isEmpty }
+    var isFiltering: Bool { filter.isActive }
     /// 当前完整查询条件；后台读与事件校验共用。
     var activeQuery: HistoryQuery {
-        HistoryQuery(text: query, collection: collectionFilter)
+        HistoryQuery(text: query, filter: filter)
     }
 
     /// `rows` 对应的完整查询；删除待接替用。
     var rowsActiveQuery: HistoryQuery {
-        HistoryQuery(text: rowsQuery, collection: rowsCollectionFilter)
+        HistoryQuery(text: rowsQuery, filter: rowsFilter)
     }
 
     /// `rows` 是否已对应当前完整查询。
     private var rowsMatchActiveQuery: Bool {
-        rowsQuery == query && rowsCollectionFilter == collectionFilter
+        rowsQuery == query && rowsFilter == filter
     }
     private var generation = 0
     private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var eventTask: Task<Void, Never>?
+    /// 行窗口载入时的自然日。
+    private var rowsLoadedOnDay = Calendar.current.startOfDay(for: Date())
+
+    /// 日期筛选已跨日，窗口需重载。
+    var hasStaleDateFilter: Bool {
+        !filter.dateRanges.isEmpty
+            && rowsLoadedOnDay < Calendar.current.startOfDay(for: Date())
+    }
 
     init(repository: ClipboardHistoryRepository, events: ClipboardHistoryEventBus) {
         self.repository = repository
@@ -81,16 +92,21 @@ final class HistoryListStore {
     func setSearchQuery(_ raw: String) {
         setQuery(HistoryQuery(
             text: Self.normalizedQuery(raw),
-            collection: collectionFilter
+            filter: filter
         ))
     }
 
-    /// 搜索词与分组一次落定，只发一次查询。
+    /// 搜索词与筛选一次落定，只发一次查询。
     func setQuery(_ newQuery: HistoryQuery) {
         guard newQuery != activeQuery else { return }
         query = newQuery.text
-        collectionFilter = newQuery.collection
+        filter = newQuery.filter
         startWindowLoad()
+    }
+
+    /// 只换筛选、保留当前搜索词。
+    func setFilter(_ newFilter: HistoryFilter) {
+        setQuery(HistoryQuery(text: query, filter: newFilter))
     }
 
     /// 搜索词归一化：只把换行类字符转为空格，与 searchText 快照一致。
@@ -104,7 +120,7 @@ final class HistoryListStore {
 
     /// 完整条件是否已生效；搜索词调用方需先归一化。
     func matches(_ candidate: HistoryQuery) -> Bool {
-        candidate.text == query && candidate.collection == collectionFilter
+        candidate.text == query && candidate.filter == filter
     }
 
     /// 重置并加载最近一窗；已在加载中则跳过。
@@ -137,7 +153,8 @@ final class HistoryListStore {
             self.didFailToLoad = false
             self.rows = window.rows
             self.rowsQuery = activeQuery.text
-            self.rowsCollectionFilter = activeQuery.collection
+            self.rowsFilter = activeQuery.filter
+            self.rowsLoadedOnDay = Calendar.current.startOfDay(for: Date())
             self.hasOlder = window.hasOlder
             self.dataRevision &+= 1
         }
@@ -212,7 +229,9 @@ final class HistoryListStore {
             startWindowLoad()
             return
         }
-        guard rowMatchesActiveCollection(row) else { return }
+        // await 期间可能已换查询，或新窗口已包含该行。
+        guard rowsMatchActiveQuery, !rows.contains(where: { $0.id == id }) else { return }
+        guard rowMatchesActiveFilter(row) else { return }
         rows.insert(row, at: 0)
         if rows.count > windowLimit {
             rows.removeLast(rows.count - windowLimit)
@@ -225,6 +244,12 @@ final class HistoryListStore {
     private func moveRowToTop(id: UUID) async {
         guard !rows.isEmpty, rows.contains(where: { $0.id == id }) else { return }
         guard let refreshed = await fetchRow(id: id) else { return }
+        guard rowsMatchActiveQuery else { return }
+        guard rowMatchesActiveFilter(refreshed) else {
+            // 触达会刷新时间与来源，可能不再命中筛选：移出窗口并补位。
+            await deleteRowAndBackfill(id: id)
+            return
+        }
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         var updated = rows
         updated.remove(at: index)
@@ -235,8 +260,11 @@ final class HistoryListStore {
     }
 
     private func reloadRow(id: UUID) async {
-        guard !rows.isEmpty, let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        guard rows.contains(where: { $0.id == id }) else { return }
         guard let refreshed = await fetchRow(id: id) else { return }
+        guard rowsMatchActiveQuery,
+              let index = rows.firstIndex(where: { $0.id == id })
+        else { return }
         rows[index] = refreshed
         dataRevision &+= 1
         invalidatePendingLoad()
@@ -312,8 +340,8 @@ final class HistoryListStore {
         case .inserted(let id):
             // 只有真新增内容才作数；面板内复制/粘贴发的是 touched，深浏览的连续性不受影响。
             if !isListVisible { receivedNewContentWhileHidden = true }
-            if isSearching || collectionFilter != .all {
-                // 搜索态或分组态无法确认新条目是否命中，整窗重取最稳。
+            if isSearching || isFiltering {
+                // 搜索态或筛选态无法确认新条目是否命中，整窗重取最稳。
                 startWindowLoad()
             } else if isListVisible, topVisibleIndex > ClipboardLayout.viewportRowCount {
                 // 用户在深浏览：不在背后换窗口，回顶部再补。
@@ -343,11 +371,15 @@ final class HistoryListStore {
                 startWindowLoad()
             } else if rows.contains(where: { $0.id == id }) {
                 await moveRowToTop(id: id)
-            } else if collectionFilter == .all {
+            } else if !isFiltering {
                 // 被触达的条目不在当前 1000 行窗口里：它已置顶，必须重载才能看到。
                 startWindowLoad()
+            } else {
+                // 筛选态：窗口外条目可能命中筛选；取一次快照确认，命中才重取。
+                if let row = await fetchRow(id: id), rowMatchesActiveFilter(row) {
+                    startWindowLoad()
+                }
             }
-            // 分组态下窗口外条目属于别的分组，忽略即可。
         case .thumbnailUpdated(let id):
             if !rowsMatchActiveQuery {
                 startWindowLoad()
@@ -359,7 +391,7 @@ final class HistoryListStore {
                 startWindowLoad()
                 return
             }
-            guard isSearching || collectionFilter != .all else {
+            guard isSearching || isFiltering else {
                 await reloadRow(id: id)
                 return
             }
@@ -389,13 +421,23 @@ final class HistoryListStore {
         }
     }
 
-    /// 行快照是否属于当前分组；搜索条件由仓库判定。
-    private func rowMatchesActiveCollection(_ row: HistoryRow) -> Bool {
-        switch collectionFilter {
-        case .all:
-            return true
-        case .collection(let collectionID):
-            return row.collectionID == collectionID
+    /// 行快照是否命中当前筛选；搜索条件由仓库判定。
+    private func rowMatchesActiveFilter(_ row: HistoryRow) -> Bool {
+        filter.matches(
+            kind: row.kind,
+            collectionID: row.collectionID,
+            sourceAppBundleIdentifier: row.sourceAppBundleIdentifier,
+            lastActivityAt: row.lastActivityAt
+        )
+    }
+
+    /// 最近窗口里出现过的来源 App；面板唤出时预热。读取失败返回 nil，保留旧候选。
+    func sourceApplications() async -> [String]? {
+        do {
+            return try await repository.sourceApplications(limit: windowLimit)
+        } catch {
+            logger.error("读取来源列表失败：\(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 

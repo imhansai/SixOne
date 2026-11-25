@@ -188,4 +188,5 @@ private final class FakeShellActions: ShellActionHandling {
     func panelDidRequestFocusContent() { focusRequests += 1 }
     func panelDidHandOffToExternalApp() { handOffs += 1 }
     func panelDidRequestClearHistory() {}
+    func panelDidDismissFilterPopover() {}
 }

@@ -1,7 +1,7 @@
 //
 //  PanelSelectionAppearance.swift
 //  SixOne
-//  面板内选择态的统一颜色；列表行与分组 chip 共用。
+//  面板内选择态的统一颜色；列表行与筛选 chip 共用。
 //
 
 import SwiftUI

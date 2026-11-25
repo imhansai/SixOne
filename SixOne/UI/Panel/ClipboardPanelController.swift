@@ -17,6 +17,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     private let confirmationState: ConfirmationState
     private let searchState: SearchState
     private let moreActionsState: MoreActionsState
+    private let filterState: FilterState
     private let previewState: PreviewState
     private let navigationState: NavigationState
     private let copyState: CopyState
@@ -38,6 +39,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         confirmationState: confirmationState,
         searchState: searchState,
         moreActionsState: moreActionsState,
+        filterState: filterState,
         previewState: previewState,
         navigationState: navigationState,
         noticeState: noticeState,
@@ -45,7 +47,6 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         quickPasteHintState: quickPasteHintState,
         cursor: cursor,
         sharing: sharing,
-        collectionDragState: context.collectionDragState
     )
 
     private lazy var itemActions = PanelItemActions(
@@ -84,6 +85,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         pasteFlow: pasteFlow,
         focusZones: focusZones,
         searchState: searchState,
+        filterState: filterState,
         hide: { [weak self] in self?.lifecycle.hide() },
         fullItem: { [weak self] id in self?.manager.fetchFullItem(id: id) }
     )
@@ -136,6 +138,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         panel: panel,
         searchState: searchState,
         moreActionsState: moreActionsState,
+        filterState: filterState,
         confirmationState: confirmationState,
         previewState: previewState,
         selectedItemID: { [weak self] in self?.cursor.selectedItemID },
@@ -149,6 +152,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         panel: panel,
         searchState: searchState,
         moreActionsState: moreActionsState,
+        filterState: filterState,
         navigationState: navigationState,
         cursor: cursor,
         isFullKeyboardAccessEnabled: { NSApplication.shared.isFullKeyboardAccessEnabled }
@@ -162,6 +166,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         self.confirmationState = context.confirmationState
         self.searchState = context.searchState
         self.moreActionsState = context.moreActionsState
+        self.filterState = context.filterState
         self.previewState = context.previewState
         self.navigationState = context.navigationState
         self.copyState = context.copyState
@@ -244,8 +249,16 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
         panel.makeFirstResponder(panel.contentView)
     }
 
-    func panelDidRequestCollectionFilter(_ filter: CollectionFilter) {
-        searchSession.collectionFilterDidChange(filter)
+    func panelDidRequestHistoryFilter(_ filter: HistoryFilter) {
+        searchSession.filterDidChange(filter)
+    }
+
+    func panelDidRequestClearHistoryFilters() {
+        searchSession.filterDidChange(.none)
+    }
+
+    func panelDidRequestCreateCollection() {
+        createCollection(assigningItemID: nil)
     }
 
     func panelDidRequestNewCollection(assigningItemID: UUID) {
@@ -261,7 +274,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             return
         }
         // 分组视图里行会移出/出现，已经看得到结果；全部视图没有可见变化，补一条短提示。
-        guard store.collectionFilter == .all else { return }
+        guard !store.isGroupFiltering else { return }
         let name = collectionID.flatMap { context.collections?.group(id: $0)?.name }
         noticeState.showMovedToCollection(named: name)
     }
@@ -274,21 +287,6 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     func panelDidRequestDeleteCollection(id: UUID) {
         guard let group = context.collections?.group(id: id) else { return }
         deleteCollection(group)
-    }
-
-    func panelDidRequestReorderCollections(movingIDs: [UUID], before targetID: UUID?) {
-        guard context.collections?.move(movingIDs, before: targetID) == true,
-              let order = context.collections?.groups.map(\.id),
-              !order.isEmpty
-        else { return }
-        // 下一轮写库，避免拖慢落位动画。
-        Task { @MainActor in
-            guard manager.setCollectionOrder(order) else {
-                noticeState.message = Localizer.string("Could not reorder groups.")
-                context.collections?.reload()
-                return
-            }
-        }
     }
 
     private func renameCollection(_ group: CollectionRow) {
@@ -327,15 +325,17 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
                     self.context.collections?.reload()
                     return
                 }
-                if self.store.collectionFilter == .collection(group.id) {
-                    self.searchSession.collectionFilterDidChange(.all)
+                if self.store.filter.collections.contains(group.id) {
+                    self.searchSession.filterDidChange(
+                        self.store.filter.toggled(collectionID: group.id)
+                    )
                 }
             },
             onCancel: {}
         )
     }
 
-    private func createCollection(assigningItemID: UUID) {
+    private func createCollection(assigningItemID: UUID?) {
         CollectionEditor.present(
             on: panel,
             mode: .create,
@@ -344,6 +344,7 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
             guard let self else { return }
             switch self.manager.createCollection(named: name) {
             case .success(let id):
+                guard let assigningItemID else { return }
                 guard self.manager.assignCollection(
                     itemID: assigningItemID,
                     collectionID: id
@@ -422,6 +423,11 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     func panelDidRequestSearchCancel() {
+        // Esc 先关筛选层，再清搜索词，避免一次按键连消两层。
+        if filterState.isPresented {
+            filterState.dismiss()
+            return
+        }
         if searchState.text.isEmpty {
             searchState.resignFocus()
         } else {
@@ -466,6 +472,10 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
     }
 
     func handleEscape() {
+        if filterState.isPresented {
+            filterState.dismiss()
+            return
+        }
         editingSession.handleEscape()
     }
 
@@ -545,6 +555,17 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate, PanelActionHan
 
     func panelDidRequestClearHistory() {
         itemActions.requestClearHistory()
+    }
+
+    func panelDidDismissFilterPopover() {
+        guard panel.isVisible else { return }
+        // 系统 popover 会短暂成为 key；点面板内部关掉它时要把 key 收回面板，
+        // 点面板外面才交给焦点判定决定是否收起。
+        if panel.frame.contains(NSEvent.mouseLocation) {
+            panel.makeKey()
+            return
+        }
+        lifecycle.recheckFocusAfterFilterPopover()
     }
 
     @objc func focusSearch(_ sender: Any?) {

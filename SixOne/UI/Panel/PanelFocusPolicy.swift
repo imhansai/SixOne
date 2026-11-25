@@ -15,8 +15,8 @@ nonisolated struct PanelFocusSnapshot: Equatable {
     var hasApplicationSheet = false
     var isEditingText = false
     var clickedOutside = false
-    /// 按住分组拖拽中；拖拽会跑出窗口。
-    var isDraggingCollection = false
+    /// 系统筛选 popover 打开中：popover 可能自己成为 key，面板不能因此收起。
+    var isFilterPopoverPresented = false
     /// 前台是别的进程的系统辅助面板（自动填充、指纹认证等）。
     var isSystemHelperFrontmost = false
     var hasKeyWindow = true
@@ -27,7 +27,8 @@ nonisolated enum PanelFocusPolicy {
     static func shouldHide(_ snapshot: PanelFocusSnapshot) -> Bool {
         if snapshot.isSharing { return false }
         if snapshot.hasAttachedSheet { return false }
-        if snapshot.isDraggingCollection { return false }
+        // popover 成为 key 不算焦点离开；应用真的切走时仍然收起。
+        if snapshot.isFilterPopoverPresented, snapshot.isAppFrontmost { return false }
         if snapshot.isPressingStatusItem { return false }
         if snapshot.isAppFrontmost, snapshot.isPanelKeyWindow { return false }
         if snapshot.isTextAuxiliaryPanelKey { return false }

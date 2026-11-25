@@ -99,7 +99,7 @@ nonisolated protocol ClipboardHistoryRepository: Sendable {
     /// 按 id 取行快照，用于触达置顶与缩略图更新后的原位刷新。
     func row(id: UUID) async throws -> HistoryRow?
 
-    /// 单条是否仍命中查询；搜索/分组变更时避免整窗重查。
+    /// 单条是否仍命中查询；搜索/筛选变更时避免整窗重查。
     func rowMatches(id: UUID, query: HistoryQuery) async throws -> Bool
 
     /// 条目是否还在库里，用于校验预览/选中是否失效。
@@ -107,6 +107,9 @@ nonisolated protocol ClipboardHistoryRepository: Sendable {
 
     /// 用户分组列表；按用户排序，旧数据按名称本地化兜底。
     func collections() async throws -> [CollectionRow]
+
+    /// 最近窗口里出现过的来源 App；按最近出现排序、去重，筛选弹层的「来源」区用。
+    func sourceApplications(limit: Int) async throws -> [String]
 }
 
 /// 每次查询新建 `ModelContext`，避免旧 context 看不到新写入或读到已删除的行。
@@ -154,14 +157,17 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
         )
         descriptor.fetchLimit = 1
         descriptor.propertiesToFetch = [
-            \.id, \.collectionID, \.searchText, \.titleSnapshot, \.alias, \.filePathsSearchText,
+            \.id, \.kindRaw, \.collectionID, \.sourceAppBundleIdentifier, \.lastActivityAt,
+            \.searchText, \.titleSnapshot, \.alias, \.filePathsSearchText,
         ]
         guard let item = try context.fetch(descriptor).first else { return false }
 
-        if case .collection(let collectionID) = query.collection,
-           item.collectionID != collectionID {
-            return false
-        }
+        guard query.filter.matches(
+            kind: item.kind,
+            collectionID: item.collectionID,
+            sourceAppBundleIdentifier: item.sourceAppBundleIdentifier,
+            lastActivityAt: item.lastActivityAt
+        ) else { return false }
 
         guard !query.text.isEmpty else { return true }
         let text = query.text
@@ -190,61 +196,77 @@ actor SwiftDataHistoryRepository: ClipboardHistoryRepository {
             .sorted(by: CollectionRow.displayOrder)
     }
 
+    func sourceApplications(limit: Int) async throws -> [String] {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<ClipboardItem>(
+            sortBy: [SortDescriptor(\ClipboardItem.recencyID, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        descriptor.propertiesToFetch = [\.sourceAppBundleIdentifier]
+        var seen: Set<String> = []
+        var result: [String] = []
+        for item in try context.fetch(descriptor) {
+            guard let bundleID = item.sourceAppBundleIdentifier,
+                  !bundleID.isEmpty,
+                  seen.insert(bundleID).inserted
+            else { continue }
+            result.append(bundleID)
+        }
+        return result
+    }
+
     // MARK: - 查询谓词
 
-    /// 分组条件与搜索共用同一次扫描；`olderThan` 为补位游标。
+    /// 每个维度单独成谓词再合取；单条表达式过长会拖垮类型检查，也方便独立测试。
     nonisolated private static func searchPredicate(
         query: HistoryQuery,
         olderThan cursor: UUID? = nil
     ) -> Predicate<ClipboardItem>? {
         let text = query.text
+        let filter = query.filter
+        var predicates: [Predicate<ClipboardItem>] = []
 
         if let cursor {
-            switch query.collection {
-            case .all:
-                if text.isEmpty { return #Predicate { $0.recencyID < cursor } }
-                return #Predicate { item in
-                    item.recencyID < cursor
-                        && ((item.searchText?.localizedStandardContains(text) ?? false)
-                            || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
-                            || (item.alias?.localizedStandardContains(text) ?? false)
-                            || (item.filePathsSearchText?.localizedStandardContains(text) ?? false))
-                }
-            case .collection(let collectionID):
-                if text.isEmpty {
-                    return #Predicate {
-                        $0.recencyID < cursor && $0.collectionID == collectionID
-                    }
-                }
-                return #Predicate { item in
-                    item.recencyID < cursor
-                        && item.collectionID == collectionID
-                        && ((item.searchText?.localizedStandardContains(text) ?? false)
-                            || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
-                            || (item.alias?.localizedStandardContains(text) ?? false)
-                            || (item.filePathsSearchText?.localizedStandardContains(text) ?? false))
-                }
-            }
+            predicates.append(#Predicate { $0.recencyID < cursor })
         }
-
-        switch query.collection {
-        case .all:
-            guard !text.isEmpty else { return nil }
-            return #Predicate { item in
+        if !filter.collections.isEmpty {
+            let collectionPredicates = filter.collections
+                .sorted { $0.uuidString < $1.uuidString }
+                .map { collectionID in
+                    #Predicate<ClipboardItem> { $0.collectionID == collectionID }
+                }
+            predicates.append(Predicate(any: collectionPredicates))
+        }
+        if !text.isEmpty {
+            predicates.append(#Predicate { item in
                 (item.searchText?.localizedStandardContains(text) ?? false)
                     || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
                     || (item.alias?.localizedStandardContains(text) ?? false)
                     || (item.filePathsSearchText?.localizedStandardContains(text) ?? false)
-            }
-        case .collection(let collectionID):
-            if text.isEmpty { return #Predicate { $0.collectionID == collectionID } }
-            return #Predicate { item in
-                item.collectionID == collectionID
-                    && ((item.searchText?.localizedStandardContains(text) ?? false)
-                        || (item.titleSnapshot?.localizedStandardContains(text) ?? false)
-                        || (item.alias?.localizedStandardContains(text) ?? false)
-                        || (item.filePathsSearchText?.localizedStandardContains(text) ?? false))
-            }
+            })
         }
+        if !filter.kinds.isEmpty {
+            let kinds = filter.kinds.map(\.rawValue).sorted()
+            predicates.append(#Predicate { kinds.contains($0.kindRaw) })
+        }
+        if !filter.sourceApps.isEmpty {
+            // CoreData 不支持对可空列做 IN / nil 合并；逐来源等值再取并集。
+            let sourcePredicates = filter.sourceApps.sorted().map { source in
+                #Predicate<ClipboardItem> { $0.sourceAppBundleIdentifier == source }
+            }
+            predicates.append(Predicate(any: sourcePredicates))
+        }
+        if !filter.dateRanges.isEmpty {
+            let datePredicates = filter.dateRanges.map { range -> Predicate<ClipboardItem> in
+                let bounds = range.bounds()
+                let start = bounds.start
+                let end = bounds.end
+                return #Predicate { $0.lastActivityAt >= start && $0.lastActivityAt < end }
+            }
+            predicates.append(Predicate(any: datePredicates))
+        }
+
+        guard !predicates.isEmpty else { return nil }
+        return Predicate(all: predicates)
     }
 }

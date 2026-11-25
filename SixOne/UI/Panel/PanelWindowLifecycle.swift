@@ -17,6 +17,7 @@ final class PanelWindowLifecycle {
     private let confirmationState: ConfirmationState
     private let searchState: SearchState
     private let moreActionsState: MoreActionsState
+    private let filterState: FilterState
     private let previewState: PreviewState
     private let navigationState: NavigationState
     private let noticeState: NoticeState
@@ -24,7 +25,6 @@ final class PanelWindowLifecycle {
     private let quickPasteHintState: QuickPasteHintState
     private let cursor: PanelSelectionCursor
     private let sharing: PanelSharing
-    private let collectionDragState: CollectionDragState
 
     private let focusGuard: PanelFocusGuard
     private let quickLook: PanelQuickLookPlayback
@@ -51,14 +51,14 @@ final class PanelWindowLifecycle {
         confirmationState: ConfirmationState,
         searchState: SearchState,
         moreActionsState: MoreActionsState,
+        filterState: FilterState,
         previewState: PreviewState,
         navigationState: NavigationState,
         noticeState: NoticeState,
         shareState: ShareState,
         quickPasteHintState: QuickPasteHintState,
         cursor: PanelSelectionCursor,
-        sharing: PanelSharing,
-        collectionDragState: CollectionDragState
+        sharing: PanelSharing
     ) {
         self.panel = panel
         self.manager = manager
@@ -67,6 +67,7 @@ final class PanelWindowLifecycle {
         self.confirmationState = confirmationState
         self.searchState = searchState
         self.moreActionsState = moreActionsState
+        self.filterState = filterState
         self.previewState = previewState
         self.navigationState = navigationState
         self.noticeState = noticeState
@@ -74,13 +75,12 @@ final class PanelWindowLifecycle {
         self.quickPasteHintState = quickPasteHintState
         self.cursor = cursor
         self.sharing = sharing
-        self.collectionDragState = collectionDragState
         self.focusGuard = PanelFocusGuard(
             panel: panel,
             shareState: shareState,
             previewState: previewState,
             searchState: searchState,
-            collectionDragState: collectionDragState
+            filterState: filterState
         )
         self.quickLook = PanelQuickLookPlayback(panel: panel)
 
@@ -99,9 +99,6 @@ final class PanelWindowLifecycle {
                 self.sharing.finishPickingSessions()
             }
         )
-        collectionDragState.onChange = { [weak self] isDragging in
-            self?.collectionDragDidChange(isDragging)
-        }
     }
 
     isolated deinit {
@@ -134,6 +131,8 @@ final class PanelWindowLifecycle {
         noticeState.message = nil
         searchState.isFocused = false
         moreActionsState.isFocused = false
+        filterState.isFocused = false
+        filterState.dismiss()
         confirmationState.reset()
         sharing.finishPickingSessions()
         shareState.stage = .idle
@@ -167,6 +166,8 @@ final class PanelWindowLifecycle {
         panel.makeFirstResponder(nil)
         searchState.isFocused = false
         moreActionsState.isFocused = false
+        filterState.isFocused = false
+        filterState.dismiss()
         // 影片挂在视图树上，不停掉会在收起后继续出声。
         quickLook.suspend()
         sharing.finishPickingSessions()
@@ -174,7 +175,6 @@ final class PanelWindowLifecycle {
         orderOutPanel()
         panelState.isVisible = false
         // 会话结束回调可能随视图移除丢失，兜底放开收起。
-        collectionDragState.isDragging = false
         store.setListVisible(false)
         removeMonitors()
         manager.setPasteboardCaptureSuspended(false)
@@ -231,12 +231,12 @@ final class PanelWindowLifecycle {
         let hasNewContent = storeHasNewContent
             || hadUnpolledPasteboardChange
             || manager.hasUnpolledPasteboardChange
-        // 收起期间有新复制：放弃分组筛选，否则新条目（默认未分组）会被藏在组外。
-        let restoredFilter = store.collectionFilter.restoredOnShow(hasNewContent: hasNewContent)
-        if restoredFilter != store.collectionFilter {
-            store.setQuery(HistoryQuery(text: store.query, collection: restoredFilter))
+        // 收起期间有新复制：放弃全部筛选，否则新条目可能被筛掉而看不见。
+        let restoredFilter = store.filter.restoredOnShow(hasNewContent: hasNewContent)
+        if restoredFilter != store.filter {
+            store.setQuery(HistoryQuery(text: store.query, filter: restoredFilter))
         }
-        if hasNewContent || !(session?.isDeepScroll ?? false) {
+        if hasNewContent || store.hasStaleDateFilter || !(session?.isDeepScroll ?? false) {
             store.loadLatest()
         }
 
@@ -272,18 +272,17 @@ final class PanelWindowLifecycle {
         }
     }
 
-    /// 拖拽结束把面板设回 key：拖拽会话可能抢走 key。
-    /// 收起判定交给 `PanelFocusPolicy`，这里不补，免得单击 chip 也查一次焦点。
-    private func collectionDragDidChange(_ isDragging: Bool) {
-        guard !isDragging, panel.isVisible, isAppFrontmost else { return }
-        panel.makeKey()
-    }
-
     // MARK: - 焦点判定
 
     /// 用 WindowServer 侧状态而非 `NSApp.isActive`，避免焦点切换瞬间读到旧值。
     private var isAppFrontmost: Bool {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+    }
+
+    /// 系统筛选 popover 关闭后补一次焦点判定：点外面时 popover 先关，面板不会自己再收到 resign。
+    func recheckFocusAfterFilterPopover() {
+        guard panel.isVisible else { return }
+        hideIfFocusLeft(restoresPreviousApplication: true)
     }
 
     /// 焦点真的离开时才隐藏；延后一拍，等新 key 窗口落定，避免辅助面板抢焦点时误收。

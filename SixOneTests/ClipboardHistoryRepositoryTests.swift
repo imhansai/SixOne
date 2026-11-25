@@ -157,6 +157,209 @@ struct ClipboardHistoryRepositoryTests {
         #expect(try await env.repository.itemExists(id: id) == false)
     }
 
+    @Test("类型筛选只返回选中的类型")
+    func filtersByKind() async throws {
+        let env = try Env { context in
+            let text = ClipboardItem(kind: .text, text: "文字")
+            let image = ClipboardItem(kind: .image, imageData: Data([0x01]))
+            let file = ClipboardItem(kind: .file, filePaths: ["/tmp/a.txt"])
+            [text, image, file].forEach(context.insert)
+            return [text, image, file]
+        }
+
+        let rows = try await env.repository.latest(
+            query: HistoryQuery(filter: HistoryFilter(kinds: [.image, .file])),
+            limit: 10
+        )
+        #expect(rows.map(\.id) == [env.items[2].id, env.items[1].id])
+    }
+
+    @Test("来源筛选命中 bundle id，无来源条目被排除")
+    func filtersBySource() async throws {
+        let env = try Env { context in
+            let safari = ClipboardItem(
+                kind: .text,
+                text: "Safari",
+                sourceAppBundleIdentifier: "com.apple.Safari"
+            )
+            let notes = ClipboardItem(
+                kind: .text,
+                text: "Notes",
+                sourceAppBundleIdentifier: "com.apple.Notes"
+            )
+            let unknown = ClipboardItem(kind: .text, text: "未知来源")
+            [safari, notes, unknown].forEach(context.insert)
+            return [safari, notes, unknown]
+        }
+
+        let rows = try await env.repository.latest(
+            query: HistoryQuery(filter: HistoryFilter(sourceApps: ["com.apple.Safari"])),
+            limit: 10
+        )
+        #expect(rows.map(\.id) == [env.items[0].id])
+    }
+
+    @Test("日期筛选按最近活动时间切分")
+    func filtersByDate() async throws {
+        let env = try Env { context in
+            let recent = ClipboardItem(kind: .text, text: "最近")
+            let old = ClipboardItem(kind: .text, text: "更早")
+            old.lastActivityAt = Date().addingTimeInterval(-40 * 86_400)
+            context.insert(recent)
+            context.insert(old)
+            return [recent, old]
+        }
+
+        let today = try await env.repository.latest(
+            query: HistoryQuery(filter: HistoryFilter(dateRanges: [.today])),
+            limit: 10
+        )
+        #expect(today.map(\.id) == [env.items[0].id])
+
+        let older = try await env.repository.latest(
+            query: HistoryQuery(filter: HistoryFilter(dateRanges: [.older])),
+            limit: 10
+        )
+        #expect(older.map(\.id) == [env.items[1].id])
+
+        let both = try await env.repository.latest(
+            query: HistoryQuery(filter: HistoryFilter(dateRanges: [.today, .older])),
+            limit: 10
+        )
+        #expect(Set(both.map(\.id)) == Set([env.items[0].id, env.items[1].id]))
+    }
+
+    @Test("类型、来源、分组、日期与搜索共同生效")
+    func combinesAllDimensions() async throws {
+        let env = try Env { context in
+            let work = ClipboardCollection(name: "Work")
+            context.insert(work)
+            let workID = work.id
+
+            let match = ClipboardItem(
+                kind: .image,
+                imageData: Data([0x01]),
+                sourceAppBundleIdentifier: "com.apple.Safari",
+                collectionID: workID
+            )
+            let wrongKind = ClipboardItem(
+                kind: .text,
+                text: "设计稿",
+                sourceAppBundleIdentifier: "com.apple.Safari",
+                collectionID: workID
+            )
+            let wrongCollection = ClipboardItem(
+                kind: .image,
+                imageData: Data([0x02]),
+                sourceAppBundleIdentifier: "com.apple.Safari"
+            )
+            let wrongSource = ClipboardItem(
+                kind: .image,
+                imageData: Data([0x03]),
+                sourceAppBundleIdentifier: "com.apple.Notes",
+                collectionID: workID
+            )
+            for item in [match, wrongKind, wrongCollection, wrongSource] {
+                item.alias = "设计稿"
+                context.insert(item)
+            }
+            return [match, wrongKind, wrongCollection, wrongSource]
+        }
+
+        let filter = HistoryFilter(
+            collections: [
+                try #require(env.items[0].collectionID),
+            ],
+            kinds: [.image],
+            sourceApps: ["com.apple.Safari"],
+            dateRanges: [.today]
+        )
+        let rows = try await env.repository.latest(
+            query: HistoryQuery(text: "设计稿", filter: filter),
+            limit: 10
+        )
+        #expect(rows.map(\.id) == [env.items[0].id])
+    }
+
+    @Test("单行校验遵循全部筛选条件")
+    func rowMatchesHonorsFilters() async throws {
+        let env = try Env { context in
+            let image = ClipboardItem(
+                kind: .image,
+                imageData: Data([0x01]),
+                sourceAppBundleIdentifier: "com.apple.Safari"
+            )
+            let text = ClipboardItem(
+                kind: .text,
+                text: "文字",
+                sourceAppBundleIdentifier: "com.apple.Safari"
+            )
+            context.insert(image)
+            context.insert(text)
+            return [image, text]
+        }
+
+        let query = HistoryQuery(
+            filter: HistoryFilter(kinds: [.image], sourceApps: ["com.apple.Safari"])
+        )
+        #expect(try await env.repository.rowMatches(id: env.items[0].id, query: query))
+        #expect(try await env.repository.rowMatches(id: env.items[1].id, query: query) == false)
+    }
+
+    @Test("游标补位同样遵循筛选条件")
+    func rowsAfterCursorHonorsFilters() async throws {
+        let env = try Env { context in
+            (0..<6).map { index in
+                let item = index.isMultiple(of: 2)
+                    ? ClipboardItem(kind: .text, text: "文字 \(index)")
+                    : ClipboardItem(kind: .image, imageData: Data([UInt8(index)]))
+                context.insert(item)
+                return item
+            }
+        }
+
+        let rows = try await env.repository.rows(
+            after: env.items[4].recencyID,
+            query: HistoryQuery(filter: HistoryFilter(kinds: [.image])),
+            limit: 5
+        )
+        #expect(rows.map(\.id) == [env.items[3].id, env.items[1].id])
+    }
+
+    @Test("来源列表去重并按最近出现排序")
+    func sourceApplicationsDeduplicate() async throws {
+        let env = try Env { context in
+            let safari = ClipboardItem(
+                kind: .text,
+                text: "a",
+                sourceAppBundleIdentifier: "com.apple.Safari"
+            )
+            let notes = ClipboardItem(
+                kind: .text,
+                text: "b",
+                sourceAppBundleIdentifier: "com.apple.Notes"
+            )
+            let safariAgain = ClipboardItem(
+                kind: .text,
+                text: "c",
+                sourceAppBundleIdentifier: "com.apple.Safari"
+            )
+            let unknown = ClipboardItem(kind: .text, text: "d")
+            [safari, notes, safariAgain, unknown].forEach(context.insert)
+            return [safari, notes, safariAgain, unknown]
+        }
+
+        #expect(
+            try await env.repository.sourceApplications(limit: 10)
+                == ["com.apple.Safari", "com.apple.Notes"]
+        )
+        // limit 是扫描行数：最新一条没有来源，扫两行才轮到 Safari。
+        #expect(
+            try await env.repository.sourceApplications(limit: 2)
+                == ["com.apple.Safari"]
+        )
+    }
+
     @MainActor
     private struct Env {
         let container: ModelContainer

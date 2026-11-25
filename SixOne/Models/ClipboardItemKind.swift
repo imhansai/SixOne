@@ -5,7 +5,7 @@
 //  条目类型。独立于模型文件，避免与持久化模型耦合。
 //
 
-enum ClipboardItemKind: String, Sendable {
+enum ClipboardItemKind: String, CaseIterable, Hashable, Sendable {
     case text
     case image
     case file

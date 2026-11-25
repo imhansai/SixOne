@@ -43,6 +43,45 @@ enum PanelKeyRouter {
                 : .panel(.cycleFocus(backwards: press.modifiers.contains(.shift)))
         }
 
+        // 筛选弹层打开：Esc 只关层；按钮仍聚焦时交给下面的开合分支。
+        if context.isFilterPopoverPresented {
+            if press.matches(PanelKeyCode.escape) { return .panel(.dismissFilterPopover) }
+            if !context.isFilterFocused {
+                if press.matches(PanelKeyCode.space)
+                    || press.matches(PanelKeyCode.returnKey)
+                    || press.matches(PanelKeyCode.keypadEnter)
+                    || press.isPlainTextReturn
+                    || press.matches(PanelKeyCode.up)
+                    || press.matches(PanelKeyCode.down)
+                    || press.matches(PanelKeyCode.left)
+                    || press.matches(PanelKeyCode.right)
+                    || press.matches(PanelKeyCode.delete)
+                    || press.matches(PanelKeyCode.delete, .command) {
+                    return .panel(.consume)
+                }
+                return .standard
+            }
+        }
+
+        // 筛选按钮聚焦：Esc 收面板，Space / Return 开合，方向键吞掉。
+        if context.isFilterFocused {
+            if press.matches(PanelKeyCode.escape) { return .panel(.hidePanel) }
+            if press.matches(PanelKeyCode.space)
+                || press.matches(PanelKeyCode.returnKey)
+                || press.matches(PanelKeyCode.keypadEnter) {
+                return press.isARepeat ? .panel(.consume) : .panel(.toggleFilterPopover)
+            }
+            if press.matches(PanelKeyCode.up)
+                || press.matches(PanelKeyCode.down)
+                || press.matches(PanelKeyCode.left)
+                || press.matches(PanelKeyCode.right)
+                || press.matches(PanelKeyCode.up, .command)
+                || press.matches(PanelKeyCode.down, .command) {
+                return .panel(.consume)
+            }
+            return .standard
+        }
+
         // 更多操作聚焦：Esc 收面板，Space 交给 SwiftUI Menu，导航键吞掉。
         if context.isMoreActionsFocused {
             if press.matches(PanelKeyCode.escape) { return .panel(.hidePanel) }

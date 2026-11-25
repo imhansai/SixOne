@@ -175,7 +175,7 @@ struct ClipboardRowView: View {
     private var markerName: String? {
         RowCollectionMarker.name(
             for: row,
-            filter: context.store.collectionFilter,
+            isGroupFiltered: context.store.isGroupFiltering,
             groupNames: context.collections?.groupNamesByID ?? [:]
         )
     }

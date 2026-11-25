@@ -83,6 +83,39 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.space, [], context) == .standard)
     }
 
+    @Test("筛选弹层打开：Esc 只关层，搜索框聚焦时也一样")
+    func filterPopoverEscape() {
+        var context = PanelKeyContext()
+        context.isFilterPopoverPresented = true
+        #expect(route(PanelKeyCode.escape, [], context) == .panel(.dismissFilterPopover))
+
+        var typing = PanelKeyContext(isSearchFocused: true)
+        typing.isFilterPopoverPresented = true
+        #expect(route(PanelKeyCode.escape, [], typing) == .panel(.dismissFilterPopover))
+        // 弹层开着时，列表动作键不能落到背后的列表。
+        #expect(route(PanelKeyCode.space, [], typing) == .panel(.consume))
+        #expect(route(PanelKeyCode.returnKey, [], typing) == .panel(.consume))
+        #expect(route(PanelKeyCode.down, [], typing) == .panel(.consume))
+    }
+
+    @Test("筛选按钮聚焦：Esc 收面板，Space / Return 开合，方向键吞掉")
+    func filterButton() {
+        var context = PanelKeyContext()
+        context.isFilterFocused = true
+        #expect(route(PanelKeyCode.escape, [], context) == .panel(.hidePanel))
+        #expect(route(PanelKeyCode.space, [], context) == .panel(.toggleFilterPopover))
+        #expect(route(PanelKeyCode.returnKey, [], context) == .panel(.toggleFilterPopover))
+        #expect(route(PanelKeyCode.keypadEnter, [], context) == .panel(.toggleFilterPopover))
+        #expect(route(PanelKeyCode.up, [], context) == .panel(.consume))
+        #expect(route(PanelKeyCode.left, [], context) == .panel(.consume))
+        #expect(route(PanelKeyCode.f, .command, context) == .standard)
+
+        // 弹层开着时 Esc 先关层，再按才收面板；Space 仍可关弹层。
+        context.isFilterPopoverPresented = true
+        #expect(route(PanelKeyCode.escape, [], context) == .panel(.dismissFilterPopover))
+        #expect(route(PanelKeyCode.space, [], context) == .panel(.toggleFilterPopover))
+    }
+
     @Test("搜索框：⌘F 与 ↑/⌘↑/⌘↓ 吞掉，Esc/↓/Return 交给 delegate")
     func searchField() {
         let context = PanelKeyContext(isSearchFocused: true)

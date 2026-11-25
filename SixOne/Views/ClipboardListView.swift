@@ -12,11 +12,13 @@ struct ClipboardListView: View {
 
     private var store: HistoryListStore { context.store }
     private var manager: ClipboardManager { context.manager }
+    private var panelState: PanelState { context.panelState }
     private var confirmationState: ConfirmationState { context.confirmationState }
     private var previewState: PreviewState { context.previewState }
     private var navigationState: NavigationState { context.navigationState }
     private var copyState: CopyState { context.copyState }
     private var noticeState: NoticeState { context.noticeState }
+    private var filterState: FilterState { context.filterState }
     private var actions: ItemActionHandling? { context.itemActions }
 
     @Environment(\.locale) private var locale
@@ -34,7 +36,7 @@ struct ClipboardListView: View {
                 PanelHeaderChrome {
                     ClipboardTopBar(context: context)
                 }
-                CollectionFilterBar(context: context)
+                ActiveFilterBar(context: context)
                 content
                 if store.hasOlder {
                     PanelFooterHint {
@@ -91,6 +93,11 @@ struct ClipboardListView: View {
             if store.rows.isEmpty {
                 store.loadLatest()
             }
+            context.filterSources.reload()
+        }
+        .onChange(of: panelState.isVisible) { _, visible in
+            // 唤出时预热来源候选，打开弹层不再临时长高。
+            if visible { context.filterSources.reload() }
         }
         .onDisappear {
             noticeFeedback.cancel()
@@ -105,6 +112,8 @@ struct ClipboardListView: View {
         }
         .onChange(of: previewState.item?.id) { oldID, newID in
             coordinator.handlePreviewIDChange(from: oldID, to: newID)
+            // 键盘打开预览时，筛选层不能盖在预览上。
+            if newID != nil { filterState.dismiss() }
         }
         .onChange(of: store.didFailToLoad) { _, failed in
             // 有旧行时空态不显示，加载失败另发顶部提示。
@@ -116,9 +125,8 @@ struct ClipboardListView: View {
     // MARK: - 列表
 
     private var noticeTopInset: CGFloat {
-        let hasFilterBar = !(context.collections?.groups.isEmpty ?? true)
-        return ClipboardLayout.headerHeight
-            + (hasFilterBar ? ClipboardLayout.collectionFilterBarHeight : 0)
+        ClipboardLayout.headerHeight
+            + (store.isFiltering ? ClipboardLayout.filterBarHeight : 0)
             + 8
     }
 
@@ -134,8 +142,15 @@ struct ClipboardListView: View {
                 // 首次加载未落定：留白，避免闪出空历史文案。
                 Color.clear
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if store.collectionFilter != .all {
-                emptyState(icon: "folder", text: "This group is empty")
+            } else if store.isFiltering {
+                if store.filter.isCollectionOnly, store.filter.collections.count == 1 {
+                    emptyState(icon: "folder", text: "This group is empty")
+                } else {
+                    emptyState(
+                        icon: "line.3.horizontal.decrease.circle",
+                        text: "No items match the filters"
+                    )
+                }
             } else {
                 emptyState(icon: "clipboard", text: "Recently copied content will appear here")
             }

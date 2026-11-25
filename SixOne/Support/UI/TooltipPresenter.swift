@@ -103,11 +103,18 @@ final class TooltipPresenter {
         activeAnchor === anchor && (panel?.isVisible ?? false)
     }
 
+    /// 系统 popover 是 key 窗口的子窗口，它自己不一定拿到 key。
+    @MainActor
+    static func isActiveWindow(_ window: NSWindow) -> Bool {
+        if window.isKeyWindow { return true }
+        return NSApp.keyWindow?.childWindows?.contains { $0 === window } ?? false
+    }
+
     private func present(text: String, anchor: NSView, reposition: Bool) {
         guard !text.isEmpty,
               let window = anchor.window,
               window.isVisible,
-              window.isKeyWindow,
+              Self.isActiveWindow(window),
               Self.isEffectivelyVisible(anchor) else {
             // 失败的是新锚点：不要顺手把另一个仍有效的 tooltip 收掉。
             if activeAnchor === anchor { hideNow() }

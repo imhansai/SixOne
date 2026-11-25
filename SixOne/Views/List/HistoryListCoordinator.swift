@@ -16,6 +16,7 @@ final class HistoryListCoordinator {
     private let copyState: CopyState
     private let searchState: SearchState
     private let moreActionsState: MoreActionsState
+    private let filterState: FilterState
 
     /// 编辑保存后预览仍开：关闭时滚回顶部展示已置顶的条目。
     private var pendingTopFocusAfterEditedPreview = false
@@ -32,6 +33,7 @@ final class HistoryListCoordinator {
         self.copyState = context.copyState
         self.searchState = context.searchState
         self.moreActionsState = context.moreActionsState
+        self.filterState = context.filterState
     }
 
     // MARK: - 列表动作
@@ -40,6 +42,7 @@ final class HistoryListCoordinator {
     func select(id: UUID) {
         searchState.resignFocus()
         moreActionsState.resignFocus()
+        filterState.resignFocus()
         navigationState.selectedItemID = id
         navigationState.isSelectionActive = true
         navigationState.requestScroll(toRow: id)
@@ -48,6 +51,7 @@ final class HistoryListCoordinator {
     func activate(id: UUID, asPlainText: Bool) {
         searchState.resignFocus()
         moreActionsState.resignFocus()
+        filterState.resignFocus()
         context.itemActions?.panelDidActivate(id: id, asPlainText: asPlainText)
     }
 

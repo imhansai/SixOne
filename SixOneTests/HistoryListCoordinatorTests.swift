@@ -122,7 +122,7 @@ struct HistoryListCoordinatorTests {
             query: fixture.store.rowsActiveQuery
         )
 
-        fixture.store.setQuery(HistoryQuery(collection: .collection(UUID())))
+        fixture.store.setQuery(HistoryQuery(filter: HistoryFilter(collections: [UUID()])))
         await fixture.store.waitForPendingLoad()
         fixture.coordinator.handleDataRevisionChange()
 

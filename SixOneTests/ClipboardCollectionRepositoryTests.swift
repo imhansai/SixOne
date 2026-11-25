@@ -23,13 +23,21 @@ struct ClipboardCollectionRepositoryTests {
         try env.save()
 
         let workRows = try await env.repository.latest(
-            query: HistoryQuery(collection: .collection(work.id)),
+            query: HistoryQuery(filter: HistoryFilter(collections: [work.id])),
             limit: 10
         )
         #expect(workRows.map(\.id) == [workItem.id])
 
+        let bothRows = try await env.repository.latest(
+            query: HistoryQuery(filter: HistoryFilter(
+                collections: [work.id, personal.id]
+            )),
+            limit: 10
+        )
+        #expect(Set(bothRows.map(\.id)) == Set([workItem.id, personalItem.id]))
+
         let allRows = try await env.repository.latest(
-            query: HistoryQuery(collection: .all),
+            query: HistoryQuery(),
             limit: 10
         )
         #expect(Set(allRows.map(\.id)) == Set([workItem.id, personalItem.id, ungrouped.id]))
@@ -46,13 +54,13 @@ struct ClipboardCollectionRepositoryTests {
         try env.save()
 
         let workRows = try await env.repository.latest(
-            query: HistoryQuery(text: "季度", collection: .collection(work.id)),
+            query: HistoryQuery(text: "季度", filter: HistoryFilter(collections: [work.id])),
             limit: 10
         )
         #expect(workRows.map(\.id) == [workReport.id])
 
         let allRows = try await env.repository.latest(
-            query: HistoryQuery(text: "季度", collection: .all),
+            query: HistoryQuery(text: "季度"),
             limit: 10
         )
         #expect(Set(allRows.map(\.id)) == Set([workReport.id, personalReport.id]))
@@ -71,7 +79,7 @@ struct ClipboardCollectionRepositoryTests {
 
         let older = try await env.repository.rows(
             after: fifth.recencyID,
-            query: HistoryQuery(collection: .collection(work.id)),
+            query: HistoryQuery(filter: HistoryFilter(collections: [work.id])),
             limit: 10
         )
         #expect(older.map(\.id) == [third.id, first.id])
@@ -87,19 +95,19 @@ struct ClipboardCollectionRepositoryTests {
 
         #expect(try await env.repository.rowMatches(
             id: item.id,
-            query: HistoryQuery(text: "季度", collection: .collection(work.id))
+            query: HistoryQuery(text: "季度", filter: HistoryFilter(collections: [work.id]))
         ))
         #expect(try await env.repository.rowMatches(
             id: item.id,
-            query: HistoryQuery(collection: .all)
+            query: HistoryQuery()
         ))
         #expect(try await env.repository.rowMatches(
             id: item.id,
-            query: HistoryQuery(collection: .collection(other.id))
+            query: HistoryQuery(filter: HistoryFilter(collections: [other.id]))
         ) == false)
         #expect(try await env.repository.rowMatches(
             id: item.id,
-            query: HistoryQuery(text: "周报", collection: .collection(work.id))
+            query: HistoryQuery(text: "周报", filter: HistoryFilter(collections: [work.id]))
         ) == false)
     }
 
@@ -136,18 +144,34 @@ struct ClipboardCollectionRepositoryTests {
         let names = [group.id: "Work"]
 
         #expect(
-            RowCollectionMarker.name(for: grouped, filter: .all, groupNames: names) == "Work"
+            RowCollectionMarker.name(
+                for: grouped,
+                isGroupFiltered: false,
+                groupNames: names
+            ) == "Work"
         )
         #expect(
             RowCollectionMarker.name(
                 for: grouped,
-                filter: .collection(group.id),
+                isGroupFiltered: true,
                 groupNames: names
             ) == nil,
             "分组视图里每行都带同一个名字，只会变成噪音"
         )
-        #expect(RowCollectionMarker.name(for: ungrouped, filter: .all, groupNames: names) == nil)
-        #expect(RowCollectionMarker.name(for: grouped, filter: .all, groupNames: [:]) == nil)
+        #expect(
+            RowCollectionMarker.name(
+                for: ungrouped,
+                isGroupFiltered: false,
+                groupNames: names
+            ) == nil
+        )
+        #expect(
+            RowCollectionMarker.name(
+                for: grouped,
+                isGroupFiltered: false,
+                groupNames: [:]
+            ) == nil
+        )
     }
 
     @Test("旧分组没有排序位置时按名称本地化排序")
