@@ -56,14 +56,16 @@ enum PanelKeyRouter {
                     || press.matches(PanelKeyCode.left)
                     || press.matches(PanelKeyCode.right)
                     || press.matches(PanelKeyCode.delete)
-                    || press.matches(PanelKeyCode.delete, .command) {
+                    || press.matches(PanelKeyCode.forwardDelete)
+                    || press.matches(PanelKeyCode.delete, .command)
+                    || press.matches(PanelKeyCode.forwardDelete, .command) {
                     return .panel(.consume)
                 }
                 return .standard
             }
         }
 
-        // 筛选按钮聚焦：Esc 收面板，Space / Return 开合，方向键吞掉。
+        // 筛选按钮聚焦：Esc 收面板，Space / Return 开合；方向与列表动作键吞掉。
         if context.isFilterFocused {
             if press.matches(PanelKeyCode.escape) { return .panel(.hidePanel) }
             if press.matches(PanelKeyCode.space)
@@ -71,12 +73,16 @@ enum PanelKeyRouter {
                 || press.matches(PanelKeyCode.keypadEnter) {
                 return press.isARepeat ? .panel(.consume) : .panel(.toggleFilterPopover)
             }
-            if press.matches(PanelKeyCode.up)
-                || press.matches(PanelKeyCode.down)
-                || press.matches(PanelKeyCode.left)
-                || press.matches(PanelKeyCode.right)
+            let swallowedKeys = [
+                PanelKeyCode.up, PanelKeyCode.down, PanelKeyCode.left, PanelKeyCode.right,
+                PanelKeyCode.delete, PanelKeyCode.forwardDelete,
+            ]
+            if swallowedKeys.contains(where: { press.matches($0) })
                 || press.matches(PanelKeyCode.up, .command)
-                || press.matches(PanelKeyCode.down, .command) {
+                || press.matches(PanelKeyCode.down, .command)
+                || press.matches(PanelKeyCode.delete, .command)
+                || press.matches(PanelKeyCode.forwardDelete, .command)
+                || press.isPlainTextReturn {
                 return .panel(.consume)
             }
             return .standard

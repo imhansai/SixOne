@@ -96,9 +96,12 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.space, [], typing) == .panel(.consume))
         #expect(route(PanelKeyCode.returnKey, [], typing) == .panel(.consume))
         #expect(route(PanelKeyCode.down, [], typing) == .panel(.consume))
+        #expect(route(PanelKeyCode.delete, [], typing) == .panel(.consume))
+        #expect(route(PanelKeyCode.forwardDelete, [], typing) == .panel(.consume))
+        #expect(route(PanelKeyCode.returnKey, .shift, typing) == .panel(.consume))
     }
 
-    @Test("筛选按钮聚焦：Esc 收面板，Space / Return 开合，方向键吞掉")
+    @Test("筛选按钮聚焦：Esc 收面板，Space / Return 开合，列表动作键吞掉")
     func filterButton() {
         var context = PanelKeyContext()
         context.isFilterFocused = true
@@ -109,11 +112,19 @@ struct PanelKeyRouterTests {
         #expect(route(PanelKeyCode.up, [], context) == .panel(.consume))
         #expect(route(PanelKeyCode.left, [], context) == .panel(.consume))
         #expect(route(PanelKeyCode.f, .command, context) == .standard)
+        // 列表仍保留着置灰的选中项，删除 / 粘贴为纯文本不能落到它上面。
+        #expect(route(PanelKeyCode.delete, [], context) == .panel(.consume))
+        #expect(route(PanelKeyCode.forwardDelete, [], context) == .panel(.consume))
+        #expect(route(PanelKeyCode.delete, .command, context) == .panel(.consume))
+        #expect(route(PanelKeyCode.forwardDelete, .command, context) == .panel(.consume))
+        #expect(route(PanelKeyCode.returnKey, .shift, context) == .panel(.consume))
 
         // 弹层开着时 Esc 先关层，再按才收面板；Space 仍可关弹层。
         context.isFilterPopoverPresented = true
         #expect(route(PanelKeyCode.escape, [], context) == .panel(.dismissFilterPopover))
         #expect(route(PanelKeyCode.space, [], context) == .panel(.toggleFilterPopover))
+        #expect(route(PanelKeyCode.delete, [], context) == .panel(.consume))
+        #expect(route(PanelKeyCode.returnKey, .shift, context) == .panel(.consume))
     }
 
     @Test("搜索框：⌘F 与 ↑/⌘↑/⌘↓ 吞掉，Esc/↓/Return 交给 delegate")
